@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+import json
 from pathlib import Path
 
 # 프로젝트 루트를 path에 추가
@@ -59,12 +60,44 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
         print(f"  {bot_id:12s} → ({bot.position.x:3d}, {bot.position.y:3d})")
     print()
 
+    # 전체 틱 데이터를 모아둘 빈 리스트 생성[cite: 1]
+    tick_lights = []
+
     # 게임 실행
     start_time = time.perf_counter()
     milestone_ticks = {50, 100, 200, 300, 400, 500}
 
     while not engine.game_over:
         events = engine.process_tick()
+        # --------------------------------------------------------
+        # 추가: 매 틱마다 발생하는 상세 라이트 수집[cite: 1]
+        current_tick_data = {
+            "tick": engine.tick,
+            "events": [
+                {
+                    "type": ev.event_type, 
+                    "actor": ev.actor_id, 
+                    "target": getattr(ev, 'target_id', None), 
+                    "detail": ev.detail
+                } for ev in events
+            ],
+            "bots": {}
+        }
+
+        for bot_id, bot in engine.bots.items():
+            # 엔진에서 방금 수집한 액션 가져오기
+            action = engine.current_actions.get(bot_id) if hasattr(engine, 'current_actions') else None
+
+            current_tick_data["bots"][bot_id] = {
+                "alive": bot.alive,
+                "action": action.value if action else "NONE",
+                "energy": bot.energy,
+                "pos": [bot.position.x, bot.position.y] if bot.alive else None,
+                "score": round(bot.score, 1)
+            }
+
+        tick_lights.append(current_tick_data)
+        # --------------------------------------------------------
 
         # 주요 이벤트 출력
         for ev in events:
@@ -110,6 +143,12 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
     print()
     print(f"🏆 우승: {result.rankings[0]['id']} "
           f"({result.rankings[0]['final_score']:.1f}점)")
+    
+    # 추가: 시뮬레이션 종료 후 전체 라이트를 JSON 파일로 추출[cite: 1]
+    with open("simulation_light.json", "w", encoding="utf-8") as f:
+        json.dump(tick_lights, f, ensure_ascii=False, indent=2)
+    print(f"\n💾 [안내] 전체 틱 라이트가 'simulation_light.json' 파일로 안전하게 저장되었습니다.")
+    # --------------------------------------------------------
 
 
 if __name__ == "__main__":
