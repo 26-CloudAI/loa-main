@@ -64,32 +64,65 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
 
     # 전체 틱 데이터를 모아둘 빈 리스트 생성[cite: 1]
     tick_lights = []
-
-    # 게임 실행
     start_time = time.perf_counter()
     milestone_ticks = {50, 100, 200, 300, 400, 500}
 
+    # [추가] 반복문 시작 전에 딱 한 번만 선언!
+    previous_alive = {bot_id: True for bot_id in engine.bots.keys()}
+
+    # 반복문은 무조건 한 번만 돌아야 합니다.
     while not engine.game_over:
         events = engine.process_tick()
-        # --------------------------------------------------------
-        # 추가: 매 틱마다 발생하는 상세 라이트 수집[cite: 1]
+
         current_tick_data = {
             "tick": engine.tick,
+            "zone_boundary": engine.zone.boundary,
             "events": [
                 {
                     "type": ev.event_type, 
-                    "actor": ev.actor_id, 
+                    "actor": getattr(ev, 'actor_id', None), 
                     "target": getattr(ev, 'target_id', None), 
                     "detail": ev.detail
                 } for ev in events
             ],
-            "bots": {}
+            "bots": {},
+            "minerals": []
         }
 
+        # --------------------------------------------------------
+        # 자연사(에너지 고갈) 라이트 강제 생성 로직
         for bot_id, bot in engine.bots.items():
-            # 엔진에서 방금 수집한 액션 가져오기
-            action = engine.current_actions.get(bot_id) if hasattr(engine, 'current_actions') else None
+            if previous_alive[bot_id] and not bot.alive:
+                has_death_light = any(
+                    e["type"] in ("kill", "death") and e["target"] == bot_id 
+                    for e in current_tick_data["events"]
+                )
+                
+                if not has_death_light:
+                    current_tick_data["events"].append({
+                        "type": "death",
+                        "actor": None,
+                        "target": bot_id,
+                        "detail": "행동 비용 또는 대기로 인해 에너지가 고갈되었습니다."
+                    })
+                    
+            previous_alive[bot_id] = bot.alive
+        # --------------------------------------------------------
 
+        # 광물 위치 수집
+        for y in range(DEFAULT_CONFIG.map.height):
+            for x in range(DEFAULT_CONFIG.map.width):
+                mineral = engine.grid.get_mineral(x, y)
+                if mineral:
+                    current_tick_data["minerals"].append({
+                        "x": x, 
+                        "y": y, 
+                        "rare": mineral.rare
+                    })
+
+        # 봇 상태 수집
+        for bot_id, bot in engine.bots.items():
+            action = engine.current_actions.get(bot_id) if hasattr(engine, 'current_actions') else None
             current_tick_data["bots"][bot_id] = {
                 "alive": bot.alive,
                 "action": action.value if action else "NONE",
@@ -98,15 +131,14 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
                 "score": round(bot.score, 1)
             }
 
+        # 이번 틱의 데이터를 전체 리스트에 안전하게 저장!
         tick_lights.append(current_tick_data)
-        # --------------------------------------------------------
 
-        # 주요 이벤트 출력
+        # 기존 콘솔 출력 유지
         for ev in events:
             if ev.event_type in ("kill", "death"):
                 print(f"  [틱 {ev.tick:4d}] {ev.detail}")
 
-        # 마일스톤 출력
         if engine.tick in milestone_ticks:
             alive = engine.get_alive_bots()
             minerals = engine.grid.count_available_minerals()
