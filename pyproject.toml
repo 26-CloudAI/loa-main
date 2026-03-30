@@ -1,0 +1,15 @@
+[project]
+name = "ai-arena"
+version = "1.0.0"
+description = "AI 봇 배틀로얄 실시간 관전 플랫폼"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+server = ["fastapi>=0.104", "uvicorn[standard]>=0.24", "redis>=5.0"]
+sandbox = ["docker>=7.0"]
+dev = ["pytest>=7.4", "pytest-asyncio>=0.21"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

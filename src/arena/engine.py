@@ -256,6 +256,10 @@ class GameEngine:
             # 공격 비용 차감 (빗나가도 소모)
             bot.deduct_energy(attack_cost)
 
+            # 비용 차감으로 사망 시 공격 무효
+            if not bot.alive:
+                continue
+
             direction = action_to_direction(action)
             if direction is None:
                 continue
@@ -322,6 +326,10 @@ class GameEngine:
                 continue
 
             bot.deduct_energy(move_cost)
+
+            # 비용 차감으로 사망 시 이동 무효
+            if not bot.alive:
+                continue
 
             direction = action_to_direction(action)
             if direction is None:

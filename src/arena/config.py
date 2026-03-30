@@ -1,14 +1,12 @@
-
 """
-config.py
-
-게임 설정 파일 (밸런스, 수치 등)
-파일 수치 변경 시 -> 엔진 전체에 변경 사항 적용됨 (형식 유지 중요)
+AI Arena — 게임 설정 상수
+모든 밸런스 수치를 이 파일 하나에서 관리한다.
+수치 변경 시 이 파일만 수정하면 엔진 전체에 반영된다.
 """
+
 from dataclasses import dataclass, field
 
 
-# Map 설정
 @dataclass(frozen=True)
 class MapConfig:
     width: int = 100
@@ -22,7 +20,6 @@ class MapConfig:
     mineral_regen_chance: float = 0.15  # 재생 확률
 
 
-# Bot 설정
 @dataclass(frozen=True)
 class BotConfig:
     initial_energy: int = 100
@@ -33,7 +30,6 @@ class BotConfig:
     low_energy_mine_bonus: int = 5      # 낮은 에너지 시 추가 채굴 보너스
 
 
-# 동작 설정
 @dataclass(frozen=True)
 class ActionCost:
     stay: int = 1
@@ -43,39 +39,35 @@ class ActionCost:
     shield: int = 3
 
 
-# 전투 시 적용되는 수치 설정
 @dataclass(frozen=True)
 class CombatConfig:
     attack_damage: int = 25
     shield_reduction: float = 0.5       # 실드 피해 감소율
 
 
-# 채굴 시 적용되는 수치 설정
 @dataclass(frozen=True)
 class MineConfig:
     normal_points: int = 15
     rare_points: int = 40
-    contested_split: float = 0.5        # 경합 시 점수 분배 비율 -> 2체 이상이 동시 채굴 시
+    contested_split: float = 0.5        # 경합 시 점수 분배 비율
 
 
-# 자기장 
 @dataclass(frozen=True)
 class ZoneConfig:
     # Phase 1: 0~299틱 — 자기장 없음
     phase1_end: int = 299
     # Phase 2: 300~449틱 — 20틱마다 1칸 수축, -3/틱
     phase2_end: int = 449
-    phase2_shrink_interval: int = 20 # Phase2의 자기장이 줄어드는 간격
+    phase2_shrink_interval: int = 20
     phase2_damage: int = 3
     # Phase 3: 450~500틱 — 10틱마다 1칸 수축 (가속), -3/틱
     phase3_shrink_interval: int = 10
     phase3_damage: int = 3
 
 
-# 게임 메인 설정
 @dataclass(frozen=True)
 class GameConfig:
-    max_ticks: int = 500    # 제한 시간
+    max_ticks: int = 500
     leaderboard_size: int = 3           # 공개 리더보드 상위 N명
 
     # 최종 점수 가중치
