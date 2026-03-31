@@ -65,7 +65,7 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
     # 전체 틱 데이터를 모아둘 빈 리스트 생성[cite: 1]
     tick_lights = []
     start_time = time.perf_counter()
-    milestone_ticks = {50, 100, 200, 300, 400, 500}
+    milestone_ticks = {50, 100, 150, 200}
 
     # [추가] 반복문 시작 전에 딱 한 번만 선언!
     previous_alive = {bot_id: True for bot_id in engine.bots.keys()}

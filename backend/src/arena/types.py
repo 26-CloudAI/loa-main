@@ -101,6 +101,7 @@ class Bot:
     id: str
     position: Position
     energy: int = 100
+    max_energy: int = 100
     score: float = 0.0
     shield_active: bool = False
     alive: bool = True
@@ -127,6 +128,10 @@ class Bot:
         self.energy -= cost
         if self.energy <= 0:
             self.alive = False
+
+    def gain_energy(self, amount: int) -> None:
+        """에너지를 회복. 최대치를 넘지 않는다."""
+        self.energy = min(self.max_energy, self.energy + amount)
 
 
 class GameOverReason(str, Enum):
