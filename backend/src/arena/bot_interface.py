@@ -6,8 +6,12 @@ Phase 2에서 DockerBotAdapter로 교체할 때 이 인터페이스만 맞추면
 """
 
 from __future__ import annotations
+from typing import TYPE_CHECKING
 
 from abc import ABC, abstractmethod
+
+if TYPE_CHECKING:
+    from .grid import Grid
 
 
 class BotInterface(ABC):
@@ -37,3 +41,11 @@ class BotInterface(ABC):
     def bot_id(self) -> str:
         """이 봇의 고유 식별자."""
         ...
+
+    def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
+        """
+        (선택적) 봇이 스폰될 위치를 지정합니다. (x, y) 튜플을 반환합니다.
+        None을 반환하거나 구현하지 않으면, 엔진이 랜덤 위치를 지정합니다.
+        맵 경계 밖이나 다른 봇이 이미 차지한 위치는 무시될 수 있습니다.
+        """
+        return None

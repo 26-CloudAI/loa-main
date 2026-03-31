@@ -25,7 +25,7 @@ from typing import Optional
 
 from .bot_interface import BotInterface
 from .config import DEFAULT_CONFIG, GameConfig
-from .grid import Grid, generate_spawn_positions
+from .grid import Grid
 from .types import (
     ATTACK_ACTIONS,
     DIRECTION_DELTA,
@@ -34,6 +34,7 @@ from .types import (
     Bot,
     GameOverReason,
     GameResult,
+    Position,
     TickEvent,
     action_to_direction,
 )
@@ -75,11 +76,37 @@ class GameEngine:
         self.zone = ZoneManager(config)
 
         # 봇 엔티티 생성 및 스폰
-        spawn_positions = generate_spawn_positions(
-            config, len(bot_interfaces), self.rng
-        )
         self.bots: dict[str, Bot] = {}
-        for bi, pos in zip(bot_interfaces, spawn_positions):
+        used_positions: set[tuple[int, int]] = set()
+
+        for bi in bot_interfaces:
+            pos = None
+            # 봇이 스폰 위치를 지정하는지 확인
+            if hasattr(bi, 'get_spawn_position'):
+                try:
+                    desired_pos = bi.get_spawn_position(self.grid)
+                    if desired_pos and isinstance(desired_pos, tuple) and len(desired_pos) == 2:
+                        x, y = desired_pos
+                        if self.grid.is_in_bounds(x, y) and (x, y) not in used_positions:
+                            pos = Position(x, y)
+                except Exception:
+                    # 봇의 스폰 위치 지정 실패 시 무시
+                    logger.warning(f"Bot {bi.bot_id}의 get_spawn_position() 호출 중 오류 발생. 랜덤 위치를 사용합니다.", exc_info=True)
+
+            # 위치가 지정되지 않았으면 랜덤 위치 할당
+            if pos is None:
+                attempts = 0
+                while attempts < 10000: # 무한 루프 방지
+                    x = self.rng.randint(0, self.config.map.width - 1)
+                    y = self.rng.randint(0, self.config.map.height - 1)
+                    if (x, y) not in used_positions:
+                        pos = Position(x, y)
+                        break
+                    attempts += 1
+                if pos is None:
+                    raise RuntimeError("맵에 봇을 배치할 공간을 찾을 수 없습니다.")
+
+            used_positions.add(pos.as_tuple())
             self.bots[bi.bot_id] = Bot(
                 id=bi.bot_id,
                 position=pos,
