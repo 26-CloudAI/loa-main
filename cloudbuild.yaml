@@ -1,24 +1,29 @@
+substitutions:
+  _REGION: asia-northeast3
+  _REPOSITORY: ai-arena
+  _SERVICE_NAME: ai-arena-server
+
 steps:
   # 1. Docker 이미지 빌드
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '-t'
-      - 'asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/server:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$COMMIT_SHA'
       - '-t'
-      - 'asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/server:latest'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:latest'
       - 'backend'
 
   # 2. Artifact Registry에 이미지 푸시
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/server:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$COMMIT_SHA'
 
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/server:latest'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:latest'
 
   # 3. Cloud Run 재배포
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -26,11 +31,11 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'ai-arena-server'
+      - '${_SERVICE_NAME}'
       - '--image'
-      - 'asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/server:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$COMMIT_SHA'
       - '--region'
-      - 'asia-northeast3'
+      - '${_REGION}'
       - '--quiet'
 
 options:
