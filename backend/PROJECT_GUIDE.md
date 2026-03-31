@@ -22,6 +22,7 @@
 ai-arena/
 ├── pyproject.toml                # 프로젝트 설정 + 의존성 정의
 ├── run_simulation.py             # 콘솔 시뮬레이션 (의존성 0)
+├── run_simulation_log.py         # 콘솔 시뮬레이션 (로그 남음)
 ├── run_sandbox_game.py           # Docker 통합 시뮬레이션
 ├── run_server.py                 # FastAPI 서버 시작
 │
