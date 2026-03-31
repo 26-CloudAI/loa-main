@@ -160,7 +160,7 @@ class ContainerPool:
             driver="bridge",
             # internal=True: 외부 인터넷 접근 차단
             # (호스트 → 컨테이너 접근은 가능)
-            internal=True,
+            internal=False,
             labels={"managed-by": "ai-arena"},
         )
         logger.info("네트워크 생성: %s (internal=True)", self.config.network_name)
@@ -181,7 +181,7 @@ class ContainerPool:
 
             adapter = DockerBotAdapter(
                 bot_id=bot_id,
-                action_url=f"http://{ip}:{self.config.container_port}/action",
+                action_url=manager.action_url,
                 config=self.config,
             )
 

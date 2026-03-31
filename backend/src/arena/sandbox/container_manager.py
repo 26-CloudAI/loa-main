@@ -66,6 +66,7 @@ class ContainerManager:
 
         self._container: Optional[Container] = None
         self._container_ip: Optional[str] = None
+        self._host_port: Optional[str] = None
         self._temp_dir: Optional[tempfile.TemporaryDirectory] = None
 
     @property
@@ -74,15 +75,15 @@ class ContainerManager:
 
     @property
     def action_url(self) -> Optional[str]:
-        if self._container_ip is None:
-            return None
-        return f"http://{self._container_ip}:{self.config.container_port}/action"
+        if self._container_ip is None: return None
+        port = self._host_port if self._host_port else self.config.container_port
+        return f"http://{self._container_ip}:{port}/action"
 
     @property
     def health_url(self) -> Optional[str]:
-        if self._container_ip is None:
-            return None
-        return f"http://{self._container_ip}:{self.config.container_port}/health"
+        if self._container_ip is None: return None
+        port = self._host_port if self._host_port else self.config.container_port
+        return f"http://{self._container_ip}:{port}/health"
 
     @property
     def container_name(self) -> str:
@@ -137,7 +138,10 @@ class ContainerManager:
 
     def _prepare_bot_files(self) -> None:
         """봇 코드와 래퍼 스크립트를 임시 디렉토리에 저장."""
-        self._temp_dir = tempfile.TemporaryDirectory(prefix=f"arena-{self.bot_id}-")
+        # --- 윈도우 권한 우회를 위해 프로젝트 내부 폴더 사용 ---
+        local_temp = Path.cwd() / "temp_bots"
+        local_temp.mkdir(exist_ok=True)
+        self._temp_dir = tempfile.TemporaryDirectory(prefix=f"arena-{self.bot_id}-", dir=local_temp)
         bot_dir = Path(self._temp_dir.name)
 
         # 유저 봇 코드
@@ -168,7 +172,8 @@ class ContainerManager:
         self._container = self.client.containers.create(
             image=self.config.base_image,
             name=self.container_name,
-            command=["python", "/bot/wrapper.py"],
+            command=["python", "-u", "/bot/wrapper.py"],
+            ports={f"{self.config.container_port}/tcp": None},
 
             # 볼륨 마운트: 봇 디렉토리 → /bot (읽기 전용)
             volumes={
@@ -221,17 +226,20 @@ class ContainerManager:
 
         # 컨테이너 네트워크 IP 획득
         self._container.reload()
-        networks = self._container.attrs["NetworkSettings"]["Networks"]
-        net_info = networks.get(self.config.network_name)
-        if net_info is None:
-            # 네트워크 이름으로 못 찾으면 첫 번째 네트워크 사용
-            net_info = next(iter(networks.values()))
-        self._container_ip = net_info["IPAddress"]
+        ports = self._container.attrs["NetworkSettings"]["Ports"]
+        port_key = f"{self.config.container_port}/tcp"
+        if ports and ports.get(port_key):
+            self._host_port = ports[port_key][0]["HostPort"]
+            self._container_ip = "127.0.0.1"  # 윈도우 localhost로 강제 지정
+        else:
+            networks = self._container.attrs["NetworkSettings"]["Networks"]
+            net_info = networks.get(self.config.network_name)
+            if net_info is None:
+                net_info = next(iter(networks.values()))
+            self._container_ip = net_info["IPAddress"]
 
         if not self._container_ip:
-            raise RuntimeError(
-                f"컨테이너 {self.container_name}의 IP를 획득할 수 없습니다."
-            )
+            raise RuntimeError(f"컨테이너 {self.container_name}의 IP를 획득할 수 없습니다.")
 
         logger.info(
             "컨테이너 IP 할당: %s → %s",
@@ -260,8 +268,12 @@ class ContainerManager:
 
             time.sleep(self.config.container_health_interval)
 
+        # 폴링 실패 시 에러 및 컨테이너 로그 출력
+        logs = self._container.logs().decode("utf-8", errors="replace")
         raise RuntimeError(
-            f"컨테이너 {self.container_name} 헬스체크 타임아웃 "
-            f"({self.config.container_startup_timeout}초). "
-            f"마지막 오류: {last_error}"
+            f"컨테이너 {self.container_name} 헬스체크 타임아웃 ({self.config.container_startup_timeout}초).\n"
+            f"마지막 오류: {last_error}\n"
+            f"=== 🐳 컨테이너 내부 에러 로그 ===\n"
+            f"{logs}\n"
+            f"================================="
         )
