@@ -178,9 +178,9 @@ def action(state):
 '''
 
 BOT_TEMPLATES = {
-    "초식": HERBIVORE_CODE,
-    "미친개": MAD_DOG_CODE,
-    "존버": CAMPER_CODE,
+    "herbivore": HERBIVORE_CODE,
+    "mad_dog": MAD_DOG_CODE,
+    "camper": CAMPER_CODE,
 }
 
 
@@ -195,7 +195,7 @@ def create_bot_codes(num_bots: int, include_malicious: bool = False) -> dict[str
         codes[bot_id] = BOT_TEMPLATES[label]
 
     if include_malicious:
-        codes["악성봇_99"] = MALICIOUS_CODE
+        codes["malicious_99"] = MALICIOUS_CODE
 
     return codes
 

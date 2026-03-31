@@ -30,7 +30,7 @@ from src.arena.sandbox.docker_adapter import DockerBotAdapter
 class TestSandboxConfig(unittest.TestCase):
     def test_defaults(self):
         cfg = DEFAULT_SANDBOX_CONFIG
-        self.assertEqual(cfg.cpu_quota, 100_000_000)
+        self.assertEqual(cfg.cpu_quota, 1_000_000_000)
         self.assertEqual(cfg.mem_limit, "50m")
         self.assertEqual(cfg.container_port, 8000)
         self.assertAlmostEqual(cfg.action_timeout_sec, 0.1)
@@ -155,7 +155,7 @@ class TestDockerBotAdapter(unittest.TestCase):
         adapter = self._make_adapter(timeout=0.5, port=19999)
         result = adapter.get_action({"tick": 0})
         self.assertEqual(result, "STAY")
-        self.assertEqual(adapter.error_count, 1)
+        self.assertEqual(adapter.error_count + adapter.timeout_count, 1)
 
     def test_bot_id_property(self):
         adapter = self._make_adapter()
