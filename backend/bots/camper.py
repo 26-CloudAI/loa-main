@@ -88,6 +88,18 @@ class CamperBot(BotInterface):
             )
         return "STAY"
 
+    def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
+        """맵의 네 코너 중 한 곳을 무작위로 선택하여 스폰합니다."""
+        w, h = grid.width, grid.height
+        margin = 5
+        corners = [
+            (margin, margin),
+            (w - 1 - margin, margin),
+            (margin, h - 1 - margin),
+            (w - 1 - margin, h - 1 - margin),
+        ]
+        return self._rng.choice(corners)
+
     def _move_toward(self, dx: int, dy: int) -> str:
         if dx == 0 and dy == 0:
             return "MINE"

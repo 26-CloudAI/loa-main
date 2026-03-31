@@ -14,8 +14,12 @@ class MapConfig:
     initial_mineral_count: int = 300
     center_zone_size: int = 30          # 중앙 고밀도 구역 한 변 길이
     center_density_multiplier: float = 2.0
-    rare_zone_size: int = 12            # 코너 희귀 광물 구역 한 변 길이
-    rare_mineral_ratio: float = 0.3     # 코너 구역 광물 중 희귀 비율
+    
+    # 희귀 광물 군락 설정
+    num_rare_mineral_clusters: int = 5    # 생성할 군락 수
+    rare_cluster_radius: int = 6          # 군락의 반경
+    rare_minerals_per_cluster: int = 10   # 군락당 희귀 광물 수
+
     mineral_regen_delay: int = 50       # 채굴 후 재생까지 필요한 틱
     mineral_regen_chance: float = 0.15  # 재생 확률
 
@@ -24,7 +28,6 @@ class MapConfig:
 class BotConfig:
     initial_energy: int = 100
     max_bots: int = 100
-    spawn_margin: int = 15              # 코너에서 스폰 가능 범위
     vision_radius: int = 2              # 시야 반경 (5×5 = 중심 ± 2)
     low_energy_threshold: int = 20      # 낮은 에너지 보정 기준 (v1.1)
     low_energy_mine_bonus: int = 5      # 낮은 에너지 시 추가 채굴 보너스
