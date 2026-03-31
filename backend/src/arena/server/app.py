@@ -48,6 +48,7 @@ from .schemas import (
     make_error_message,
 )
 from .ws_manager import SpectatorManager
+from ..mock_auth.router import router as mock_auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,10 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Mock Auth 라우터 등록 (/auth/*)
+    # Firebase Auth 전환 시 이 줄만 실제 auth 라우터로 교체한다.
+    app.include_router(mock_auth_router)
 
     def _registry() -> GameRegistry:
         return state["registry"]
