@@ -6,6 +6,7 @@ AI Arena — 맵 그리드 관리
 from __future__ import annotations
 
 import random
+import math
 from typing import Optional
 
 from .config import GameConfig
@@ -27,68 +28,83 @@ class Grid:
         self._place_initial_minerals()
 
     def _place_initial_minerals(self) -> None:
-        """초기 광물을 맵에 배치한다. 중앙은 고밀도, 코너에 희귀 광물."""
+        """
+        초기 광물을 맵에 배치한다.
+        1. 맵의 랜덤 위치에 희귀 광물 군락을 생성한다.
+        2. 나머지 공간에 일반 광물을 중앙 고밀도로 배치한다.
+        """
         mc = self.config.map
-        target_count = mc.initial_mineral_count
+        
+        occupied_positions = self._place_rare_clusters()
+        
+        num_normal_minerals = mc.initial_mineral_count - len(occupied_positions)
+        if num_normal_minerals <= 0:
+            return
 
-        # 모든 셀에 가중치 부여
-        weighted_cells: list[tuple[int, int, float, bool]] = []
-
+        # 일반 광물 배치 (중앙 고밀도 적용)
+        weighted_cells: list[tuple[int, int, float]] = []
         half_center = mc.center_zone_size // 2
         cx, cy = self.width // 2, self.height // 2
 
         for x in range(self.width):
             for y in range(self.height):
+                if (x, y) in occupied_positions:
+                    continue
+                
                 weight = 1.0
-                rare = False
-
                 # 중앙 고밀도 구역
                 if abs(x - cx) < half_center and abs(y - cy) < half_center:
                     weight = mc.center_density_multiplier
-
-                # 코너 희귀 구역 판별
-                if self._is_in_rare_zone(x, y):
-                    if self.rng.random() < mc.rare_mineral_ratio:
-                        rare = True
-
-                weighted_cells.append((x, y, weight, rare))
-
+                weighted_cells.append((x, y, weight))
+        
         # 가중치 기반 랜덤 샘플링
-        weights = [w for _, _, w, _ in weighted_cells]
-        total_weight = sum(weights)
-        probs = [w / total_weight for w in weights]
+        if not weighted_cells:
+            return
 
-        # 중복 없이 target_count개 선택
+        weights = [w for _, _, w in weighted_cells]
+        
+        # 중복 없이 num_normal_minerals개 선택
         indices = list(range(len(weighted_cells)))
-        chosen = set()
-        attempts = 0
-        max_attempts = target_count * 10
+        self.rng.shuffle(indices) # 추가적인 무작위성
+        
+        chosen_indices = self.rng.choices(
+            indices, weights=weights, k=min(num_normal_minerals, len(indices))
+        )
 
-        while len(chosen) < target_count and attempts < max_attempts:
-            idx = self.rng.choices(indices, weights=probs, k=1)[0]
-            if idx not in chosen:
-                chosen.add(idx)
-            attempts += 1
+        for idx in chosen_indices:
+            x, y, _ = weighted_cells[idx]
+            if (x, y) not in self._minerals:
+                 pos = Position(x, y)
+                 self._minerals[(x, y)] = Mineral(position=pos, rare=False)
 
-        for idx in chosen:
-            x, y, _, rare = weighted_cells[idx]
-            pos = Position(x, y)
-            self._minerals[(x, y)] = Mineral(position=pos, rare=rare)
 
-    def _is_in_rare_zone(self, x: int, y: int) -> bool:
-        """해당 좌표가 코너 희귀 광물 구역에 속하는지 판별."""
-        rz = self.config.map.rare_zone_size
-        w, h = self.width, self.height
-        corners = [
-            (0, 0),                     # 좌상단
-            (w - rz, 0),                # 우상단
-            (0, h - rz),                # 좌하단
-            (w - rz, h - rz),           # 우하단
-        ]
-        for cx, cy in corners:
-            if cx <= x < cx + rz and cy <= y < cy + rz:
-                return True
-        return False
+    def _place_rare_clusters(self) -> set[tuple[int, int]]:
+        """맵의 랜덤 위치에 희귀 광물 군락을 생성하고, 차지된 위치를 반환."""
+        mc = self.config.map
+        occupied = set()
+
+        for _ in range(mc.num_rare_mineral_clusters):
+            # 맵 가장자리를 피해 군락 중심 생성
+            margin = mc.rare_cluster_radius + 2
+            cx = self.rng.randint(margin, self.width - margin -1)
+            cy = self.rng.randint(margin, self.height - margin - 1)
+
+            for _ in range(mc.rare_minerals_per_cluster):
+                attempts = 0
+                while attempts < 20: # 20번 시도 후 실패 시 다음으로
+                    angle = self.rng.uniform(0, 2 * 3.14159)
+                    radius = self.rng.uniform(0, mc.rare_cluster_radius)
+                    
+                    x = int(cx + radius * math.cos(angle))
+                    y = int(cy + radius * math.sin(angle))
+
+                    if self.is_in_bounds(x, y) and (x, y) not in occupied:
+                        pos = Position(x, y)
+                        self._minerals[(x, y)] = Mineral(position=pos, rare=True)
+                        occupied.add((x,y))
+                        break
+                    attempts += 1
+        return occupied
 
     def get_mineral(self, x: int, y: int) -> Optional[Mineral]:
         """해당 좌표의 채굴 가능한 광물을 반환. 없거나 이미 채굴됐으면 None."""
@@ -139,44 +155,3 @@ class Grid:
         return 0 <= x < self.width and 0 <= y < self.height
 
 
-def generate_spawn_positions(
-    config: GameConfig, num_bots: int, rng: random.Random
-) -> list[Position]:
-    """
-    봇 스폰 위치를 4개 코너 근처에 분산 배치한다.
-    봇 수가 4의 배수가 아닐 때도 균등 분배.
-    """
-    margin = config.bot.spawn_margin
-    w, h = config.map.width, config.map.height
-
-    corners = [
-        (0, 0),                         # 좌상단
-        (w - margin, 0),                # 우상단
-        (0, h - margin),                # 좌하단
-        (w - margin, h - margin),       # 우하단
-    ]
-
-    positions: list[Position] = []
-    used: set[tuple[int, int]] = set()
-
-    for i in range(num_bots):
-        corner_x, corner_y = corners[i % 4]
-
-        # 해당 코너 내 랜덤 위치 (겹치지 않게)
-        attempts = 0
-        while attempts < 100:
-            x = corner_x + rng.randint(0, margin - 1)
-            y = corner_y + rng.randint(0, margin - 1)
-            # 맵 경계 클램핑
-            x = min(x, w - 1)
-            y = min(y, h - 1)
-            if (x, y) not in used:
-                used.add((x, y))
-                positions.append(Position(x, y))
-                break
-            attempts += 1
-        else:
-            # fallback: 겹치더라도 배치
-            positions.append(Position(x, y))
-
-    return positions
