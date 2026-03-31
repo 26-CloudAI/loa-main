@@ -24,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.arena.config import DEFAULT_CONFIG
 from src.arena.engine import GameEngine
-from src.arena.sandbox import ContainerPool, SandboxConfig
+from src.arena.sandbox.container_pool import ContainerPool
+from src.arena.sandbox.config import SandboxConfig
 
 # ── 봇 코드 템플릿 ──
 
