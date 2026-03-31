@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Arena 리플레이어</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #1e1e1e; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .header-controls { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
+        
+        /* 캔버스와 라이트 패널을 나란히 배치하기 위한 레이아웃 */
+        .main-layout { display: flex; gap: 20px; align-items: flex-start; max-height: 600px; }
+        
+        canvas { background-color: #2d2d2d; border: 2px solid #555; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        
+        /* 라이트 뷰어 패널 스타일 */
+        .light-panel { width: 350px; height: 600px; background: #242424; border: 2px solid #555; display: flex; flex-direction: column; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .light-header { padding: 12px; background: #333; border-bottom: 2px solid #555; display: flex; justify-content: space-between; align-items: center; }
+        .light-header select { background: #444; color: white; border: 1px solid #666; padding: 6px; border-radius: 4px; outline: none; }
+        .light-content { flex: 1; overflow-y: auto; padding: 15px; font-size: 0.9em; line-height: 1.6; }
+        .light-item { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed #444; word-break: keep-all; }
+        .tick-badge { color: #ff9800; font-weight: bold; margin-right: 5px; }
+        
+        .controls { display: flex; gap: 15px; align-items: center; background: #333; padding: 10px 20px; border-radius: 8px; margin-top: 20px; }
+        button { padding: 8px 16px; cursor: pointer; background: #4caf50; border: none; color: white; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #45a049; }
+        input[type="file"] { margin-bottom: 10px; }
+        .info { font-size: 1.1em; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header-controls">
+        <h2>⚔️ AI Arena 리플레이 뷰어</h2>
+        <input type="file" id="logUploader" accept=".json">
+    </div>
+
+    <!-- 좌측: 캔버스 / 우측: 텍스트 라이트 뷰어 -->
+    <div class="main-layout">
+        <canvas id="arena" width="600" height="600"></canvas>
+        
+        <div class="light-panel">
+            <div class="light-header">
+                <strong style="font-size: 1.1em;">📜 이벤트 라이트</strong>
+                <select id="botFilter">
+                    <option value="ALL">모든 봇 보기</option>
+                </select>
+            </div>
+            <div class="light-content" id="lightContent">
+                <!-- 텍스트 라이트가 여기에 동적으로 추가됩니다 -->
+                <div style="color: #888; text-align: center; margin-top: 50px;">JSON 파일을 업로드해주세요.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="btnPrev">⏪ 이전</button>
+        <button id="btnPlay">▶ 재생 / ⏸ 일시정지</button>
+        <button id="btnNext">다음 ⏩</button>
+        <span class="info" id="tickDisplay">Tick: 0 / 0</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('arena');
+        const ctx = canvas.getContext('2d');
+        const cellSize = canvas.width / 100;
+
+        let replayData = [];
+        let currentTick = 0;
+        let isPlaying = false;
+        let playInterval;
+        let uniqueBots = new Set();
+
+        // 필터 변경 시 현재 틱까지의 라이트 즉시 다시 그리기
+        document.getElementById('botFilter').addEventListener('change', () => {
+            updateLightPanel(currentTick);
+        });
+
+        document.getElementById('logUploader').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                replayData = JSON.parse(event.target.result);
+                currentTick = 0;
+                
+                // 봇 목록 추출하여 드롭다운(필터)에 세팅
+                uniqueBots.clear();
+                if(replayData[0] && replayData[0].bots) {
+                    Object.keys(replayData[0].bots).forEach(b => uniqueBots.add(b));
+                }
+                const filterSelect = document.getElementById('botFilter');
+                filterSelect.innerHTML = '<option value="ALL">모든 봇 보기</option>';
+                uniqueBots.forEach(botId => {
+                    const opt = document.createElement('option');
+                    opt.value = botId;
+                    opt.innerText = botId;
+                    filterSelect.appendChild(opt);
+                });
+
+                drawFrame(currentTick);
+            };
+            reader.readAsText(file);
+        });
+
+        // 1. 이벤트를 상세 이유와 함께 출력하도록 개선
+        function formatEventMessage(ev) {
+            const actorStr = ev.actor ? `<b>${ev.actor}</b>` : "";
+            const targetStr = ev.target ? `<b>${ev.target}</b>` : "";
+            
+            switch(ev.type) {
+                case "mine_success": 
+                    return `<span style="color:#ffeb3b">${actorStr}</span> 이(가) 광물을 획득했습니다.`;
+                case "mine_fail": 
+                    return `<span style="color:#9e9e9e">${actorStr}</span> 이(가) 채굴에 실패했습니다.`;
+                case "attack_hit": 
+                    return `<span style="color:#f44336">${actorStr}</span> 이(가) ${targetStr} 을(를) 공격했습니다.`;
+                case "attack_miss":
+                    return `<span style="color:#f44336">${actorStr}</span> 의 공격이 빗나갔습니다.`;
+                case "kill": 
+                    return `💀 <span style="color:#f44336">${targetStr}</span> 이(가) 교전 중 사망했습니다.`; 
+                case "death": 
+                    // 엔진에서 보내준 상세 이유(ev.detail)를 그대로 붙여서 에너지/자기장 등의 원인을 보여줍니다.
+                    const deadBot = ev.target || (ev.detail ? ev.detail.split(' ')[0] : "알 수 없는 봇");
+                    return `🪦 <span style="color:#9e9e9e"><b>${deadBot}</b></span> 이(가) 사망했습니다. <span style="font-size:0.85em; color:#aaa;">(${ev.detail})</span>`; 
+                case "zone_damage": 
+                    return `<span style="color:#ff9800">${actorStr}</span> 이(가) 자기장 피해를 입었습니다!`;
+                default: 
+                    return `${actorStr} ${ev.detail}`;
+            }
+        }
+
+        // 2. 우측 라이트 패널 업데이트 (사망 필터링 강화 및 생존자 표시)
+        // 우측 라이트 패널 업데이트 (실드 사용 내역 추가)
+        function updateLightPanel(tickIndex) {
+            if (replayData.length === 0) return;
+            const container = document.getElementById('lightContent');
+            const selectedBot = document.getElementById('botFilter').value;
+            
+            let htmlString = '';
+            
+            for (let i = 0; i <= tickIndex; i++) {
+                const frame = replayData[i];
+
+                // 1. 실드 사용 라이트 추가 (엔진 이벤트에는 없으므로 봇의 액션을 직접 확인)
+                if (frame.bots) {
+                    for (const [botId, botData] of Object.entries(frame.bots)) {
+                        if (botData.action === "SHIELD") {
+                            // 필터링 확인
+                            if (selectedBot !== "ALL" && selectedBot !== botId) continue;
+                            
+                            const message = `<span style="color:#00bcd4"><b>${botId}</b></span> 이(가) 방어 실드를 전개했습니다!`;
+                            htmlString += `
+                                <div class="light-item">
+                                    <span class="tick-badge">${frame.tick}틱 :</span> ${message}
+                                </div>
+                            `;
+                        }
+                    }
+                }
+
+                // 2. 기존 공식 이벤트 라이트 추가 (채굴, 공격, 사망 등)
+                if (frame.events && frame.events.length > 0) {
+                    frame.events.forEach(ev => {
+                        // 필터링 기준: actor, target, detail 텍스트 안에 봇 이름이 있으면 통과
+                        if (selectedBot !== "ALL") {
+                            const isActor = ev.actor === selectedBot;
+                            const isTarget = ev.target === selectedBot;
+                            const isInDetail = ev.detail && ev.detail.includes(selectedBot);
+                            if (!isActor && !isTarget && !isInDetail) return;
+                        }
+
+                        const message = formatEventMessage(ev);
+                        htmlString += `
+                            <div class="light-item">
+                                <span class="tick-badge">${frame.tick}틱 :</span> ${message}
+                            </div>
+                        `;
+                    });
+                }
+            }
+            
+            // 시뮬레이션의 마지막 틱에 도달했을 경우 최후의 생존자 판별 및 출력
+            if (tickIndex === replayData.length - 1) {
+                const lastFrame = replayData[tickIndex];
+                let survivors = [];
+                for (const [botId, botData] of Object.entries(lastFrame.bots)) {
+                    if (botData.alive) survivors.push(botId);
+                }
+                
+                htmlString += `
+                    <div class="light-item" style="margin-top: 15px; border-top: 2px solid #555; padding-top: 15px; text-align: center;">
+                        🎉 <strong>게임 종료!</strong><br><br>
+                        ${survivors.length > 0 
+                            ? `👑 최후의 생존자: <span style="color:#00bcd4;"><b>${survivors.join(', ')}</b></span>` 
+                            : `모든 봇이 쓰러졌습니다.`}
+                    </div>
+                `;
+            }
+
+            container.innerHTML = htmlString || '<div style="color: #888; text-align: center;">표시할 라이트가 없습니다.</div>';
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function drawFrame(tickIndex) {
+            if (replayData.length === 0) return;
+            const frame = replayData[tickIndex];
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const boundary = frame.zone_boundary || 0;
+            if (boundary > 0) {
+                ctx.fillStyle = "rgba(255, 0, 0, 0.25)";
+                ctx.fillRect(0, 0, canvas.width, boundary * cellSize);
+                ctx.fillRect(0, canvas.height - boundary * cellSize, canvas.width, boundary * cellSize);
+                ctx.fillRect(0, boundary * cellSize, boundary * cellSize, canvas.height - 2 * boundary * cellSize);
+                ctx.fillRect(canvas.width - boundary * cellSize, boundary * cellSize, boundary * cellSize, canvas.height - 2 * boundary * cellSize);
+            }
+
+            if (frame.minerals) {
+                frame.minerals.forEach(m => {
+                    ctx.fillStyle = m.rare ? "#9c27b0" : "#ffeb3b";
+                    ctx.beginPath();
+                    ctx.arc(m.x * cellSize + cellSize/2, m.y * cellSize + cellSize/2, cellSize * 0.35, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+
+            for (const [botId, botData] of Object.entries(frame.bots)) {
+                if (!botData.alive || !botData.pos) continue;
+
+                const [x, y] = botData.pos;
+                const cx = x * cellSize + cellSize / 2;
+                const cy = y * cellSize + cellSize / 2;
+                
+                if (botId.includes("초식")) ctx.fillStyle = "#4caf50";
+                else if (botId.includes("미친개")) ctx.fillStyle = "#f44336";
+                else if (botId.includes("존버")) ctx.fillStyle = "#2196f3";
+                else ctx.fillStyle = "#ffffff";
+
+                ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+
+                if (botData.action === "SHIELD") {
+                    ctx.strokeStyle = "#00bcd4";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, cellSize * 1.2, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else if (botData.action && botData.action.startsWith("ATTACK")) {
+                    ctx.strokeStyle = "red";
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy);
+                    if (botData.action === "ATTACK_UP") ctx.lineTo(cx, cy - cellSize * 2.5);
+                    if (botData.action === "ATTACK_DOWN") ctx.lineTo(cx, cy + cellSize * 2.5);
+                    if (botData.action === "ATTACK_LEFT") ctx.lineTo(cx - cellSize * 2.5, cy);
+                    if (botData.action === "ATTACK_RIGHT") ctx.lineTo(cx + cellSize * 2.5, cy);
+                    ctx.stroke();
+                }
+            }
+
+            document.getElementById('tickDisplay').innerText = `Tick: ${frame.tick} / ${replayData[replayData.length - 1].tick}`;
+            
+            // 화면을 그릴 때 텍스트 라이트 패널도 함께 동기화
+            updateLightPanel(tickIndex);
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                playInterval = setInterval(() => {
+                    if (currentTick < replayData.length - 1) {
+                        currentTick++;
+                        drawFrame(currentTick);
+                    } else {
+                        togglePlay();
+                    }
+                }, 50); 
+            } else {
+                clearInterval(playInterval);
+            }
+        }
+
+        document.getElementById('btnPlay').addEventListener('click', togglePlay);
+        document.getElementById('btnPrev').addEventListener('click', () => {
+            if (currentTick > 0) { currentTick--; drawFrame(currentTick); }
+        });
+        document.getElementById('btnNext').addEventListener('click', () => {
+            if (currentTick < replayData.length - 1) { currentTick++; drawFrame(currentTick); }
+        });
+    </script>
+</body>
+</html>
