@@ -1,19 +1,28 @@
 """
 AI Arena — 서버 설정
 Redis, WebSocket, API 관련 설정값.
+
+환경변수로 재정의 가능:
+  REDIS_HOST      Redis 서버 주소 (기본: localhost)
+  REDIS_PORT      Redis 포트 (기본: 6379)
+  REDIS_PASSWORD  Redis 비밀번호 (기본: None)
+  API_PORT        API 서버 포트 (기본: 8080)
+  MAX_BOT_CODE_SIZE  봇 코드 최대 크기 bytes (기본: 50000)
+  MAX_BOTS_PER_GAME  게임당 최대 봇 수 (기본: 100)
 """
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
 class RedisConfig:
-    host: str = "localhost"
-    port: int = 6379
+    host: str = os.environ.get("REDIS_HOST", "localhost")
+    port: int = int(os.environ.get("REDIS_PORT", "6379"))
     db: int = 0
-    password: str | None = None
+    password: str | None = os.environ.get("REDIS_PASSWORD", None)
 
     # 키 접두사 (네임스페이스 분리)
     key_prefix: str = "arena:"
@@ -44,11 +53,11 @@ class WebSocketConfig:
 @dataclass(frozen=True)
 class APIConfig:
     host: str = "0.0.0.0"
-    port: int = 8080
+    port: int = int(os.environ.get("API_PORT", "8080"))
 
     # 봇 코드 업로드 제한
-    max_bot_code_size: int = 50_000     # 50KB
-    max_bots_per_game: int = 100
+    max_bot_code_size: int = int(os.environ.get("MAX_BOT_CODE_SIZE", "50000"))   # 50KB
+    max_bots_per_game: int = int(os.environ.get("MAX_BOTS_PER_GAME", "100"))
 
     # 게임 틱 간격 (초) — 관전 속도 제어
     tick_interval: float = 0.05         # 50ms (초당 20틱)
