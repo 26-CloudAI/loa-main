@@ -143,14 +143,19 @@ class ContainerManager:
         local_temp.mkdir(exist_ok=True)
         self._temp_dir = tempfile.TemporaryDirectory(prefix=f"arena-{self.bot_id}-", dir=local_temp)
         bot_dir = Path(self._temp_dir.name)
+        # cap_drop=["ALL"] 환경에서 컨테이너 root가 파일을 읽으려면
+        # other 읽기/실행 권한(o+rx/o+r)이 필요하다
+        os.chmod(bot_dir, 0o755)
 
         # 유저 봇 코드
         user_bot_path = bot_dir / "user_bot.py"
         user_bot_path.write_text(self.bot_code, encoding="utf-8")
+        os.chmod(user_bot_path, 0o644)
 
         # 래퍼 스크립트
         wrapper_dest = bot_dir / "wrapper.py"
         wrapper_dest.write_text(_WRAPPER_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        os.chmod(wrapper_dest, 0o644)
 
     def _ensure_image(self) -> None:
         """베이스 이미지가 로컬에 있는지 확인. 없으면 pull."""
