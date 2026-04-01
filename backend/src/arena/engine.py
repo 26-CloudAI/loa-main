@@ -111,6 +111,7 @@ class GameEngine:
                 id=bi.bot_id,
                 position=pos,
                 energy=config.bot.initial_energy,
+                max_energy=config.bot.initial_energy,
             )
 
     # ──────────────────────────────────────────────
@@ -317,6 +318,9 @@ class GameEngine:
             if not target.alive:
                 continue
 
+            # 처치 시 에너지 흡수를 위해 공격 전 에너지를 기록
+            energy_before_damage = target.energy
+
             actual_damage = target.apply_damage(attack_damage)
             events.append(TickEvent(
                 tick=self.tick,
@@ -330,12 +334,16 @@ class GameEngine:
                 attacker = self.bots[attacker_id]
                 if attacker.alive:
                     attacker.kills += 1
+                    # 처치한 적의 남은 에너지를 흡수
+                    energy_absorbed = energy_before_damage
+                    attacker.gain_energy(energy_absorbed)
+
                 events.append(TickEvent(
                     tick=self.tick,
                     event_type="kill",
                     actor_id=attacker_id,
                     target_id=target_id,
-                    detail=f"{attacker_id}이(가) {target_id} 처치",
+                    detail=f"{attacker_id}이(가) {target_id} 처치 (에너지 +{energy_absorbed})",
                 ))
 
     # ──────────────────────────────────────────────
@@ -413,17 +421,20 @@ class GameEngine:
 
             # 점수 계산
             base_points = mc.rare_points if mineral.rare else mc.normal_points
+            energy_gain = mc.energy_gain_rare if mineral.rare else mc.energy_gain_normal
             split_count = len(miner_ids)
             points_each = base_points / split_count
 
             # 광물 소비
             self.grid.mark_mined(mx, my, self.tick)
 
+
             for mid in miner_ids:
                 bot = self.bots[mid]
                 if not bot.alive:
                     continue
                 bot.score += points_each
+                bot.gain_energy(energy_gain // split_count) # 경합 시 에너지도 분배
                 bot.minerals_mined += 1
                 events.append(TickEvent(
                     tick=self.tick,
@@ -432,7 +443,8 @@ class GameEngine:
                     detail=(
                         f"{'희귀 ' if mineral.rare else ''}"
                         f"광물 채굴 +{points_each:.1f}점"
-                        f"{' (경합)' if split_count > 1 else ''}"
+                        f", 에너지 +{energy_gain // split_count}"
+                        f"{' (경합)' if split_count > 1 else ''}",
                     ),
                 ))
 

@@ -52,25 +52,27 @@ class CombatConfig:
 class MineConfig:
     normal_points: int = 15
     rare_points: int = 40
+    energy_gain_normal: int = 10  # 일반 광물 채굴 시 에너지 회복량
+    energy_gain_rare: int = 25    # 희귀 광물 채굴 시 에너지 회복량
     contested_split: float = 0.5        # 경합 시 점수 분배 비율
 
 
 @dataclass(frozen=True)
 class ZoneConfig:
-    # Phase 1: 0~299틱 — 자기장 없음
-    phase1_end: int = 299
-    # Phase 2: 300~449틱 — 20틱마다 1칸 수축, -3/틱
-    phase2_end: int = 449
-    phase2_shrink_interval: int = 20
+    # Phase 1: 0~75틱 — 자기장 없음
+    phase1_end: int = 75
+    # Phase 2: 76~150틱 — 4틱마다 1칸 수축
+    phase2_end: int = 150
+    phase2_shrink_interval: int = 4
     phase2_damage: int = 3
-    # Phase 3: 450~500틱 — 10틱마다 1칸 수축 (가속), -3/틱
-    phase3_shrink_interval: int = 10
+    # Phase 3: 151~200틱 — 2틱마다 1칸 수축 (가속)
+    phase3_shrink_interval: int = 2
     phase3_damage: int = 3
 
 
 @dataclass(frozen=True)
 class GameConfig:
-    max_ticks: int = 500
+    max_ticks: int = 200
     leaderboard_size: int = 3           # 공개 리더보드 상위 N명
 
     # 최종 점수 가중치

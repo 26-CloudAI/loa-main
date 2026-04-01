@@ -233,10 +233,12 @@
                 const cx = x * cellSize + cellSize / 2;
                 const cy = y * cellSize + cellSize / 2;
                 
-                if (botId.includes("초식")) ctx.fillStyle = "#4caf50";
-                else if (botId.includes("미친개")) ctx.fillStyle = "#f44336";
-                else if (botId.includes("존버")) ctx.fillStyle = "#2196f3";
-                else ctx.fillStyle = "#ffffff";
+                const idLower = botId.toLowerCase();
+
+                if (idLower.includes("초식") || idLower.includes("herbivore")) ctx.fillStyle = "#4caf50";
+                else if (idLower.includes("미친개") || idLower.includes("maddog") || idLower.includes("mad_dog")) ctx.fillStyle = "#f44336";
+                else if (idLower.includes("존버") || idLower.includes("camper")) ctx.fillStyle = "#2196f3";
+                else ctx.fillStyle = "#ffffff"; // 그 외의 새로운 봇은 흰색
 
                 ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
 
