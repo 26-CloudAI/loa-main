@@ -78,9 +78,11 @@ class CamperBot(BotInterface):
                     if grid[dy][dx] in ("mineral", "mineral_rare"):
                         return self._move_toward(dx - cx, dy - cy)
 
-        # 초반: 에너지 절약 (STAY)
+        # 초반: 에너지 절약 (STAY) 하되, 에너지가 60 이하로 떨어지면 굶어 죽지 않기 위해 파밍 시작
         if tick < 100:
-            return "STAY"
+            if energy > 60:
+                return "STAY"
+            # 에너지가 60 이하이면 랜덤 탐색 로직으로 자연스럽게 넘어감
 
         # 중반: 느린 탐색
         if self._rng.random() < 0.3:

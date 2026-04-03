@@ -26,8 +26,8 @@ class MadDogBot(BotInterface):
         energy = my["energy"]
         cx, cy = 2, 2  # 시야 중심
 
-        # 에너지 낮으면 광물 찾아서 회복 시도
-        if energy <= 15:
+        # 에너지 낮으면 전투 포기하고 우선 광물 찾아서 회복 시도
+        if energy <= 40:
             return self._emergency_mine(grid, cx, cy)
 
         # 인접 4칸에 적 → 즉시 공격
