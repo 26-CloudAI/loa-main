@@ -46,3 +46,4 @@ secrets/
 # 로그
 logs/
 *.log
+src/arena/server/secrets/

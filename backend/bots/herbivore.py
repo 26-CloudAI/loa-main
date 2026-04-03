@@ -15,14 +15,28 @@ class HerbivoreBot(BotInterface):
         self._bot_id = bot_id
         self._rng = random.Random(seed)
         self._on_mineral = False  # 이전 틱에서 광물 칸으로 이동했는지
+        self._memory: dict[tuple[int, int], str] = {}  # 발견한 광물 위치 기억
 
     @property
     def bot_id(self) -> str:
         return self._bot_id
 
     def get_action(self, state: dict) -> str:
+        my = state["my_bot"]
+        pos_x, pos_y = my["position"]
         grid = state["vision"]["grid"]
         cx, cy = 2, 2  # 시야 중심 (5×5)
+
+        # 1. 시야 정보를 바탕으로 맵 기억(Memory) 업데이트
+        for dy in range(5):
+            for dx in range(5):
+                map_x, map_y = pos_x + (dx - cx), pos_y + (dy - cy)
+                cell = grid[dy][dx]
+                if cell in ("mineral", "mineral_rare"):
+                    self._memory[(map_x, map_y)] = cell
+                elif cell == "empty":
+                    # 빈 칸인 것을 확인했으면 기억에서 지움 (누군가 캤음)
+                    self._memory.pop((map_x, map_y), None)
 
         # 이전 틱에서 광물 칸으로 이동 → 이번 틱에 채굴
         if self._on_mineral:
@@ -67,30 +81,22 @@ class HerbivoreBot(BotInterface):
         if best:
             return self._move_toward(*best)
 
+        # 4. 시야에 광물이 없다면, 기억(Memory) 속 가장 가까운 광물로 이동
+        if self._memory:
+            best_mem = None
+            best_mem_dist = 999
+            for (mx, my), m_type in self._memory.items():
+                dist = abs(mx - pos_x) + abs(my - pos_y)
+                prio = dist - (1 if m_type == "mineral_rare" else 0)
+                if prio < best_mem_dist:
+                    best_mem_dist = prio
+                    best_mem = (mx - pos_x, my - pos_y)
+            
+            if best_mem:
+                return self._move_toward(*best_mem)
+
         # 광물 없으면 랜덤 탐색
         return self._rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
-
-    def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
-        """가장 가까운 희귀 광물 군락 근처에 스폰되도록 요청합니다."""
-        all_minerals = grid.get_all_mineral_positions()
-        rare_minerals = [(x, y) for x, y, is_rare in all_minerals if is_rare]
-
-        if not rare_minerals:
-            return None
-
-        # 무작위 희귀 광물 하나를 타겟으로 지정
-        target_pos = self._rng.choice(rare_minerals)
-        
-        # 해당 광물 주변의 유효한 스폰 위치를 찾음 (약간의 랜덤성 추가)
-        for _ in range(10): # 10번 시도
-            dx = self._rng.randint(-2, 2)
-            dy = self._rng.randint(-2, 2)
-            spawn_x, spawn_y = target_pos[0] + dx, target_pos[1] + dy
-
-            if grid.is_in_bounds(spawn_x, spawn_y):
-                return (spawn_x, spawn_y)
-        
-        return target_pos # 10번 실패 시 그냥 해당 광물 위치 반환
 
     def _move_toward(self, dx: int, dy: int) -> str:
         if abs(dx) >= abs(dy):

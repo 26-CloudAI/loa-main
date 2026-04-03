@@ -255,6 +255,7 @@ def run(
             current_tick_data = {
                 "tick": engine.tick,
                 "zone_boundary": engine.zone.boundary,
+                "zone_bounds": engine.zone.bounds,
                 "events": [
                     {
                         "type": ev.event_type, 

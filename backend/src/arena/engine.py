@@ -73,7 +73,7 @@ class GameEngine:
 
         # 맵 초기화
         self.grid = Grid(config, self.rng)
-        self.zone = ZoneManager(config)
+        self.zone = ZoneManager(config, self.rng)
 
         # 봇 엔티티 생성 및 스폰
         self.bots: dict[str, Bot] = {}
@@ -81,19 +81,7 @@ class GameEngine:
 
         for bi in bot_interfaces:
             pos = None
-            # 봇이 스폰 위치를 지정하는지 확인
-            if hasattr(bi, 'get_spawn_position'):
-                try:
-                    desired_pos = bi.get_spawn_position(self.grid)
-                    if desired_pos and isinstance(desired_pos, tuple) and len(desired_pos) == 2:
-                        x, y = desired_pos
-                        if self.grid.is_in_bounds(x, y) and (x, y) not in used_positions:
-                            pos = Position(x, y)
-                except Exception:
-                    # 봇의 스폰 위치 지정 실패 시 무시
-                    logger.warning(f"Bot {bi.bot_id}의 get_spawn_position() 호출 중 오류 발생. 랜덤 위치를 사용합니다.", exc_info=True)
 
-            # 위치가 지정되지 않았으면 랜덤 위치 할당
             if pos is None:
                 attempts = 0
                 while attempts < 10000: # 무한 루프 방지
@@ -111,7 +99,7 @@ class GameEngine:
                 id=bi.bot_id,
                 position=pos,
                 energy=config.bot.initial_energy,
-                max_energy=config.bot.initial_energy,
+                max_energy=config.bot.max_energy,
             )
 
     # ──────────────────────────────────────────────
