@@ -1,0 +1,63 @@
+"""
+AI Arena — 환경변수 기반 설정
+
+서버 시작 시 환경변수를 읽어 모듈 수준 상수로 노출한다.
+설정이 한 곳에 집중되므로 GCP Cloud Run 등 외부 환경에서 env var만으로 제어 가능.
+
+환경변수 목록:
+  USE_REDIS       Redis 사용 여부 (기본: false)
+  JWT_SECRET      JWT 서명 비밀키 (없으면 랜덤 생성 + 경고)
+  LOG_FORMAT      로그 포맷 (기본: text | json)
+  SERVER_PORT     서버 포트 (기본: 8080)
+  DB_TYPE         DB 종류 (기본: sqlite | postgresql)
+  DB_HOST         DB 호스트
+  DB_NAME         DB 이름 (기본: ai_arena)
+  DB_USER         DB 사용자
+  DB_PASSWORD     DB 비밀번호
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import secrets
+
+logger = logging.getLogger(__name__)
+
+# ── Redis ──────────────────────────────────────
+USE_REDIS: bool = os.environ.get("USE_REDIS", "false").lower() in ("true", "1", "yes")
+
+# ── JWT ────────────────────────────────────────
+_raw_secret = os.environ.get("JWT_SECRET", "")
+if not _raw_secret:
+    _raw_secret = secrets.token_hex(32)
+    logger.warning(
+        "JWT_SECRET 환경변수가 설정되지 않았습니다. "
+        "랜덤 시크릿을 사용합니다. "
+        "서버 재시작 시 기존 토큰이 무효화됩니다. "
+        "프로덕션에서는 JWT_SECRET 환경변수를 설정하세요."
+    )
+JWT_SECRET: str = _raw_secret
+
+# ── 로깅 ───────────────────────────────────────
+LOG_FORMAT: str = os.environ.get("LOG_FORMAT", "text")  # "text" | "json"
+
+# ── 서버 ───────────────────────────────────────
+SERVER_PORT: int = int(os.environ.get("SERVER_PORT", "8080"))
+
+# ── CORS ───────────────────────────────────────
+# 콤마 구분 문자열 (예: "https://my-app.web.app,https://my-app.firebaseapp.com")
+# env var 없으면 개발 편의상 ["*"] 유지
+_cors_raw = os.environ.get("CORS_ORIGINS", "")
+CORS_ORIGINS: list[str] = (
+    [o.strip() for o in _cors_raw.split(",") if o.strip()]
+    if _cors_raw
+    else ["*"]
+)
+
+# ── DB ─────────────────────────────────────────
+DB_TYPE: str = os.environ.get("DB_TYPE", "sqlite")        # "sqlite" | "postgresql"
+DB_HOST: str = os.environ.get("DB_HOST", "")
+DB_NAME: str = os.environ.get("DB_NAME", "ai_arena")
+DB_USER: str = os.environ.get("DB_USER", "")
+DB_PASSWORD: str = os.environ.get("DB_PASSWORD", "")

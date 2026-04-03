@@ -2,6 +2,10 @@ substitutions:
   _REGION: asia-northeast3
   _REPOSITORY: ai-arena
   _SERVICE_NAME: ai-arena-server
+  _IMAGE_TAG: latest       # 트리거 실행 시 ${_IMAGE_TAG}로 덮어씀, 수동 실행 시 latest 사용
+  # ↓ 인프라 생성 후 Cloud Build 트리거 설정에서 채워넣기
+  _REDIS_HOST: ''          # Memorystore IP (3-A 완료 후)
+  _CORS_ORIGINS: ''        # 예: https://<앱>.web.app,https://<앱>.firebaseapp.com
 
 steps:
   # 1. Docker 이미지 빌드
@@ -9,23 +13,19 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:${_IMAGE_TAG}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:latest'
       - 'backend'
 
-  # 2. Artifact Registry에 이미지 푸시
+  # 2. Artifact Registry에 이미지 푸시 (커밋 SHA + latest 태그 동시)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$COMMIT_SHA'
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server'
 
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'push'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:latest'
-
-  # 3. Cloud Run 재배포
+  # 3. Cloud Run 배포
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
@@ -33,9 +33,49 @@ steps:
       - 'deploy'
       - '${_SERVICE_NAME}'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:${_IMAGE_TAG}'
       - '--region'
       - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+
+      # 리소스
+      - '--memory'
+      - '512Mi'
+      - '--cpu'
+      - '1'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '3'
+      - '--port'
+      - '8080'
+
+      # VPC (Memorystore Redis 접근용)
+      - '--vpc-connector'
+      - 'arena-connector'
+
+      # Cloud SQL (PostgreSQL)
+      - '--add-cloudsql-instances'
+      - '$PROJECT_ID:${_REGION}:arena-db'
+
+      # Secret Manager (DB 비밀번호)
+      - '--set-secrets'
+      - 'DB_PASSWORD=db-password:latest'
+
+      # 환경변수
+      - '--set-env-vars'
+      - >-
+        USE_REDIS=true,
+        REDIS_HOST=${_REDIS_HOST},
+        DB_TYPE=postgresql,
+        DB_HOST=/cloudsql/$PROJECT_ID:${_REGION}:arena-db,
+        DB_NAME=ai_arena,
+        DB_USER=arena_user,
+        LOG_FORMAT=json,
+        CORS_ORIGINS=${_CORS_ORIGINS}
+
       - '--quiet'
 
 options:
