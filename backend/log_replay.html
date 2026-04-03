@@ -220,7 +220,7 @@
                     if (s.survivalTicks === 0 && s.alive) {
                         s.survivalTicks = lastFrame.tick;
                     }
-                    s.finalScore = s.miningScore + (s.survivalTicks * 0.1) + (s.kills * 10);
+                    s.finalScore = s.miningScore + (s.survivalTicks * 0.1) + (s.kills * 30);
                 });
 
                 // 점수 순으로 정렬
@@ -250,7 +250,7 @@
                             </div>
                             <div style="color: #999; font-size: 0.9em; display: flex; justify-content: space-between;">
                                 <span>⛏️광물: ${s.miningScore.toFixed(1)}</span>
-                                <span>⚔️킬: ${s.kills} (+${s.kills * 10})</span>
+                                <span>⚔️킬: ${s.kills} (+${s.kills * 30})</span>
                                 <span>⏱️생존: ${s.survivalTicks} (+${(s.survivalTicks * 0.1).toFixed(1)})</span>
                             </div>
                         </div>
