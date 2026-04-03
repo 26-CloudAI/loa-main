@@ -2,6 +2,7 @@ substitutions:
   _REGION: asia-northeast3
   _REPOSITORY: ai-arena
   _SERVICE_NAME: ai-arena-server
+  _IMAGE_TAG: latest       # 트리거 실행 시 ${_IMAGE_TAG}로 덮어씀, 수동 실행 시 latest 사용
   # ↓ 인프라 생성 후 Cloud Build 트리거 설정에서 채워넣기
   _REDIS_HOST: ''          # Memorystore IP (3-A 완료 후)
   _CORS_ORIGINS: ''        # 예: https://<앱>.web.app,https://<앱>.firebaseapp.com
@@ -12,7 +13,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:${_IMAGE_TAG}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:latest'
       - 'backend'
@@ -32,7 +33,7 @@ steps:
       - 'deploy'
       - '${_SERVICE_NAME}'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:${_IMAGE_TAG}'
       - '--region'
       - '${_REGION}'
       - '--platform'
