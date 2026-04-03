@@ -60,9 +60,9 @@ steps:
       - '--add-cloudsql-instances'
       - '$PROJECT_ID:${_REGION}:arena-db'
 
-      # Secret Manager (JWT, DB 비밀번호)
+      # Secret Manager (DB 비밀번호)
       - '--set-secrets'
-      - 'JWT_SECRET=jwt-secret:latest,DB_PASSWORD=db-password:latest'
+      - 'DB_PASSWORD=db-password:latest'
 
       # 환경변수
       - '--set-env-vars'
