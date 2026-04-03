@@ -208,13 +208,26 @@
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            const boundary = frame.zone_boundary || 0;
-            if (boundary > 0) {
-                ctx.fillStyle = "rgba(255, 0, 0, 0.25)";
-                ctx.fillRect(0, 0, canvas.width, boundary * cellSize);
-                ctx.fillRect(0, canvas.height - boundary * cellSize, canvas.width, boundary * cellSize);
-                ctx.fillRect(0, boundary * cellSize, boundary * cellSize, canvas.height - 2 * boundary * cellSize);
-                ctx.fillRect(canvas.width - boundary * cellSize, boundary * cellSize, boundary * cellSize, canvas.height - 2 * boundary * cellSize);
+            const bounds = frame.zone_bounds;
+
+            ctx.fillStyle = "rgba(255, 0, 0, 0.35)"; // 붉은색 조금 더 진하게
+            if (bounds) {
+                // 신규 로직: 비대칭 자기장 (목표지점 방향 축소)
+                const [minX, minY, maxX, maxY] = bounds;
+                const mapW = 100, mapH = 100;
+                
+                // 상/하/좌/우 4개의 사각형으로 나누어 붉은 위험 영역을 그립니다.
+                if (minY > 0) ctx.fillRect(0, 0, canvas.width, minY * cellSize); // 상단
+                if (maxY < mapH - 1) ctx.fillRect(0, (maxY + 1) * cellSize, canvas.width, (mapH - maxY - 1) * cellSize); // 하단
+                if (minX > 0) ctx.fillRect(0, minY * cellSize, minX * cellSize, (maxY - minY + 1) * cellSize); // 좌측
+                if (maxX < mapW - 1) ctx.fillRect((maxX + 1) * cellSize, minY * cellSize, (mapW - maxX - 1) * cellSize, (maxY - minY + 1) * cellSize); // 우측
+
+                // ✨ 눈에 확 띄도록 얇은 하얀색 테두리를 추가합니다.
+                if (minX > 0 || minY > 0 || maxX < mapW - 1 || maxY < mapH - 1) {
+                    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(minX * cellSize, minY * cellSize, (maxX - minX + 1) * cellSize, (maxY - minY + 1) * cellSize);
+                }
             }
 
             if (frame.minerals) {

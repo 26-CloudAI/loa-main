@@ -70,28 +70,6 @@ class HerbivoreBot(BotInterface):
         # 광물 없으면 랜덤 탐색
         return self._rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
 
-    def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
-        """가장 가까운 희귀 광물 군락 근처에 스폰되도록 요청합니다."""
-        all_minerals = grid.get_all_mineral_positions()
-        rare_minerals = [(x, y) for x, y, is_rare in all_minerals if is_rare]
-
-        if not rare_minerals:
-            return None
-
-        # 무작위 희귀 광물 하나를 타겟으로 지정
-        target_pos = self._rng.choice(rare_minerals)
-        
-        # 해당 광물 주변의 유효한 스폰 위치를 찾음 (약간의 랜덤성 추가)
-        for _ in range(10): # 10번 시도
-            dx = self._rng.randint(-2, 2)
-            dy = self._rng.randint(-2, 2)
-            spawn_x, spawn_y = target_pos[0] + dx, target_pos[1] + dy
-
-            if grid.is_in_bounds(spawn_x, spawn_y):
-                return (spawn_x, spawn_y)
-        
-        return target_pos # 10번 실패 시 그냥 해당 광물 위치 반환
-
     def _move_toward(self, dx: int, dy: int) -> str:
         if abs(dx) >= abs(dy):
             return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"

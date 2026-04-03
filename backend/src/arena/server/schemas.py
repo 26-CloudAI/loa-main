@@ -118,7 +118,7 @@ class TickBroadcast:
     tick: int
     bots: list[dict]            # [{id, x, y, energy, score, alive, shield_active}, ...]
     minerals: list[dict]        # [{x, y, rare}, ...] (채굴 가능한 것만)
-    zone_boundary: int
+    zone_bounds: list[int]      # 비대칭 자기장 경계 [minX, minY, maxX, maxY]
     alive_count: int
     leaderboard: list[dict]     # [{rank, id, score}, ...]
 
@@ -129,7 +129,7 @@ class TickBroadcast:
                 "tick": self.tick,
                 "bots": self.bots,
                 "minerals": self.minerals,
-                "zone_boundary": self.zone_boundary,
+                "zone_bounds": self.zone_bounds,
                 "alive_count": self.alive_count,
                 "leaderboard": self.leaderboard,
             },

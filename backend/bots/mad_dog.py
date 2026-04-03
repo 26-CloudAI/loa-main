@@ -64,14 +64,6 @@ class MadDogBot(BotInterface):
         # 중앙 근처면 배회
         return self._rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
 
-    def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
-        """맵의 중앙 (45-55 사이)에 스폰하여 교전 확률을 높입니다."""
-        center_min = 45
-        center_max = 55
-        x = self._rng.randint(center_min, center_max)
-        y = self._rng.randint(center_min, center_max)
-        return (x, y)
-
     def _move_toward(self, dx: int, dy: int) -> str:
         if dx == 0 and dy == 0:
             return "STAY"
