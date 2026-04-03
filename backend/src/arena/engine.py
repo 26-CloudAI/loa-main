@@ -99,7 +99,7 @@ class GameEngine:
                 id=bi.bot_id,
                 position=pos,
                 energy=config.bot.initial_energy,
-                max_energy=config.bot.initial_energy,
+                max_energy=config.bot.max_energy,
             )
 
     # ──────────────────────────────────────────────

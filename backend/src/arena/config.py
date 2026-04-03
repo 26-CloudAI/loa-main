@@ -27,6 +27,7 @@ class MapConfig:
 @dataclass(frozen=True)
 class BotConfig:
     initial_energy: int = 100
+    max_energy: int = 1000              # 후반을 위해 비축할 수 있는 최대 에너지
     max_bots: int = 100
     vision_radius: int = 2              # 시야 반경 (5×5 = 중심 ± 2)
     low_energy_threshold: int = 20      # 낮은 에너지 보정 기준 (v1.1)
@@ -52,8 +53,8 @@ class CombatConfig:
 class MineConfig:
     normal_points: int = 15
     rare_points: int = 40
-    energy_gain_normal: int = 10  # 일반 광물 채굴 시 에너지 회복량
-    energy_gain_rare: int = 25    # 희귀 광물 채굴 시 에너지 회복량
+    energy_gain_normal: int = 20  # 상향: 일반 광물 채굴 시 에너지 회복량
+    energy_gain_rare: int = 50    # 상향: 희귀 광물 채굴 시 에너지 회복량
     contested_split: float = 0.5        # 경합 시 점수 분배 비율
 
 
