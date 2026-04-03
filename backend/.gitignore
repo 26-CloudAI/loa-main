@@ -26,4 +26,4 @@ docker-compose.override.yml
 .DS_Store
 Thumbs.db
 
-backend/src/arena/server/secrets/
+src/arena/server/secrets/
