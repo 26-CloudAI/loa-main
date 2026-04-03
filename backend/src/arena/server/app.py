@@ -39,6 +39,9 @@ from ..bot_interface import BotInterface
 from ..config import DEFAULT_CONFIG
 from .config import DEFAULT_SERVER_CONFIG, ServerConfig
 from .game_session import GameRegistry, GameSession
+from fastapi import Depends
+from ..auth.firebase_handler import verify_firebase_token
+
 from .redis_manager import (
     InMemoryPubSubBroker,
     InMemoryStateStore,
@@ -179,10 +182,6 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    # Mock Auth 라우터 등록 (/auth/*)
-    # Firebase Auth 전환 시 이 줄만 실제 auth 라우터로 교체한다.
-    app.include_router(mock_auth_router)
 
     def _registry() -> GameRegistry:
         return state["registry"]
@@ -337,11 +336,6 @@ def create_app(
             "active_games": len(_registry().list_games()),
             "total_spectators": _spectator_mgr().get_total_connections(),
         }
-
-    # --- 가상의 의존성 (실제 구현 시 교체 필요) ---
-    async def get_current_user():
-        """현재 로그인한 사용자 정보를 가져오는 가상의 의존성"""
-        return {"user_id": "mock_user_123"}
         
     # 가상의 DB 객체 (실제로는 db/bot_repo.py의 객체를 사용)
     # bot_repo = BotRepo() 
@@ -364,12 +358,15 @@ def create_app(
 
     # ── 봇 CRUD API ──
 
+    
     @app.post("/api/bots", status_code=201)
-    async def register_bot(body: BotCreateRequest): # 실제 환경: user = Depends(get_current_user)
-        """새로운 봇 코드를 등록합니다."""
-        user_id = "mock_user_123" # user["user_id"]
+    async def register_bot(
+        body: BotCreateRequest, 
+        user: dict = Depends(verify_firebase_token) # 의존성 주입!
+    ):
+        # 이제 user_id를 파이어베이스가 준 진짜 UID로 사용합니다.
+        user_id = user["uid"] 
         
-        # 1. 코드 검증 (크기 및 action 함수 유무)
         validate_bot_code(body.code, server_config.api.max_bot_code_size)
         
         # 2. DB 저장 로직 (bot_repo 활용)
