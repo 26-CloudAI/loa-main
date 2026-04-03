@@ -71,7 +71,7 @@ class MockUser:
 #  Mock 토큰 유틸 (JWT 흉내, 표준 라이브러리만 사용)
 # ──────────────────────────────────────────────
 
-_MOCK_SECRET = "mock-secret-not-for-production"
+from ..server.settings import JWT_SECRET as _MOCK_SECRET
 _TOKEN_TTL = 3600  # 1시간 (Firebase ID Token 기본 TTL과 동일)
 
 
