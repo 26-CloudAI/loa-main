@@ -14,6 +14,7 @@ class MadDogBot(BotInterface):
     def __init__(self, bot_id: str, seed: int | None = None):
         self._bot_id = bot_id
         self._rng = random.Random(seed)
+        self._memory: dict[tuple[int, int], str] = {}
 
     @property
     def bot_id(self) -> str:
@@ -26,9 +27,19 @@ class MadDogBot(BotInterface):
         energy = my["energy"]
         cx, cy = 2, 2  # 시야 중심
 
-        # 에너지 낮으면 광물 찾아서 회복 시도
-        if energy <= 15:
-            return self._emergency_mine(grid, cx, cy)
+        # 메모리 업데이트
+        for dy in range(5):
+            for dx in range(5):
+                map_x, map_y = pos_x + (dx - cx), pos_y + (dy - cy)
+                cell = grid[dy][dx]
+                if cell in ("mineral", "mineral_rare"):
+                    self._memory[(map_x, map_y)] = cell
+                elif cell == "empty":
+                    self._memory.pop((map_x, map_y), None)
+
+        # 에너지 낮으면 전투 포기하고 우선 광물 찾아서 회복 시도
+        if energy <= 40:
+            return self._emergency_mine(grid, cx, cy, pos_x, pos_y)
 
         # 인접 4칸에 적 → 즉시 공격
         adjacent_attacks = [
@@ -55,6 +66,27 @@ class MadDogBot(BotInterface):
         if closest_enemy:
             return self._move_toward(*closest_enemy)
 
+        # [추가] 기회주의적 채굴 (Opportunistic Mining)
+        # 시야에 적이 없을 때, 이동하는 길에 에너지를 든든하게 유지합니다.
+        
+        # 1. 발 아래 광물이 있다면 즉시 채굴
+        if (pos_x, pos_y) in self._memory:
+            self._memory.pop((pos_x, pos_y), None)
+            return "MINE"
+
+        # 2. 전투 특화 봇이므로 동선 낭비를 막고 에너지를 아끼기 위해 '가장 가까운' 광물을 선택
+        closest_mineral = None
+        closest_min_dist = 999
+        for dy in range(5):
+            for dx in range(5):
+                if grid[dy][dx] in ("mineral", "mineral_rare"):
+                    dist = abs(dx - cx) + abs(dy - cy)
+                    if dist < closest_min_dist:
+                        closest_min_dist = dist
+                        closest_mineral = (dx - cx, dy - cy)
+        if closest_mineral:
+            return self._move_toward(*closest_mineral)
+
         # 적이 없으면 맵 중앙으로 이동 (적을 만날 확률 높임)
         center_dx = 50 - pos_x
         center_dy = 50 - pos_y
@@ -66,13 +98,19 @@ class MadDogBot(BotInterface):
 
     def _move_toward(self, dx: int, dy: int) -> str:
         if dx == 0 and dy == 0:
-            return "STAY"
+            return "MINE"  # 광물 위에 도착했을 때 대기하지 않고 즉시 캐도록 수정
         if abs(dx) >= abs(dy):
             return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
         return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
 
-    def _emergency_mine(self, grid: list, cx: int, cy: int) -> str:
-        """에너지 위기 시 인접 광물 채굴 시도."""
+    def _emergency_mine(self, grid: list, cx: int, cy: int, pos_x: int, pos_y: int) -> str:
+        """에너지 위기 시 인접 광물 채굴 시도. 시야와 기억 활용."""
+        
+        # 발 아래 광물이 있다면 즉시 채굴
+        if (pos_x, pos_y) in self._memory:
+            self._memory.pop((pos_x, pos_y), None)
+            return "MINE"
+            
         adjacent = [
             (0, -1, "MOVE_UP"),
             (0, 1, "MOVE_DOWN"),
@@ -82,4 +120,23 @@ class MadDogBot(BotInterface):
         for adx, ady, move in adjacent:
             if grid[cy + ady][cx + adx] in ("mineral", "mineral_rare"):
                 return move
+                
+        # 시야 내 가장 가까운 광물 방향으로 추적
+        for dy in range(5):
+            for dx in range(5):
+                if grid[dy][dx] in ("mineral", "mineral_rare"):
+                    return self._move_toward(dx - cx, dy - cy)
+                    
+        # 기억 속 광물 추적
+        if self._memory:
+            best_mem = None
+            best_mem_dist = 999
+            for (mx, my) in self._memory.keys():
+                dist = abs(mx - pos_x) + abs(my - pos_y)
+                if dist < best_mem_dist:
+                    best_mem_dist = dist
+                    best_mem = (mx - pos_x, my - pos_y)
+            if best_mem:
+                return self._move_toward(*best_mem)
+                
         return "SHIELD"  # 광물도 없으면 방어

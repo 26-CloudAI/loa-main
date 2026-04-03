@@ -26,7 +26,8 @@ class MapConfig:
 
 @dataclass(frozen=True)
 class BotConfig:
-    initial_energy: int = 100
+    initial_energy: int = 250           # 상향: 스폰 운에 의존하지 않도록 넉넉한 초기 에너지 부여
+    max_energy: int = 1000              # 후반을 위해 비축할 수 있는 최대 에너지
     max_bots: int = 100
     vision_radius: int = 2              # 시야 반경 (5×5 = 중심 ± 2)
     low_energy_threshold: int = 20      # 낮은 에너지 보정 기준 (v1.1)
@@ -50,10 +51,10 @@ class CombatConfig:
 
 @dataclass(frozen=True)
 class MineConfig:
-    normal_points: int = 15
-    rare_points: int = 40
-    energy_gain_normal: int = 10  # 일반 광물 채굴 시 에너지 회복량
-    energy_gain_rare: int = 25    # 희귀 광물 채굴 시 에너지 회복량
+    normal_points: int = 5              # 하향: 전투(킬 10점) 대비 일반 채굴 밸런스 조정
+    rare_points: int = 20               # 하향: 희귀 채굴 점수 조정
+    energy_gain_normal: int = 10        # 하향: 일반 광물 채굴 시 에너지 회복량
+    energy_gain_rare: int = 25          # 하향: 희귀 광물 채굴 시 에너지 회복량
     contested_split: float = 0.5        # 경합 시 점수 분배 비율
 
 
@@ -78,7 +79,7 @@ class GameConfig:
     # 최종 점수 가중치
     score_per_mineral: float = 1.0      # 채굴 점수는 게임 중 실시간 반영
     score_per_survival_tick: float = 0.1
-    score_per_kill: float = 10.0
+    score_per_kill: float = 30.0        # 상향: 킬의 난이도와 리스크에 걸맞은 높은 보상
 
     map: MapConfig = field(default_factory=MapConfig)
     bot: BotConfig = field(default_factory=BotConfig)

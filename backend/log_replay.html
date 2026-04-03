@@ -183,19 +183,80 @@
             // 시뮬레이션의 마지막 틱에 도달했을 경우 최후의 생존자 판별 및 출력
             if (tickIndex === replayData.length - 1) {
                 const lastFrame = replayData[tickIndex];
-                let survivors = [];
-                for (const [botId, botData] of Object.entries(lastFrame.bots)) {
-                    if (botData.alive) survivors.push(botId);
-                }
                 
+                // --- 점수 집계 로직 ---
+                const stats = {};
+                // 0번째 틱에서 봇 목록 초기화
+                if (replayData[0] && replayData[0].bots) {
+                    Object.keys(replayData[0].bots).forEach(botId => {
+                        stats[botId] = {
+                            miningScore: lastFrame.bots[botId] ? lastFrame.bots[botId].score : 0,
+                            kills: 0,
+                            survivalTicks: 0,
+                            alive: lastFrame.bots[botId] ? lastFrame.bots[botId].alive : false
+                        };
+                    });
+                }
+
+                // 전체 이벤트를 순회하며 킬 수와 생존 틱 계산
+                replayData.forEach(frame => {
+                    if (frame.events) {
+                        frame.events.forEach(ev => {
+                            if (ev.type === "kill" && ev.actor && stats[ev.actor]) {
+                                stats[ev.actor].kills++;
+                            }
+                            if ((ev.type === "death" || ev.type === "kill") && ev.target && stats[ev.target]) {
+                                if (stats[ev.target].survivalTicks === 0) {
+                                    stats[ev.target].survivalTicks = frame.tick;
+                                }
+                            }
+                        });
+                    }
+                });
+
+                // 살아남은 봇들의 생존 틱 처리 및 최종 점수 계산
+                Object.keys(stats).forEach(botId => {
+                    const s = stats[botId];
+                    if (s.survivalTicks === 0 && s.alive) {
+                        s.survivalTicks = lastFrame.tick;
+                    }
+                    s.finalScore = s.miningScore + (s.survivalTicks * 0.1) + (s.kills * 30);
+                });
+
+                // 점수 순으로 정렬
+                const sortedBots = Object.keys(stats).sort((a, b) => stats[b].finalScore - stats[a].finalScore);
+                const winnerId = sortedBots.length > 0 ? sortedBots[0] : null;
+
                 htmlString += `
                     <div class="light-item" style="margin-top: 15px; border-top: 2px solid #555; padding-top: 15px; text-align: center;">
                         🎉 <strong>게임 종료!</strong><br><br>
-                        ${survivors.length > 0 
-                            ? `👑 최후의 생존자: <span style="color:#00bcd4;"><b>${survivors.join(', ')}</b></span>` 
+                        ${winnerId 
+                            ? `👑 최종 승리자: <span style="color:#ffeb3b; font-size:1.1em;"><b>${winnerId}</b></span><br><span style="font-size:0.9em; color:#ccc;">(${stats[winnerId].finalScore.toFixed(1)}점)</span>` 
                             : `모든 봇이 쓰러졌습니다.`}
                     </div>
+                    <div style="margin-top: 10px; font-size: 0.85em; line-height: 1.5; padding-bottom: 10px;">
+                        <div style="text-align: center; color: #aaa; margin-bottom: 8px;">📊 최종 점수 결과</div>
                 `;
+
+                sortedBots.forEach((botId, index) => {
+                    const s = stats[botId];
+                    const isWinner = index === 0;
+                    const rankColor = isWinner ? "#ffeb3b" : "#fff";
+                    htmlString += `
+                        <div style="background: rgba(255,255,255,0.05); padding: 8px; margin-bottom: 5px; border-radius: 4px; border-left: 3px solid ${rankColor};">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                <strong style="color: ${rankColor};">${index + 1}위. ${botId}</strong>
+                                <strong style="color: #00bcd4;">${s.finalScore.toFixed(1)}점</strong>
+                            </div>
+                            <div style="color: #999; font-size: 0.9em; display: flex; justify-content: space-between;">
+                                <span>⛏️광물: ${s.miningScore.toFixed(1)}</span>
+                                <span>⚔️킬: ${s.kills} (+${s.kills * 30})</span>
+                                <span>⏱️생존: ${s.survivalTicks} (+${(s.survivalTicks * 0.1).toFixed(1)})</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                htmlString += `</div>`;
             }
 
             container.innerHTML = htmlString || '<div style="color: #888; text-align: center;">표시할 라이트가 없습니다.</div>';

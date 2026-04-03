@@ -16,6 +16,7 @@ class CamperBot(BotInterface):
     def __init__(self, bot_id: str, seed: int | None = None):
         self._bot_id = bot_id
         self._rng = random.Random(seed)
+        self._memory: dict[tuple[int, int], str] = {}
 
     @property
     def bot_id(self) -> str:
@@ -29,6 +30,16 @@ class CamperBot(BotInterface):
         pos_x, pos_y = my["position"]
         energy = my["energy"]
         cx, cy = 2, 2  # 시야 중심
+
+        # 메모리 업데이트
+        for dy in range(5):
+            for dx in range(5):
+                map_x, map_y = pos_x + (dx - cx), pos_y + (dy - cy)
+                cell = grid[dy][dx]
+                if cell in ("mineral", "mineral_rare"):
+                    self._memory[(map_x, map_y)] = cell
+                elif cell == "empty":
+                    self._memory.pop((map_x, map_y), None)
 
         # 인접 적 감지 → 실드 또는 회피
         for dy in range(5):
@@ -59,8 +70,8 @@ class CamperBot(BotInterface):
             if pos_y > safe_max_y:
                 return "MOVE_UP"
 
-        # 후반 (300틱 이후) → 채굴 모드
-        if tick >= 250:
+        # 중반 이후 (100틱~) → 채굴 모드 전환
+        if tick >= 100:
             adjacent = [
                 (0, -1, "MOVE_UP"),
                 (0, 1, "MOVE_DOWN"),
@@ -78,9 +89,23 @@ class CamperBot(BotInterface):
                     if grid[dy][dx] in ("mineral", "mineral_rare"):
                         return self._move_toward(dx - cx, dy - cy)
 
-        # 초반: 에너지 절약 (STAY)
+            # 기억 속 광물 추적
+            if self._memory:
+                best_mem = None
+                best_mem_dist = 999
+                for (mx, my) in self._memory.keys():
+                    dist = abs(mx - pos_x) + abs(my - pos_y)
+                    if dist < best_mem_dist:
+                        best_mem_dist = dist
+                        best_mem = (mx - pos_x, my - pos_y)
+                if best_mem:
+                    return self._move_toward(*best_mem)
+
+        # 초반: 에너지 절약 (STAY) 하되, 에너지가 60 이하로 떨어지면 굶어 죽지 않기 위해 파밍 시작
         if tick < 100:
-            return "STAY"
+            if energy > 60:
+                return "STAY"
+            # 에너지가 60 이하이면 랜덤 탐색 로직으로 자연스럽게 넘어감
 
         # 중반: 느린 탐색
         if self._rng.random() < 0.3:
