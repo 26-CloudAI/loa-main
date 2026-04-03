@@ -25,7 +25,7 @@ class CamperBot(BotInterface):
         my = state["my_bot"]
         grid = state["vision"]["grid"]
         tick = state["tick"]
-        zone_boundary = state["zone_boundary"]
+        zone_bounds = state["zone_bounds"]
         pos_x, pos_y = my["position"]
         energy = my["energy"]
         cx, cy = 2, 2  # 시야 중심
@@ -44,16 +44,17 @@ class CamperBot(BotInterface):
                         return self._flee(dx - cx, dy - cy)
 
         # 자기장 회피: 안전 경계 안으로 이동
-        if zone_boundary > 0:
-            safe_min = zone_boundary + 2  # 여유 2칸
-            safe_max_x = 99 - zone_boundary - 2
-            safe_max_y = 99 - zone_boundary - 2
+        if zone_bounds[0] > 0 or zone_bounds[1] > 0 or zone_bounds[2] < 99 or zone_bounds[3] < 99:
+            safe_min_x = zone_bounds[0] + 2
+            safe_min_y = zone_bounds[1] + 2
+            safe_max_x = zone_bounds[2] - 2
+            safe_max_y = zone_bounds[3] - 2
 
-            if pos_x < safe_min:
+            if pos_x < safe_min_x:
                 return "MOVE_RIGHT"
             if pos_x > safe_max_x:
                 return "MOVE_LEFT"
-            if pos_y < safe_min:
+            if pos_y < safe_min_y:
                 return "MOVE_DOWN"
             if pos_y > safe_max_y:
                 return "MOVE_UP"
@@ -87,18 +88,6 @@ class CamperBot(BotInterface):
                 ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"]
             )
         return "STAY"
-
-    def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
-        """맵의 네 코너 중 한 곳을 무작위로 선택하여 스폰합니다."""
-        w, h = grid.width, grid.height
-        margin = 5
-        corners = [
-            (margin, margin),
-            (w - 1 - margin, margin),
-            (margin, h - 1 - margin),
-            (w - 1 - margin, h - 1 - margin),
-        ]
-        return self._rng.choice(corners)
 
     def _move_toward(self, dx: int, dy: int) -> str:
         if dx == 0 and dy == 0:
