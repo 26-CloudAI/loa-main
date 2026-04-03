@@ -77,6 +77,7 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
         current_tick_data = {
             "tick": engine.tick,
             "zone_boundary": engine.zone.boundary,
+            "zone_bounds": engine.zone.bounds,
             "events": [
                 {
                     "type": ev.event_type, 
