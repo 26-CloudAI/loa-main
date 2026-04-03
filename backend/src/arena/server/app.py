@@ -14,15 +14,18 @@ AI Arena — FastAPI 서버
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
 # FastAPI import를 안전하게 처리
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+    from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
 
@@ -35,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from ..bot_interface import BotInterface
 from ..config import DEFAULT_CONFIG
+from . import settings as _settings
 from .config import DEFAULT_SERVER_CONFIG, ServerConfig
 from .game_session import GameRegistry, GameSession
 from .redis_manager import (
@@ -133,6 +137,11 @@ def create_app(
     # 공유 상태
     state = {"registry": None, "spectator_mgr": None}
 
+    # 레이트리밋: IP별 요청 타임스탬프 (슬라이딩 윈도우)
+    _rate_limit_store: dict[str, deque] = defaultdict(deque)
+    _RATE_LIMIT_MAX = 3       # 최대 요청 수
+    _RATE_LIMIT_WINDOW = 60   # 슬라이딩 윈도우 (초)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # 시작
@@ -148,9 +157,25 @@ def create_app(
         logger.info(
             "서버 시작 (Redis: %s)", "활성" if use_redis else "인메모리"
         )
+
+        # 백그라운드 정리 태스크 (5분 주기)
+        async def _cleanup_loop():
+            while True:
+                await asyncio.sleep(300)
+                removed = await registry.cleanup_finished()
+                if removed:
+                    logger.info("종료된 게임 정리: %d개 삭제됨", removed)
+
+        cleanup_task = asyncio.create_task(_cleanup_loop())
+
         yield
 
         # 종료
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
         await spectator_mgr.cleanup()
         logger.info("서버 종료")
 
@@ -163,7 +188,7 @@ def create_app(
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_settings.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -182,7 +207,7 @@ def create_app(
     # ── REST API ──
 
     @app.post("/api/games")
-    async def create_game(body: dict):
+    async def create_game(request: Request, body: dict):
         """
         게임을 생성하고 시작한다.
 
@@ -195,6 +220,20 @@ def create_app(
             "min_bots": 4
         }
         """
+        # 레이트리밋: IP당 60초 슬라이딩 윈도우 내 최대 3회
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        timestamps = _rate_limit_store[client_ip]
+        # 윈도우 밖의 오래된 타임스탬프 제거
+        while timestamps and now - timestamps[0] > _RATE_LIMIT_WINDOW:
+            timestamps.popleft()
+        if len(timestamps) >= _RATE_LIMIT_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail=f"요청 한도 초과: {_RATE_LIMIT_WINDOW}초당 최대 {_RATE_LIMIT_MAX}회",
+            )
+        timestamps.append(now)
+
         registry = _registry()
         bots_data = body.get("bots", [])
         tick_interval = body.get("tick_interval", 0.05)
