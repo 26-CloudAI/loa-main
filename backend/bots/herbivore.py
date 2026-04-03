@@ -15,14 +15,28 @@ class HerbivoreBot(BotInterface):
         self._bot_id = bot_id
         self._rng = random.Random(seed)
         self._on_mineral = False  # 이전 틱에서 광물 칸으로 이동했는지
+        self._memory: dict[tuple[int, int], str] = {}  # 발견한 광물 위치 기억
 
     @property
     def bot_id(self) -> str:
         return self._bot_id
 
     def get_action(self, state: dict) -> str:
+        my = state["my_bot"]
+        pos_x, pos_y = my["position"]
         grid = state["vision"]["grid"]
         cx, cy = 2, 2  # 시야 중심 (5×5)
+
+        # 1. 시야 정보를 바탕으로 맵 기억(Memory) 업데이트
+        for dy in range(5):
+            for dx in range(5):
+                map_x, map_y = pos_x + (dx - cx), pos_y + (dy - cy)
+                cell = grid[dy][dx]
+                if cell in ("mineral", "mineral_rare"):
+                    self._memory[(map_x, map_y)] = cell
+                elif cell == "empty":
+                    # 빈 칸인 것을 확인했으면 기억에서 지움 (누군가 캤음)
+                    self._memory.pop((map_x, map_y), None)
 
         # 이전 틱에서 광물 칸으로 이동 → 이번 틱에 채굴
         if self._on_mineral:
@@ -66,6 +80,20 @@ class HerbivoreBot(BotInterface):
 
         if best:
             return self._move_toward(*best)
+
+        # 4. 시야에 광물이 없다면, 기억(Memory) 속 가장 가까운 광물로 이동
+        if self._memory:
+            best_mem = None
+            best_mem_dist = 999
+            for (mx, my), m_type in self._memory.items():
+                dist = abs(mx - pos_x) + abs(my - pos_y)
+                prio = dist - (1 if m_type == "mineral_rare" else 0)
+                if prio < best_mem_dist:
+                    best_mem_dist = prio
+                    best_mem = (mx - pos_x, my - pos_y)
+            
+            if best_mem:
+                return self._move_toward(*best_mem)
 
         # 광물 없으면 랜덤 탐색
         return self._rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
