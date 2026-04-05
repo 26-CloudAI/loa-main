@@ -1,6 +1,14 @@
 """
 미친개 (Mad Dog) — 전투 전용 봇
-전략: 시야 내 적을 감지하면 추적 → 인접하면 공격. 적이 없으면 중앙으로 이동.
+전략: 시야 내 적을 최우선으로 추적해 공격하며, 적이 없으면 맵 중앙을 장악하고 기회주의적으로 파밍한다.
+
+[상세 로직]
+1. 에너지 위기 관리: 에너지가 40 이하면 전투를 포기하고 인접/시야/기억 속 광물을 최우선으로 찾아 비상 채굴 시도 (광물도 없으면 `SHIELD`)
+2. 근접 공격: 인접(거리 1) 칸에 적이 있으면 해당 방향으로 즉시 `ATTACK`
+3. 적 추적: 시야 내에 적이 감지되면 가장 가까운 적 방향으로 이동
+4. 기회주의적 채굴: 에너지가 300 미만이고 시야에 적이 없을 때, 현재 밟고 있는 칸에 광물이 있으면 채굴(`MINE`)하고 주변 광물로 이동
+5. 중앙 장악 (사냥): 시야에 적이나 광물이 없거나 에너지가 300 이상이면 적을 찾기 위해 맵 중앙(50, 50)으로 이동
+6. 기본: 무작위 4방향 배회
 """
 
 from __future__ import annotations
@@ -68,24 +76,26 @@ class MadDogBot(BotInterface):
 
         # [추가] 기회주의적 채굴 (Opportunistic Mining)
         # 시야에 적이 없을 때, 이동하는 길에 에너지를 든든하게 유지합니다.
+        # 단, 에너지가 300 이상이면 광물을 무시하고 적극적으로 적을 찾아 나섭니다.
         
-        # 1. 발 아래 광물이 있다면 즉시 채굴
-        if (pos_x, pos_y) in self._memory:
-            self._memory.pop((pos_x, pos_y), None)
-            return "MINE"
+        if energy < 300:
+            # 1. 발 아래 광물이 있다면 즉시 채굴
+            if (pos_x, pos_y) in self._memory:
+                self._memory.pop((pos_x, pos_y), None)
+                return "MINE"
 
-        # 2. 전투 특화 봇이므로 동선 낭비를 막고 에너지를 아끼기 위해 '가장 가까운' 광물을 선택
-        closest_mineral = None
-        closest_min_dist = 999
-        for dy in range(5):
-            for dx in range(5):
-                if grid[dy][dx] in ("mineral", "mineral_rare"):
-                    dist = abs(dx - cx) + abs(dy - cy)
-                    if dist < closest_min_dist:
-                        closest_min_dist = dist
-                        closest_mineral = (dx - cx, dy - cy)
-        if closest_mineral:
-            return self._move_toward(*closest_mineral)
+            # 2. 전투 특화 봇이므로 동선 낭비를 막고 에너지를 아끼기 위해 '가장 가까운' 광물을 선택
+            closest_mineral = None
+            closest_min_dist = 999
+            for dy in range(5):
+                for dx in range(5):
+                    if grid[dy][dx] in ("mineral", "mineral_rare"):
+                        dist = abs(dx - cx) + abs(dy - cy)
+                        if dist < closest_min_dist:
+                            closest_min_dist = dist
+                            closest_mineral = (dx - cx, dy - cy)
+            if closest_mineral:
+                return self._move_toward(*closest_mineral)
 
         # 적이 없으면 맵 중앙으로 이동 (적을 만날 확률 높임)
         center_dx = 50 - pos_x
