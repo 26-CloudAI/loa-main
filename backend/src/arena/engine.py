@@ -38,7 +38,7 @@ from .types import (
     TickEvent,
     action_to_direction,
 )
-from .vision import build_bot_state
+from .vision import build_bot_state, build_leaderboard
 from .zone import ZoneManager
 
 logger = logging.getLogger(__name__)
@@ -237,6 +237,7 @@ class GameEngine:
     def _collect_actions(self) -> dict[str, Action]:
         """모든 생존 봇에서 action을 수집. 예외 시 STAY."""
         actions: dict[str, Action] = {}
+        leaderboard = build_leaderboard(self.bots, self.config)
 
         for bot_id, bot in self.bots.items():
             if not bot.alive:
@@ -248,7 +249,8 @@ class GameEngine:
                 continue
 
             state = build_bot_state(
-                bot, self.bots, self.grid, self.zone, self.config, self.tick
+                bot, self.bots, self.grid, self.zone, self.config, self.tick,
+                leaderboard=leaderboard,
             )
 
             try:
@@ -261,10 +263,8 @@ class GameEngine:
                 action = Action.STAY
 
             actions[bot_id] = action
-            # ----------------------------------------------------
-            # 추가: 현재 틱의 액션을 외부(시뮬레이터)에서 참조할 수 있게 저장[cite: 3]
-            self.current_actions = actions
-            # ----------------------------------------------------
+
+        self.current_actions = actions
         return actions
 
     # ──────────────────────────────────────────────
@@ -302,7 +302,13 @@ class GameEngine:
         attack_cost = self.config.action_cost.attack
         attack_damage = self.config.combat.attack_damage
 
-        # (target_bot_id, attacker_bot_id, damage) 쌍 수집
+        # 공격 전 위치 스냅샷 — O(1) 봇 탐색
+        pos_to_bot: dict[tuple[int, int], str] = {
+            b.position.as_tuple(): b.id
+            for b in self.bots.values()
+            if b.alive
+        }
+
         pending_attacks: list[tuple[str, str]] = []
 
         for bot_id, action in actions.items():
@@ -312,10 +318,8 @@ class GameEngine:
             if not bot.alive:
                 continue
 
-            # 공격 비용 차감 (빗나가도 소모)
             bot.deduct_energy(attack_cost)
 
-            # 비용 차감으로 사망 시 공격 무효
             if not bot.alive:
                 continue
 
@@ -327,8 +331,10 @@ class GameEngine:
             target_x = bot.position.x + dx
             target_y = bot.position.y + dy
 
-            # 대상 칸에 있는 봇 찾기
-            target_bot = self._find_bot_at(target_x, target_y, exclude=bot_id)
+            target_id = pos_to_bot.get((target_x, target_y))
+            if target_id is None or target_id == bot_id:
+                target_id = None
+            target_bot = self.bots[target_id] if target_id else None
             if target_bot is None:
                 events.append(TickEvent(
                     tick=self.tick,
@@ -341,12 +347,15 @@ class GameEngine:
             pending_attacks.append((target_bot.id, bot_id))
 
         # 데미지 일괄 적용 (동시 공격 처리)
+        # 에너지 흡수는 모든 데미지 적용 후 처리 — 동시 처치 시 흡수 에너지가
+        # 같은 틱의 피격 결과에 영향을 주지 않도록 분리한다.
+        pending_kills: list[tuple[str, str, int]] = []  # (attacker_id, target_id, energy_absorbed)
+
         for target_id, attacker_id in pending_attacks:
             target = self.bots[target_id]
             if not target.alive:
                 continue
 
-            # 처치 시 에너지 흡수를 위해 공격 전 에너지를 기록
             energy_before_damage = target.energy
 
             if target.shield_active:
@@ -369,20 +378,22 @@ class GameEngine:
             ))
 
             if not target.alive:
-                attacker = self.bots[attacker_id]
-                if attacker.alive:
-                    attacker.kills += 1
-                    # 처치한 적의 남은 에너지를 흡수
-                    energy_absorbed = energy_before_damage
-                    attacker.gain_energy(energy_absorbed)
+                pending_kills.append((attacker_id, target_id, energy_before_damage))
 
-                events.append(TickEvent(
-                    tick=self.tick,
-                    event_type="kill",
-                    actor_id=attacker_id,
-                    target_id=target_id,
-                    detail=f"{attacker_id}이(가) {target_id} 처치 (에너지 +{energy_absorbed})",
-                ))
+        # 모든 데미지 적용 후 처치 처리 (에너지 흡수 및 킬 카운트)
+        for attacker_id, target_id, energy_absorbed in pending_kills:
+            attacker = self.bots[attacker_id]
+            if attacker.alive:
+                attacker.kills += 1
+                attacker.gain_energy(energy_absorbed)
+
+            events.append(TickEvent(
+                tick=self.tick,
+                event_type="kill",
+                actor_id=attacker_id,
+                target_id=target_id,
+                detail=f"{attacker_id}이(가) {target_id} 처치 (에너지 +{energy_absorbed})",
+            ))
 
     # ──────────────────────────────────────────────
     #  내부 — 이동

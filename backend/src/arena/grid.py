@@ -57,16 +57,11 @@ class Grid:
                     weight = mc.center_density_multiplier
                 weighted_cells.append((x, y, weight))
         
-        # 가중치 기반 랜덤 샘플링
         if not weighted_cells:
             return
 
         weights = [w for _, _, w in weighted_cells]
-        
-        # 중복 없이 num_normal_minerals개 선택
         indices = list(range(len(weighted_cells)))
-        self.rng.shuffle(indices) # 추가적인 무작위성
-        
         chosen_indices = self.rng.choices(
             indices, weights=weights, k=min(num_normal_minerals, len(indices))
         )
@@ -83,17 +78,20 @@ class Grid:
         mc = self.config.map
         occupied = set()
 
+        margin = mc.rare_zone_size + 2
+        # 맵이 너무 작으면 희귀 군락 배치 생략
+        if margin >= self.width - margin or margin >= self.height - margin:
+            return occupied
+
         for _ in range(mc.num_rare_mineral_clusters):
-            # 맵 가장자리를 피해 군락 중심 생성
-            margin = mc.rare_cluster_radius + 2
-            cx = self.rng.randint(margin, self.width - margin -1)
+            cx = self.rng.randint(margin, self.width - margin - 1)
             cy = self.rng.randint(margin, self.height - margin - 1)
 
             for _ in range(mc.rare_minerals_per_cluster):
                 attempts = 0
-                while attempts < 20: # 20번 시도 후 실패 시 다음으로
-                    angle = self.rng.uniform(0, 2 * 3.14159)
-                    radius = self.rng.uniform(0, mc.rare_cluster_radius)
+                while attempts < 20:
+                    angle = self.rng.uniform(0, math.tau)
+                    radius = self.rng.uniform(0, mc.rare_zone_size)
                     
                     x = int(cx + radius * math.cos(angle))
                     y = int(cy + radius * math.sin(angle))
@@ -153,5 +151,21 @@ class Grid:
 
     def is_in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height
+
+
+def generate_spawn_positions(
+    cfg: GameConfig, n: int, rng: random.Random
+) -> list[Position]:
+    """
+    spawn_margin을 적용한 스폰 가능 영역에서 n개의 중복 없는 위치를 반환.
+    """
+    margin = cfg.bot.spawn_margin
+    candidates = [
+        Position(x, y)
+        for x in range(margin, cfg.map.width - margin)
+        for y in range(margin, cfg.map.height - margin)
+    ]
+    rng.shuffle(candidates)
+    return candidates[:n]
 
 

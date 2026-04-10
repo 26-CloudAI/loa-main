@@ -15,6 +15,16 @@ from __future__ import annotations
 import random
 
 from src.arena.bot_interface import BotInterface
+from src.arena.types import Action, CellType
+from bots.utils import CX, CY, ADJACENT_DIRS, MOVE_ACTIONS, move_toward, flee
+
+_ENEMY = CellType.BOT_ENEMY
+_MINERAL = CellType.MINERAL
+_MINERAL_RARE = CellType.MINERAL_RARE
+_ENERGY_SHIELD_MIN = 20   # 실드 사용 최소 에너지
+_PHASE_LATE = 250          # 후반 채굴 모드 시작 틱
+_PHASE_EARLY_END = 100     # 초반 STAY 모드 종료 틱
+_ZONE_MARGIN = 2           # 자기장 경계 여유 칸
 
 
 class CamperBot(BotInterface):
@@ -109,15 +119,12 @@ class CamperBot(BotInterface):
         # 2. 인접/시야 내 적 감지 → 실드 또는 회피
         for dy in range(5):
             for dx in range(5):
-                if grid[dy][dx] == "bot_enemy":
-                    dist = abs(dx - cx) + abs(dy - cy)
+                if grid[dy][dx] == _ENEMY:
+                    dist = abs(dx - CX) + abs(dy - CY)
                     if dist == 1:
-                        # 바로 옆 → 실드 (에너지 여유 있으면)
-                        if energy > 20:
-                            return "SHIELD"
-                        return self._flee(dx - cx, dy - cy)
+                        return Action.SHIELD if energy > _ENERGY_SHIELD_MIN else flee(dx - CX, dy - CY)
                     if dist == 2:
-                        return self._flee(dx - cx, dy - cy)
+                        return flee(dx - CX, dy - CY)
 
         # 3. 보이지 않는 위험(광물에 가려진 자기장, 원거리 저격) 감지 시 중앙으로 대피
         if danger_inferred:

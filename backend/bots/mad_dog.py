@@ -16,6 +16,15 @@ from __future__ import annotations
 import random
 
 from src.arena.bot_interface import BotInterface
+from src.arena.types import Action, CellType
+from bots.utils import CX, CY, ADJACENT_DIRS, MOVE_ACTIONS, move_toward
+
+_ENEMY = CellType.BOT_ENEMY
+_MINERAL = CellType.MINERAL
+_MINERAL_RARE = CellType.MINERAL_RARE
+_ENERGY_CRITICAL = 15  # 이 에너지 이하이면 긴급 채굴 모드
+_MAP_CENTER = 50        # 맵 중앙 좌표 (100×100 기준)
+_CENTER_RADIUS = 3      # 이 범위 안에 있으면 중앙 근처로 간주
 
 
 class MadDogBot(BotInterface):
@@ -81,19 +90,19 @@ class MadDogBot(BotInterface):
             if grid[cy + ady][cx + adx] == "bot_enemy":
                 return attack
 
-        # 시야 내 가장 가까운 적 방향으로 추적
-        closest_enemy = None
+        # 시야 내 가장 가까운 적 추적
+        closest = None
         closest_dist = 999
         for dy in range(5):
             for dx in range(5):
-                if grid[dy][dx] == "bot_enemy":
-                    dist = abs(dx - cx) + abs(dy - cy)
+                if grid[dy][dx] == _ENEMY:
+                    dist = abs(dx - CX) + abs(dy - CY)
                     if dist < closest_dist:
                         closest_dist = dist
-                        closest_enemy = (dx - cx, dy - cy)
+                        closest = (dx - CX, dy - CY)
 
-        if closest_enemy:
-            return self._move_toward(*closest_enemy)
+        if closest:
+            return move_toward(*closest)
 
         # [추가] 기회주의적 채굴 (Opportunistic Mining)
         # 시야에 적이 없을 때, 이동하는 길에 에너지를 든든하게 유지합니다.
@@ -124,8 +133,7 @@ class MadDogBot(BotInterface):
         if abs(center_dx) > 3 or abs(center_dy) > 3:
             return self._move_toward(center_dx, center_dy)
 
-        # 중앙 근처면 배회
-        return self._rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
+        return self._rng.choice(MOVE_ACTIONS)
 
     def _move_toward(self, dx: int, dy: int) -> str:
         if dx == 0 and dy == 0:
