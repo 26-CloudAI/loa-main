@@ -28,6 +28,27 @@ class MadDogBot(BotInterface):
     def bot_id(self) -> str:
         return self._bot_id
 
+    def choose_spawn(self, map_info: dict) -> tuple[int, int] | None:
+        """희귀 광물 클러스터 주변에 매복 스폰 — 채굴봇을 사냥하기 위해 6~10칸 거리."""
+        rare = [(m["x"], m["y"]) for m in map_info["minerals"] if m["rare"]]
+        if not rare:
+            # 희귀 광물 없으면 맵 중앙 (적 조우 확률 최대화)
+            return (map_info["width"] // 2, map_info["height"] // 2)
+
+        # 밀집도가 가장 높은 희귀 광물 클러스터 찾기
+        best_center, best_count = None, 0
+        for rx, ry in rare:
+            count = sum(1 for ox, oy in rare if abs(ox - rx) + abs(oy - ry) <= 10)
+            if count > best_count:
+                best_count, best_center = count, (rx, ry)
+
+        tx, ty = best_center  # type: ignore[misc]
+        w, h = map_info["width"], map_info["height"]
+        # 클러스터 중심에서 6~10칸 떨어진 랜덤 방향으로 매복
+        dist = self._rng.randint(6, 10)
+        dx, dy = self._rng.choice([(dist, 0), (-dist, 0), (0, dist), (0, -dist)])
+        return (max(0, min(w - 1, tx + dx)), max(0, min(h - 1, ty + dy)))
+
     def get_action(self, state: dict) -> str:
         my = state["my_bot"]
         grid = state["vision"]["grid"]

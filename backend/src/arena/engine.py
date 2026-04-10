@@ -77,14 +77,54 @@ class GameEngine:
 
         # 봇 엔티티 생성 및 스폰
         self.bots: dict[str, Bot] = {}
-        used_positions: set[tuple[int, int]] = set()
+
+        # ── 스폰 위치 선택 ──────────────────────────────────────────────────
+        # 맵 정보를 구성해 모든 봇에게 동시에 제공한다.
+        map_info = {
+            "width":    config.map.width,
+            "height":   config.map.height,
+            "minerals": [
+                {"x": x, "y": y, "rare": rare}
+                for x, y, rare in self.grid.get_all_mineral_positions()
+            ],
+        }
+
+        # 각 봇에게 스폰 위치를 요청한다 (봇끼리 서로의 선택을 모름).
+        spawn_requests: dict[str, tuple[int, int] | None] = {}
+        for bi in bot_interfaces:
+            try:
+                choice = bi.choose_spawn(map_info)
+                if choice is not None:
+                    x, y = int(choice[0]), int(choice[1])
+                    spawn_requests[bi.bot_id] = (x, y) if self.grid.is_in_bounds(x, y) else None
+                else:
+                    spawn_requests[bi.bot_id] = None
+            except Exception:
+                logger.debug("Bot %s choose_spawn 실패, 랜덤 스폰 처리", bi.bot_id, exc_info=True)
+                spawn_requests[bi.bot_id] = None
+
+        # 같은 칸을 요청한 봇이 여럿이면 무작위로 1명만 허용한다.
+        position_claims: defaultdict[tuple[int, int], list[str]] = defaultdict(list)
+        for bot_id, pos in spawn_requests.items():
+            if pos is not None:
+                position_claims[pos].append(bot_id)
+
+        confirmed: dict[str, tuple[int, int]] = {}
+        for pos, claimants in position_claims.items():
+            winner = self.rng.choice(claimants)
+            confirmed[winner] = pos
+
+        # ── 실제 스폰 ───────────────────────────────────────────────────────
+        used_positions: set[tuple[int, int]] = set(confirmed.values())
 
         for bi in bot_interfaces:
-            pos = None
-
-            if pos is None:
+            if bi.bot_id in confirmed:
+                pos = Position(*confirmed[bi.bot_id])
+            else:
+                # 선택 없음 또는 충돌 패배 → 랜덤 스폰
+                pos = None
                 attempts = 0
-                while attempts < 10000: # 무한 루프 방지
+                while attempts < 10000:
                     x = self.rng.randint(0, self.config.map.width - 1)
                     y = self.rng.randint(0, self.config.map.height - 1)
                     if (x, y) not in used_positions:

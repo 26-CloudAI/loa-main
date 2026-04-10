@@ -29,6 +29,23 @@ class CamperBot(BotInterface):
     def bot_id(self) -> str:
         return self._bot_id
 
+    def choose_spawn(self, map_info: dict) -> tuple[int, int] | None:
+        """희귀 광물과 최대한 멀리 떨어진 맵 가장자리에 스폰 — 핫플레이스 회피."""
+        w, h = map_info["width"], map_info["height"]
+        rare = [(m["x"], m["y"]) for m in map_info["minerals"] if m["rare"]]
+
+        # 맵 4개 모서리 후보
+        corners = [(5, 5), (w - 6, 5), (5, h - 6), (w - 6, h - 6)]
+
+        if not rare:
+            return self._rng.choice(corners)
+
+        # 희귀 광물과의 최단 거리가 가장 큰 모서리 선택
+        def min_dist_to_rare(cx: int, cy: int) -> int:
+            return min(abs(cx - rx) + abs(cy - ry) for rx, ry in rare)
+
+        return max(corners, key=lambda c: min_dist_to_rare(c[0], c[1]))
+
     def get_action(self, state: dict) -> str:
         action = self._determine_action(state)
         self._last_action = action
