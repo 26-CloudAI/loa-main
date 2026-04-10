@@ -16,6 +16,15 @@ from __future__ import annotations
 import random
 
 from src.arena.bot_interface import BotInterface
+from src.arena.types import Action, CellType
+from bots.utils import CX, CY, ADJACENT_DIRS, MOVE_ACTIONS, move_toward
+
+_ENEMY = CellType.BOT_ENEMY
+_MINERAL = CellType.MINERAL
+_MINERAL_RARE = CellType.MINERAL_RARE
+_ENERGY_CRITICAL = 15  # 이 에너지 이하이면 긴급 채굴 모드
+_MAP_CENTER = 50        # 맵 중앙 좌표 (100×100 기준)
+_CENTER_RADIUS = 3      # 이 범위 안에 있으면 중앙 근처로 간주
 
 
 class MadDogBot(BotInterface):
@@ -27,6 +36,27 @@ class MadDogBot(BotInterface):
     @property
     def bot_id(self) -> str:
         return self._bot_id
+
+    def choose_spawn(self, map_info: dict) -> tuple[int, int] | None:
+        """희귀 광물 클러스터 주변에 매복 스폰 — 채굴봇을 사냥하기 위해 6~10칸 거리."""
+        rare = [(m["x"], m["y"]) for m in map_info["minerals"] if m["rare"]]
+        if not rare:
+            # 희귀 광물 없으면 맵 중앙 (적 조우 확률 최대화)
+            return (map_info["width"] // 2, map_info["height"] // 2)
+
+        # 밀집도가 가장 높은 희귀 광물 클러스터 찾기
+        best_center, best_count = None, 0
+        for rx, ry in rare:
+            count = sum(1 for ox, oy in rare if abs(ox - rx) + abs(oy - ry) <= 10)
+            if count > best_count:
+                best_count, best_center = count, (rx, ry)
+
+        tx, ty = best_center  # type: ignore[misc]
+        w, h = map_info["width"], map_info["height"]
+        # 클러스터 중심에서 6~10칸 떨어진 랜덤 방향으로 매복
+        dist = self._rng.randint(6, 10)
+        dx, dy = self._rng.choice([(dist, 0), (-dist, 0), (0, dist), (0, -dist)])
+        return (max(0, min(w - 1, tx + dx)), max(0, min(h - 1, ty + dy)))
 
     def get_action(self, state: dict) -> str:
         my = state["my_bot"]
@@ -60,19 +90,19 @@ class MadDogBot(BotInterface):
             if grid[cy + ady][cx + adx] == "bot_enemy":
                 return attack
 
-        # 시야 내 가장 가까운 적 방향으로 추적
-        closest_enemy = None
+        # 시야 내 가장 가까운 적 추적
+        closest = None
         closest_dist = 999
         for dy in range(5):
             for dx in range(5):
-                if grid[dy][dx] == "bot_enemy":
-                    dist = abs(dx - cx) + abs(dy - cy)
+                if grid[dy][dx] == _ENEMY:
+                    dist = abs(dx - CX) + abs(dy - CY)
                     if dist < closest_dist:
                         closest_dist = dist
-                        closest_enemy = (dx - cx, dy - cy)
+                        closest = (dx - CX, dy - CY)
 
-        if closest_enemy:
-            return self._move_toward(*closest_enemy)
+        if closest:
+            return move_toward(*closest)
 
         # [추가] 기회주의적 채굴 (Opportunistic Mining)
         # 시야에 적이 없을 때, 이동하는 길에 에너지를 든든하게 유지합니다.
@@ -103,8 +133,7 @@ class MadDogBot(BotInterface):
         if abs(center_dx) > 3 or abs(center_dy) > 3:
             return self._move_toward(center_dx, center_dy)
 
-        # 중앙 근처면 배회
-        return self._rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
+        return self._rng.choice(MOVE_ACTIONS)
 
     def _move_toward(self, dx: int, dy: int) -> str:
         if dx == 0 and dy == 0:

@@ -40,8 +40,11 @@ from bots.rl_boss_bot import RLBossBot
 # ---------------------------------------------------------------------------
 
 BOSS_BOT_ID = "boss_rl"
-OPPONENT_CLASSES = [HerbivoreBot, MadDogBot, CamperBot]
-OPPONENT_LABELS = ["초식", "미친개", "존버"]
+OPPONENTS = [
+    (HerbivoreBot, "초식"),
+    (MadDogBot,    "미친개"),
+    (CamperBot,    "존버"),
+]
 
 # 학습 중 탐색 엡실론 (온라인 업데이트를 유도하기 위해 기본값보다 높게)
 TRAIN_EPSILON = 0.30   # 학습 중 탐색률
@@ -61,11 +64,8 @@ def _create_opponent_bots(
     """n개의 상대 봇을 랜덤하게 생성한다."""
     bots = []
     for i in range(n):
-        cls_idx = rng.randint(0, len(OPPONENT_CLASSES) - 1)
-        cls = OPPONENT_CLASSES[cls_idx]
-        label = OPPONENT_LABELS[cls_idx]
-        bot_id = f"{label}_{i:02d}"
-        bots.append(cls(bot_id=bot_id, seed=base_seed + i))
+        cls, label = rng.choice(OPPONENTS)
+        bots.append(cls(bot_id=f"{label}_{i:02d}", seed=base_seed + i))
     return bots
 
 
