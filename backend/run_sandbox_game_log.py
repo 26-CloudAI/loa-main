@@ -36,41 +36,84 @@ import random
 
 _rng = random.Random(42)
 _on_mineral = False
+_memory = {}
 
 def action(state):
-    global _on_mineral
+    global _on_mineral, _memory
+    
+    my = state["my_bot"]
+    pos_x, pos_y = my["position"]
     grid = state["vision"]["grid"]
     cx, cy = 2, 2
+
+    # 1. 시야 정보를 바탕으로 맵 기억 업데이트
+    for dy in range(5):
+        for dx in range(5):
+            map_x, map_y = pos_x + (dx - cx), pos_y + (dy - cy)
+            cell = grid[dy][dx]
+            if cell in ("mineral", "mineral_rare"):
+                _memory[(map_x, map_y)] = cell
+            elif cell == "empty":
+                _memory.pop((map_x, map_y), None)
 
     if _on_mineral:
         _on_mineral = False
         return "MINE"
 
-    # 적 회피
+    def move_toward(dx, dy):
+        if abs(dx) >= abs(dy):
+            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
+        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+
+    def flee(enemy_dx, enemy_dy):
+        if abs(enemy_dx) >= abs(enemy_dy):
+            return "MOVE_LEFT" if enemy_dx > 0 else "MOVE_RIGHT"
+        return "MOVE_UP" if enemy_dy > 0 else "MOVE_DOWN"
+
+    # 시야 내 적 감지 → 도주 우선
     for dy in range(5):
         for dx in range(5):
             if grid[dy][dx] == "bot_enemy":
-                dist = abs(dx - cx) + abs(dy - cy)
-                if dist <= 2:
-                    edx, edy = dx - cx, dy - cy
-                    if abs(edx) >= abs(edy):
-                        return "MOVE_LEFT" if edx > 0 else "MOVE_RIGHT"
-                    return "MOVE_UP" if edy > 0 else "MOVE_DOWN"
+                enemy_dx = dx - cx
+                enemy_dy = dy - cy
+                if abs(enemy_dx) + abs(enemy_dy) <= 2:
+                    return flee(enemy_dx, enemy_dy)
 
-    # 인접 광물 이동
-    for adx, ady, move in [(0,-1,"MOVE_UP"),(0,1,"MOVE_DOWN"),(-1,0,"MOVE_LEFT"),(1,0,"MOVE_RIGHT")]:
-        if grid[cy+ady][cx+adx] in ("mineral", "mineral_rare"):
+    # 인접 4칸에 광물 → 이동 후 다음 틱 채굴
+    adjacent = [(0, -1, "MOVE_UP"), (0, 1, "MOVE_DOWN"), (-1, 0, "MOVE_LEFT"), (1, 0, "MOVE_RIGHT")]
+    for adx, ady, move in adjacent:
+        cell = grid[cy + ady][cx + adx]
+        if cell in ("mineral", "mineral_rare"):
             _on_mineral = True
             return move
 
-    # 시야 내 광물 방향 이동
+    # 시야 내 가장 가까운 광물 방향으로 이동
+    best = None
+    best_dist = 999
     for dy in range(5):
         for dx in range(5):
             if grid[dy][dx] in ("mineral", "mineral_rare"):
-                mdx, mdy = dx - cx, dy - cy
-                if abs(mdx) >= abs(mdy):
-                    return "MOVE_RIGHT" if mdx > 0 else "MOVE_LEFT"
-                return "MOVE_DOWN" if mdy > 0 else "MOVE_UP"
+                dist = abs(dx - cx) + abs(dy - cy)
+                prio = dist - (1 if grid[dy][dx] == "mineral_rare" else 0)
+                if prio < best_dist:
+                    best_dist = prio
+                    best = (dx - cx, dy - cy)
+
+    if best:
+        return move_toward(*best)
+
+    # 시야에 광물이 없다면, 기억 속 가장 가까운 광물로 이동
+    if _memory:
+        best_mem = None
+        best_mem_dist = 999
+        for (mx, my), m_type in _memory.items():
+            dist = abs(mx - pos_x) + abs(my - pos_y)
+            prio = dist - (1 if m_type == "mineral_rare" else 0)
+            if prio < best_mem_dist:
+                best_mem_dist = prio
+                best_mem = (mx - pos_x, my - pos_y)
+        if best_mem:
+            return move_toward(*best_mem)
 
     return _rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
 '''
@@ -79,24 +122,69 @@ MAD_DOG_CODE = '''
 import random
 
 _rng = random.Random(99)
+_memory = {}
 
 def action(state):
+    global _memory
     my = state["my_bot"]
     grid = state["vision"]["grid"]
-    energy = my["energy"]
     pos_x, pos_y = my["position"]
+    energy = my["energy"]
     cx, cy = 2, 2
 
-    if energy <= 15:
+    # 메모리 업데이트
+    for dy in range(5):
+        for dx in range(5):
+            map_x, map_y = pos_x + (dx - cx), pos_y + (dy - cy)
+            cell = grid[dy][dx]
+            if cell in ("mineral", "mineral_rare"):
+                _memory[(map_x, map_y)] = cell
+            elif cell == "empty":
+                _memory.pop((map_x, map_y), None)
+
+    def move_toward(dx, dy):
+        if dx == 0 and dy == 0:
+            return "MINE"
+        if abs(dx) >= abs(dy):
+            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
+        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+
+    def emergency_mine():
+        if (pos_x, pos_y) in _memory:
+            _memory.pop((pos_x, pos_y), None)
+            return "MINE"
+        adjacent = [(0, -1, "MOVE_UP"), (0, 1, "MOVE_DOWN"), (-1, 0, "MOVE_LEFT"), (1, 0, "MOVE_RIGHT")]
+        for adx, ady, move in adjacent:
+            if grid[cy + ady][cx + adx] in ("mineral", "mineral_rare"):
+                return move
+        for dy in range(5):
+            for dx in range(5):
+                if grid[dy][dx] in ("mineral", "mineral_rare"):
+                    return move_toward(dx - cx, dy - cy)
+        if _memory:
+            best_mem = None
+            best_mem_dist = 999
+            for (mx, my) in _memory.keys():
+                dist = abs(mx - pos_x) + abs(my - pos_y)
+                if dist < best_mem_dist:
+                    best_mem_dist = dist
+                    best_mem = (mx - pos_x, my - pos_y)
+            if best_mem:
+                return move_toward(*best_mem)
         return "SHIELD"
 
+    # 에너지 위기 관리
+    if energy <= 40:
+        return emergency_mine()
+
     # 인접 적 공격
-    for adx, ady, atk in [(0,-1,"ATTACK_UP"),(0,1,"ATTACK_DOWN"),(-1,0,"ATTACK_LEFT"),(1,0,"ATTACK_RIGHT")]:
-        if grid[cy+ady][cx+adx] == "bot_enemy":
-            return atk
+    adjacent_attacks = [(0, -1, "ATTACK_UP"), (0, 1, "ATTACK_DOWN"), (-1, 0, "ATTACK_LEFT"), (1, 0, "ATTACK_RIGHT")]
+    for adx, ady, attack in adjacent_attacks:
+        if grid[cy + ady][cx + adx] == "bot_enemy":
+            return attack
 
     # 적 추적
-    closest = None
+    closest_enemy = None
     best_dist = 999
     for dy in range(5):
         for dx in range(5):
@@ -104,20 +192,32 @@ def action(state):
                 dist = abs(dx - cx) + abs(dy - cy)
                 if dist < best_dist:
                     best_dist = dist
-                    closest = (dx - cx, dy - cy)
+                    closest_enemy = (dx - cx, dy - cy)
 
-    if closest:
-        mdx, mdy = closest
-        if abs(mdx) >= abs(mdy):
-            return "MOVE_RIGHT" if mdx > 0 else "MOVE_LEFT"
-        return "MOVE_DOWN" if mdy > 0 else "MOVE_UP"
+    if closest_enemy:
+        return move_toward(*closest_enemy)
+
+    # 기회주의적 채굴
+    if energy < 300:
+        if (pos_x, pos_y) in _memory:
+            _memory.pop((pos_x, pos_y), None)
+            return "MINE"
+        closest_mineral = None
+        closest_min_dist = 999
+        for dy in range(5):
+            for dx in range(5):
+                if grid[dy][dx] in ("mineral", "mineral_rare"):
+                    dist = abs(dx - cx) + abs(dy - cy)
+                    if dist < closest_min_dist:
+                        closest_min_dist = dist
+                        closest_mineral = (dx - cx, dy - cy)
+        if closest_mineral:
+            return move_toward(*closest_mineral)
 
     # 중앙으로 이동
     cdx, cdy = 50 - pos_x, 50 - pos_y
     if abs(cdx) > 3 or abs(cdy) > 3:
-        if abs(cdx) >= abs(cdy):
-            return "MOVE_RIGHT" if cdx > 0 else "MOVE_LEFT"
-        return "MOVE_DOWN" if cdy > 0 else "MOVE_UP"
+        return move_toward(cdx, cdy)
 
     return _rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
 '''
@@ -126,50 +226,135 @@ CAMPER_CODE = '''
 import random
 
 _rng = random.Random(77)
+_memory = {}
+_last_energy = 100
+_last_action = "STAY"
 
 def action(state):
+    global _memory, _last_energy, _last_action
+    
     my = state["my_bot"]
     grid = state["vision"]["grid"]
     tick = state["tick"]
-    zone = state["zone_boundary"]
     pos_x, pos_y = my["position"]
     energy = my["energy"]
     cx, cy = 2, 2
 
-    # 인접 적 → 실드/회피
+    danger_inferred = False
+    cost_map = {
+        "STAY": 1, "MINE": 3, "SHIELD": 3,
+        "MOVE_UP": 2, "MOVE_DOWN": 2, "MOVE_LEFT": 2, "MOVE_RIGHT": 2,
+        "ATTACK_UP": 5, "ATTACK_DOWN": 5, "ATTACK_LEFT": 5, "ATTACK_RIGHT": 5
+    }
+    expected_loss = cost_map.get(_last_action, 1)
+
+    if energy < _last_energy:
+        if (_last_energy - energy) > expected_loss:
+            danger_inferred = True
+    else:
+        gain = energy - _last_energy
+        if gain in (4, 19):
+            danger_inferred = True
+
+    _last_energy = energy
+
+    for dy in range(5):
+        for dx in range(5):
+            map_x, map_y = pos_x + (dx - cx), pos_y + (dy - cy)
+            cell = grid[dy][dx]
+            if cell in ("mineral", "mineral_rare"):
+                _memory[(map_x, map_y)] = cell
+            elif cell == "empty":
+                _memory.pop((map_x, map_y), None)
+
+    def move_toward(dx, dy):
+        if dx == 0 and dy == 0:
+            return "STAY"
+        if abs(dx) >= abs(dy):
+            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
+        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+
+    def flee(enemy_dx, enemy_dy):
+        if abs(enemy_dx) >= abs(enemy_dy):
+            return "MOVE_LEFT" if enemy_dx > 0 else "MOVE_RIGHT"
+        return "MOVE_UP" if enemy_dy > 0 else "MOVE_DOWN"
+
+    zone_dx, zone_dy = 0, 0
+    zone_count = 0
+    for dy in range(5):
+        for dx in range(5):
+            if grid[dy][dx] == "zone":
+                zone_dx += (dx - cx)
+                zone_dy += (dy - cy)
+                zone_count += 1
+    
+    if zone_count > 0:
+        _last_action = flee(zone_dx, zone_dy)
+        return _last_action
+
     for dy in range(5):
         for dx in range(5):
             if grid[dy][dx] == "bot_enemy":
                 dist = abs(dx - cx) + abs(dy - cy)
-                if dist == 1 and energy > 20:
-                    return "SHIELD"
-                if dist <= 2:
-                    edx, edy = dx - cx, dy - cy
-                    if abs(edx) >= abs(edy):
-                        return "MOVE_LEFT" if edx > 0 else "MOVE_RIGHT"
-                    return "MOVE_UP" if edy > 0 else "MOVE_DOWN"
+                if dist == 1:
+                    if energy > 20:
+                        _last_action = "SHIELD"
+                        return _last_action
+                    _last_action = flee(dx - cx, dy - cy)
+                    return _last_action
+                if dist == 2:
+                    _last_action = flee(dx - cx, dy - cy)
+                    return _last_action
 
-    # 자기장 회피
-    if zone > 0:
-        safe_min = zone + 2
-        safe_max = 99 - zone - 2
-        if pos_x < safe_min: return "MOVE_RIGHT"
-        if pos_x > safe_max: return "MOVE_LEFT"
-        if pos_y < safe_min: return "MOVE_DOWN"
-        if pos_y > safe_max: return "MOVE_UP"
+    if danger_inferred:
+        _last_action = move_toward(50 - pos_x, 50 - pos_y)
+        return _last_action
 
-    # 후반 채굴
-    if tick >= 250:
-        for adx, ady, move in [(0,-1,"MOVE_UP"),(0,1,"MOVE_DOWN"),(-1,0,"MOVE_LEFT"),(1,0,"MOVE_RIGHT")]:
-            if grid[cy+ady][cx+adx] in ("mineral", "mineral_rare"):
-                return move
+    if (pos_x, pos_y) in _memory:
+        _memory.pop((pos_x, pos_y), None)
+        _last_action = "MINE"
+        return _last_action
 
-    if tick < 100:
-        return "STAY"
+    closest_mineral = None
+    closest_dist = 999
+    for dy in range(5):
+        for dx in range(5):
+            if grid[dy][dx] in ("mineral", "mineral_rare"):
+                dist = abs(dx - cx) + abs(dy - cy)
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest_mineral = (dx - cx, dy - cy)
+    if closest_mineral:
+        _last_action = move_toward(*closest_mineral)
+        return _last_action
 
-    if _rng.random() < 0.3:
-        return _rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
-    return "STAY"
+    if _memory:
+        best_mem = None
+        best_mem_dist = 999
+        for (mx, my) in _memory.keys():
+            dist = abs(mx - pos_x) + abs(my - pos_y)
+            if dist < best_mem_dist:
+                best_mem_dist = dist
+                best_mem = (mx - pos_x, my - pos_y)
+        if best_mem:
+            _last_action = move_toward(*best_mem)
+            return _last_action
+
+    if pos_x <= 20 and pos_y < 80:
+        _last_action = "MOVE_DOWN"
+        return _last_action
+    if pos_y >= 80 and pos_x < 80:
+        _last_action = "MOVE_RIGHT"
+        return _last_action
+    if pos_x >= 80 and pos_y > 20:
+        _last_action = "MOVE_UP"
+        return _last_action
+    if pos_y <= 20 and pos_x > 20:
+        _last_action = "MOVE_LEFT"
+        return _last_action
+        
+    _last_action = move_toward(15 - pos_x, 15 - pos_y)
+    return _last_action
 '''
 
 # 의도적 무한루프 봇 (악성 코드 테스트)
@@ -309,14 +494,15 @@ def run(
                     "action": action_val,
                     "energy": bot.energy,
                     "pos": [bot.position.x, bot.position.y] if bot.alive else None,
-                    "score": round(bot.score, 1)
+                    "score": round(bot.score, 1),
+                    "shield_active": bot.shield_active
                 }
 
             # 이번 틱의 데이터를 전체 리스트에 안전하게 저장!
             tick_lights.append(current_tick_data)
 
             for ev in events:
-                if ev.event_type in ("kill", "death"):
+                if ev.event_type in ("kill", "death", "guard_success"):
                     print(f"  [틱 {ev.tick:4d}] {ev.detail}")
 
             if engine.tick in milestone_ticks:

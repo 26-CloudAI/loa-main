@@ -309,6 +309,16 @@ class GameEngine:
             # 처치 시 에너지 흡수를 위해 공격 전 에너지를 기록
             energy_before_damage = target.energy
 
+            if target.shield_active:
+                target.score += self.config.score_per_guard
+                events.append(TickEvent(
+                    tick=self.tick,
+                    event_type="guard_success",
+                    actor_id=target_id,
+                    target_id=attacker_id,
+                    detail=f"방어 성공 (+{self.config.score_per_guard}점)",
+                ))
+
             actual_damage = target.apply_damage(attack_damage)
             events.append(TickEvent(
                 tick=self.tick,
