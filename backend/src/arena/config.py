@@ -46,7 +46,7 @@ class ActionCost:
 @dataclass(frozen=True)
 class CombatConfig:
     attack_damage: int = 25
-    shield_reduction: float = 0.5       # 실드 피해 감소율
+    shield_reduction: float = 1.0       # 실드 피해 감소율 (100% 완전 방어)
 
 
 @dataclass(frozen=True)
@@ -80,6 +80,7 @@ class GameConfig:
     score_per_mineral: float = 1.0      # 채굴 점수는 게임 중 실시간 반영
     score_per_survival_tick: float = 0.1
     score_per_kill: float = 30.0        # 상향: 킬의 난이도와 리스크에 걸맞은 높은 보상
+    score_per_guard: float = 10.0       # 가드 보너스: 상대 공격 방어 성공 시
 
     map: MapConfig = field(default_factory=MapConfig)
     bot: BotConfig = field(default_factory=BotConfig)
