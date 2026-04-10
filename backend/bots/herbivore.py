@@ -29,6 +29,22 @@ class HerbivoreBot(BotInterface):
     def bot_id(self) -> str:
         return self._bot_id
 
+    def choose_spawn(self, map_info: dict) -> tuple[int, int] | None:
+        """희귀 광물 바로 옆에 스폰해 즉시 채굴 루틴 진입."""
+        rare = [(m["x"], m["y"]) for m in map_info["minerals"] if m["rare"]]
+        if not rare:
+            return None
+        # 희귀 광물 중 랜덤하게 하나 선택 후 인접 칸에 스폰
+        tx, ty = self._rng.choice(rare)
+        offsets = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        self._rng.shuffle(offsets)
+        w, h = map_info["width"], map_info["height"]
+        for dx, dy in offsets:
+            nx, ny = tx + dx, ty + dy
+            if 0 <= nx < w and 0 <= ny < h:
+                return (nx, ny)
+        return (tx, ty)
+
     def get_action(self, state: dict) -> str:
         my = state["my_bot"]
         pos_x, pos_y = my["position"]
