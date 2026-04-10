@@ -1,10 +1,24 @@
+import json
+import os
+
 import firebase_admin
-from firebase_admin import credentials, auth
-from fastapi import HTTPException, Depends
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from firebase_admin import auth, credentials
 
 # 파이어베이스 초기화 (한 번만 실행)
-cred = credentials.Certificate("src/arena/server/secrets/serviceAccountKey.json")
+_creds_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+if _creds_json:
+    # GCP Cloud Run: Secret Manager에서 JSON 문자열로 주입
+    cred = credentials.Certificate(json.loads(_creds_json))
+else:
+    # 로컬: 파일 경로 사용
+    _creds_path = os.environ.get(
+        "FIREBASE_CREDENTIALS_PATH",
+        "src/arena/server/secrets/serviceAccountKey.json",
+    )
+    cred = credentials.Certificate(_creds_path)
+
 firebase_admin.initialize_app(cred)
 
 security = HTTPBearer()

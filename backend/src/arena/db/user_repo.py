@@ -7,20 +7,26 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional
 
 
 @dataclass
 class User:
     id: int
+    firebase_uid: str
     username: str
     display_name: str
-    password_hash: str
-    salt: str
+    email: Optional[str]
+    email_verified: bool
+    auth_provider: Optional[str]
+    photo_url: Optional[str]
+    role: str
     created_at: str
+    updated_at: Optional[str]
     last_login_at: Optional[str]
     is_active: bool
+    banned_reason: Optional[str]
+    banned_at: Optional[str]
 
 
 class UserRepository:
@@ -29,18 +35,20 @@ class UserRepository:
 
     def create(
         self,
+        firebase_uid: str,
         username: str,
         display_name: str,
-        password_hash: str,
-        salt: str,
+        email: Optional[str] = None,
+        auth_provider: Optional[str] = None,
+        photo_url: Optional[str] = None,
     ) -> User:
         """유저를 생성하고 반환."""
         cursor = self.conn.execute(
             """
-            INSERT INTO users (username, display_name, password_hash, salt)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO users (firebase_uid, username, display_name, email, auth_provider, photo_url)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (username, display_name, password_hash, salt),
+            (firebase_uid, username, display_name, email, auth_provider, photo_url),
         )
         self.conn.commit()
         return self.get_by_id(cursor.lastrowid)
@@ -59,6 +67,13 @@ class UserRepository:
         row = cursor.fetchone()
         return self._row_to_user(row) if row else None
 
+    def get_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
+        cursor = self.conn.execute(
+            "SELECT * FROM users WHERE firebase_uid = ?", (firebase_uid,)
+        )
+        row = cursor.fetchone()
+        return self._row_to_user(row) if row else None
+
     def update_last_login(self, user_id: int) -> None:
         self.conn.execute(
             "UPDATE users SET last_login_at = datetime('now') WHERE id = ?",
@@ -68,7 +83,7 @@ class UserRepository:
 
     def update_display_name(self, user_id: int, display_name: str) -> None:
         self.conn.execute(
-            "UPDATE users SET display_name = ? WHERE id = ?",
+            "UPDATE users SET display_name = ?, updated_at = datetime('now') WHERE id = ?",
             (display_name, user_id),
         )
         self.conn.commit()
@@ -88,11 +103,18 @@ class UserRepository:
     def _row_to_user(self, row: sqlite3.Row) -> User:
         return User(
             id=row["id"],
+            firebase_uid=row["firebase_uid"],
             username=row["username"],
             display_name=row["display_name"],
-            password_hash=row["password_hash"],
-            salt=row["salt"],
+            email=row["email"],
+            email_verified=bool(row["email_verified"]),
+            auth_provider=row["auth_provider"],
+            photo_url=row["photo_url"],
+            role=row["role"],
             created_at=row["created_at"],
+            updated_at=row["updated_at"],
             last_login_at=row["last_login_at"],
             is_active=bool(row["is_active"]),
+            banned_reason=row["banned_reason"],
+            banned_at=row["banned_at"],
         )

@@ -17,11 +17,8 @@ from src.arena.db.user_repo import UserRepository
 from src.arena.db.bot_repo import BotRepository
 from src.arena.db.game_repo import GameRepository
 from src.arena.auth.auth_service import (
-    AuthService,
+    FirebaseUserService,
     TokenConfig,
-    generate_salt,
-    hash_password,
-    verify_password,
     create_token,
     decode_token,
 )
@@ -40,9 +37,15 @@ class DBTestBase(unittest.TestCase):
         self.conn.close()
 
     def _create_test_user(self, username="testuser") -> int:
-        salt = generate_salt()
-        pw_hash = hash_password("pass123", salt)
-        user = self.users.create(username, f"Test {username}", pw_hash, salt)
+        """Firebase UID 기반으로 테스트 유저 생성."""
+        firebase_uid = f"firebase_uid_{username}"
+        user = self.users.create(
+            firebase_uid,
+            username,
+            f"Test {username}",
+            email=f"{username}@test.com",
+            auth_provider="google.com",
+        )
         return user.id
 
 
@@ -65,18 +68,25 @@ class TestUserRepo(DBTestBase):
         self.assertIsNotNone(user)
         self.assertEqual(user.username, "alice")
 
+    def test_get_by_firebase_uid(self):
+        self._create_test_user("bob")
+        user = self.users.get_by_firebase_uid("firebase_uid_bob")
+        self.assertIsNotNone(user)
+        self.assertEqual(user.username, "bob")
+
     def test_get_nonexistent(self):
         self.assertIsNone(self.users.get_by_id(9999))
         self.assertIsNone(self.users.get_by_username("ghost"))
+        self.assertIsNone(self.users.get_by_firebase_uid("no_such_uid"))
 
     def test_duplicate_username(self):
-        self._create_test_user("bob")
+        self._create_test_user("charlie")
         with self.assertRaises(Exception):
-            self._create_test_user("bob")
+            self._create_test_user("charlie")
 
     def test_username_exists(self):
-        self._create_test_user("charlie")
-        self.assertTrue(self.users.username_exists("charlie"))
+        self._create_test_user("dave")
+        self.assertTrue(self.users.username_exists("dave"))
         self.assertFalse(self.users.username_exists("nobody"))
 
     def test_update_display_name(self):
@@ -240,30 +250,7 @@ class TestGameRepo(DBTestBase):
 
 
 # ──────────────────────────────────────────────
-#  4. 비밀번호 해싱
-# ──────────────────────────────────────────────
-
-class TestPasswordHashing(unittest.TestCase):
-    def test_hash_and_verify(self):
-        salt = generate_salt()
-        pw_hash = hash_password("mypassword", salt)
-        self.assertTrue(verify_password("mypassword", salt, pw_hash))
-        self.assertFalse(verify_password("wrongpassword", salt, pw_hash))
-
-    def test_different_salts(self):
-        salt1 = generate_salt()
-        salt2 = generate_salt()
-        h1 = hash_password("same_pass", salt1)
-        h2 = hash_password("same_pass", salt2)
-        self.assertNotEqual(h1, h2)
-
-    def test_salt_length(self):
-        salt = generate_salt()
-        self.assertEqual(len(bytes.fromhex(salt)), 32)
-
-
-# ──────────────────────────────────────────────
-#  5. JWT 토큰
+#  4. JWT 토큰 (mock_auth용)
 # ──────────────────────────────────────────────
 
 class TestJWT(unittest.TestCase):
@@ -281,7 +268,7 @@ class TestJWT(unittest.TestCase):
         token = create_token(
             {"user_id": 1},
             self.config,
-            expires_in=-1,  # 이미 만료
+            expires_in=-1,
         )
         payload = decode_token(token, self.config)
         self.assertIsNone(payload)
@@ -295,7 +282,7 @@ class TestJWT(unittest.TestCase):
     def test_tampered_token(self):
         token = create_token({"user_id": 1}, self.config)
         parts = token.split(".")
-        parts[1] = parts[1] + "x"  # 페이로드 변조
+        parts[1] = parts[1] + "x"
         tampered = ".".join(parts)
         payload = decode_token(tampered, self.config)
         self.assertIsNone(payload)
@@ -307,68 +294,53 @@ class TestJWT(unittest.TestCase):
 
 
 # ──────────────────────────────────────────────
-#  6. AuthService
+#  5. FirebaseUserService
 # ──────────────────────────────────────────────
 
-class TestAuthService(DBTestBase):
+class TestFirebaseUserService(DBTestBase):
     def setUp(self):
         super().setUp()
-        self.token_config = TokenConfig(secret_key="test-secret")
-        self.auth = AuthService(self.users, self.token_config)
+        self.firebase_service = FirebaseUserService(self.users)
 
-    def test_register_success(self):
-        ok, msg, data = self.auth.register("alice", "pass123", "Alice")
-        self.assertTrue(ok)
-        self.assertIn("id", data)
-        self.assertEqual(data["username"], "alice")
+    def _make_token(self, uid, email="user@test.com", name="Test User"):
+        return {
+            "uid": uid,
+            "email": email,
+            "name": name,
+            "firebase": {"sign_in_provider": "google.com"},
+            "picture": "https://example.com/photo.jpg",
+        }
 
-    def test_register_duplicate(self):
-        self.auth.register("bob", "pass123")
-        ok, msg, _ = self.auth.register("bob", "pass456")
-        self.assertFalse(ok)
-        self.assertIn("이미", msg)
+    def test_create_new_user(self):
+        token = self._make_token("uid_001", "alice@test.com", "Alice")
+        user = self.firebase_service.get_or_create_user(token)
+        self.assertIsNotNone(user)
+        self.assertEqual(user.firebase_uid, "uid_001")
+        self.assertEqual(user.email, "alice@test.com")
+        self.assertEqual(user.display_name, "Alice")
+        self.assertEqual(user.auth_provider, "google.com")
 
-    def test_register_short_username(self):
-        ok, msg, _ = self.auth.register("ab", "pass123")
-        self.assertFalse(ok)
+    def test_get_existing_user(self):
+        token = self._make_token("uid_002", "bob@test.com", "Bob")
+        user1 = self.firebase_service.get_or_create_user(token)
+        user2 = self.firebase_service.get_or_create_user(token)
+        self.assertEqual(user1.id, user2.id)
 
-    def test_register_short_password(self):
-        ok, msg, _ = self.auth.register("validuser", "12345")
-        self.assertFalse(ok)
+    def test_last_login_updated_on_existing(self):
+        token = self._make_token("uid_003")
+        self.firebase_service.get_or_create_user(token)
+        user = self.firebase_service.get_or_create_user(token)
+        self.assertIsNotNone(user.last_login_at)
 
-    def test_login_success(self):
-        self.auth.register("charlie", "secure123")
-        ok, msg, data = self.auth.login("charlie", "secure123")
-        self.assertTrue(ok)
-        self.assertIn("access_token", data)
-        self.assertEqual(data["user"]["username"], "charlie")
+    def test_username_generated_from_email(self):
+        token = self._make_token("uid_004", "charlie@example.com", "Charlie")
+        user = self.firebase_service.get_or_create_user(token)
+        self.assertEqual(user.username, "charlie")
 
-    def test_login_wrong_password(self):
-        self.auth.register("dave", "correct")
-        ok, msg, _ = self.auth.login("dave", "wrong")
-        self.assertFalse(ok)
-
-    def test_login_nonexistent(self):
-        ok, msg, _ = self.auth.login("ghost", "pass")
-        self.assertFalse(ok)
-
-    def test_login_deactivated(self):
-        self.auth.register("eve", "pass123")
-        user = self.users.get_by_username("eve")
-        self.users.deactivate(user.id)
-        ok, msg, _ = self.auth.login("eve", "pass123")
-        self.assertFalse(ok)
-
-    def test_authenticate_token(self):
-        self.auth.register("frank", "pass123")
-        _, _, data = self.auth.login("frank", "pass123")
-        payload = self.auth.authenticate_token(data["access_token"])
-        self.assertIsNotNone(payload)
-        self.assertEqual(payload["username"], "frank")
-
-    def test_authenticate_bad_token(self):
-        result = self.auth.authenticate_token("garbage.token.here")
-        self.assertIsNone(result)
+    def test_username_generated_from_uid_when_no_email(self):
+        token = {"uid": "abcdef1234567890", "firebase": {"sign_in_provider": "anonymous"}}
+        user = self.firebase_service.get_or_create_user(token)
+        self.assertEqual(user.username, "abcdef1234567890")
 
 
 if __name__ == "__main__":
