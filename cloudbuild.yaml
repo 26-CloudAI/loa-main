@@ -56,13 +56,13 @@ steps:
       - '--vpc-connector'
       - 'arena-connector'
 
-      # Cloud SQL (PostgreSQL) — arena-db 생성 후 주석 해제
-      # - '--add-cloudsql-instances'
-      # - '$PROJECT_ID:${_REGION}:arena-db'
+      # Cloud SQL (PostgreSQL)
+      - '--add-cloudsql-instances'
+      - '$PROJECT_ID:${_REGION}:arena-db'
 
-      # Secret Manager (Firebase 서비스 계정) — DB 비밀번호는 Cloud SQL 연결 후 복구
+      # Secret Manager (Firebase 서비스 계정 + DB 비밀번호)
       - '--set-secrets'
-      - 'FIREBASE_CREDENTIALS_JSON=firebase-service-account:latest'
+      - 'FIREBASE_CREDENTIALS_JSON=firebase-service-account:latest,DB_PASSWORD=db-password:latest'
 
       # 환경변수
       - '--set-env-vars'
@@ -70,7 +70,11 @@ steps:
         USE_REDIS=true,
         REDIS_HOST=${_REDIS_HOST},
         LOG_FORMAT=json,
-        CORS_ORIGINS=${_CORS_ORIGINS}
+        CORS_ORIGINS=${_CORS_ORIGINS},
+        DB_TYPE=postgresql,
+        DB_HOST=10.114.0.3,
+        DB_NAME=ai_arena,
+        DB_USER=arena_user
 
       - '--quiet'
 
