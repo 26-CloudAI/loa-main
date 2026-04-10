@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 import type { ReactNode } from 'react'
+import { MOCK, MOCK_USER, MOCK_TOKEN } from '../dev/mock'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
 
@@ -27,6 +28,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   async function login(email: string, password: string) {
+    // ── mock mode ──────────────────────────────────────────────
+    if (MOCK) {
+      await new Promise((r) => setTimeout(r, 400))
+      localStorage.setItem('loa_token', MOCK_TOKEN)
+      setToken(MOCK_TOKEN)
+      setUser(MOCK_USER)
+      return
+    }
+    // ──────────────────────────────────────────────────────────
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

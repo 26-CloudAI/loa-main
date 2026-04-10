@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { MOCK, MOCK_GAMES } from '../dev/mock'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
 
@@ -35,6 +36,13 @@ export default function GamesPage() {
   const [error, setError] = useState('')
 
   async function fetchGames() {
+    // ── mock mode ──────────────────────────────────────────────
+    if (MOCK) {
+      setGames(MOCK_GAMES as GameInfo[])
+      setLoading(false)
+      return
+    }
+    // ──────────────────────────────────────────────────────────
     try {
       const res = await fetch(`${API_BASE}/api/games`)
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)

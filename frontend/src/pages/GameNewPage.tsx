@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { MOCK, MOCK_GAME_ID } from '../dev/mock'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
 
@@ -45,11 +46,19 @@ export default function GameNewPage() {
   const codeOverLimit = codeBytes > MAX_CODE_BYTES
   const canSubmit = !submitting && code.trim().length > 0 && !codeOverLimit
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
     setError('')
+
+    // ── mock mode ──────────────────────────────────────────────
+    if (MOCK) {
+      await new Promise((r) => setTimeout(r, 600))
+      navigate(`/games/${MOCK_GAME_ID}/watch`)
+      return
+    }
+    // ──────────────────────────────────────────────────────────
 
     try {
       const body: Record<string, unknown> = {
