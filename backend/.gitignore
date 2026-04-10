@@ -11,6 +11,8 @@ build/
 
 # 환경
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 
@@ -25,3 +27,23 @@ docker-compose.override.yml
 # OS
 .DS_Store
 Thumbs.db
+
+# 시크릿 / 인증 키 (절대 커밋 금지)
+*.pem
+*.p12
+*.key
+*.pfx
+*service-account*.json
+*service_account*.json
+*-credentials.json
+*_credentials.json
+*-key.json
+*_key.json
+firebase-adminsdk*.json
+gcloud-key*.json
+secrets/
+
+# 로그
+logs/
+*.log
+src/arena/server/secrets/

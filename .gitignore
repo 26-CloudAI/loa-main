@@ -1,2 +1,27 @@
 # Claude Code
 .claude/
+
+# 시크릿 / 인증 키 (절대 커밋 금지)
+*.pem
+*.p12
+*.key
+*.pfx
+*service-account*.json
+*service_account*.json
+*-credentials.json
+*_credentials.json
+*-key.json
+*_key.json
+firebase-adminsdk*.json
+gcloud-key*.json
+secrets/
+
+# 환경변수
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+server/secrets/

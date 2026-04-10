@@ -77,6 +77,7 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
         current_tick_data = {
             "tick": engine.tick,
             "zone_boundary": engine.zone.boundary,
+            "zone_bounds": engine.zone.bounds,
             "events": [
                 {
                     "type": ev.event_type, 
@@ -128,7 +129,8 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
                 "action": action.value if action else "NONE",
                 "energy": bot.energy,
                 "pos": [bot.position.x, bot.position.y] if bot.alive else None,
-                "score": round(bot.score, 1)
+                "score": round(bot.score, 1),
+                "shield_active": bot.shield_active
             }
 
         # 이번 틱의 데이터를 전체 리스트에 안전하게 저장!
@@ -136,7 +138,7 @@ def run(num_bots: int = 5, seed: int = 42, verbose: bool = False):
 
         # 기존 콘솔 출력 유지
         for ev in events:
-            if ev.event_type in ("kill", "death"):
+            if ev.event_type in ("kill", "death", "guard_success"):
                 print(f"  [틱 {ev.tick:4d}] {ev.detail}")
 
         if engine.tick in milestone_ticks:

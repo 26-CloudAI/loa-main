@@ -111,6 +111,6 @@ def build_bot_state(
         "vision": {
             "grid": vision_grid,
         },
-        "zone_boundary": zone.boundary,
+        "zone_bounds": zone.bounds,
         "leaderboard": leaderboard,
     }

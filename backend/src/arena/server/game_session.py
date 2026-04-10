@@ -232,7 +232,7 @@ class GameSession:
             tick=self._engine.tick,
             bots=bots_data,
             minerals=minerals_data,
-            zone_boundary=self._engine.zone.boundary,
+            zone_bounds=self._engine.zone.bounds,
             alive_count=len(alive_bots),
             leaderboard=leaderboard,
         )

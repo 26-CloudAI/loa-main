@@ -17,6 +17,28 @@ if TYPE_CHECKING:
 class BotInterface(ABC):
     """봇이 구현해야 하는 최소 인터페이스."""
 
+    def choose_spawn(self, map_info: dict) -> tuple[int, int] | None:  # noqa: ARG002
+        """
+        게임 시작 전 맵 정보를 보고 원하는 스폰 위치를 반환한다.
+
+        Args:
+            map_info: 초기 맵 정보 딕셔너리
+                {
+                    "width":    int,
+                    "height":   int,
+                    "minerals": [{"x": int, "y": int, "rare": bool}, ...]
+                }
+
+        Returns:
+            (x, y) 좌표 튜플. None 반환 시 랜덤 스폰.
+            같은 칸을 요청한 봇이 여럿이면 엔진이 무작위로 1명만 허용하고
+            나머지는 랜덤 스폰으로 처리한다.
+
+        Raises:
+            어떤 예외가 발생하든 엔진이 잡아서 랜덤 스폰으로 처리한다.
+        """
+        return None
+
     @abstractmethod
     def get_action(self, state: dict) -> str:
         """
@@ -41,11 +63,3 @@ class BotInterface(ABC):
     def bot_id(self) -> str:
         """이 봇의 고유 식별자."""
         ...
-
-    def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
-        """
-        (선택적) 봇이 스폰될 위치를 지정합니다. (x, y) 튜플을 반환합니다.
-        None을 반환하거나 구현하지 않으면, 엔진이 랜덤 위치를 지정합니다.
-        맵 경계 밖이나 다른 봇이 이미 차지한 위치는 무시될 수 있습니다.
-        """
-        return None
