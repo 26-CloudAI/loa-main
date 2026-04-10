@@ -72,6 +72,19 @@ def build_vision_grid(
     return vision
 
 
+def build_leaderboard(all_bots: dict[str, Bot], config: GameConfig) -> list[dict]:
+    """생존 봇 상위 N명의 리더보드를 반환한다. 틱당 한 번만 호출해야 한다."""
+    alive = sorted(
+        (b for b in all_bots.values() if b.alive),
+        key=lambda b: b.score,
+        reverse=True,
+    )
+    return [
+        {"rank": rank, "id": b.id, "score": b.score}
+        for rank, b in enumerate(alive[: config.leaderboard_size], start=1)
+    ]
+
+
 def build_bot_state(
     bot: Bot,
     all_bots: dict[str, Bot],
@@ -79,20 +92,12 @@ def build_bot_state(
     zone: ZoneManager,
     config: GameConfig,
     tick: int,
+    leaderboard: list[dict] | None = None,
 ) -> dict:
     """봇에게 전달할 state 딕셔너리를 생성한다."""
     vision_grid = build_vision_grid(bot, all_bots, grid, zone, config)
-
-    # 리더보드: 생존 봇 중 상위 N명
-    alive_bots = [b for b in all_bots.values() if b.alive]
-    alive_bots.sort(key=lambda b: b.score, reverse=True)
-    leaderboard = []
-    for rank, b in enumerate(alive_bots[: config.leaderboard_size], start=1):
-        leaderboard.append({
-            "rank": rank,
-            "id": b.id,
-            "score": b.score,
-        })
+    if leaderboard is None:
+        leaderboard = build_leaderboard(all_bots, config)
 
     return {
         "tick": tick,

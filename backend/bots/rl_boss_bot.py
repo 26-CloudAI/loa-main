@@ -28,11 +28,14 @@ from __future__ import annotations
 
 import json
 import random
+import urllib.error
+import urllib.request
 from collections import deque
 from pathlib import Path
 from typing import Optional
 
 from src.arena.bot_interface import BotInterface
+from src.arena.types import Action
 
 # 학습된 가중치 기본 경로 (train_boss_bot.py가 저장하는 위치)
 _DEFAULT_WEIGHTS_PATH = Path(__file__).parent / "trained_weights.json"
@@ -41,27 +44,21 @@ _DEFAULT_WEIGHTS_PATH = Path(__file__).parent / "trained_weights.json"
 # 상수 정의
 # ---------------------------------------------------------------------------
 
-ACTIONS = [
-    "STAY",
-    "MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT",
-    "MINE",
-    "ATTACK_UP", "ATTACK_DOWN", "ATTACK_LEFT", "ATTACK_RIGHT",
-    "SHIELD",
-]
+ACTIONS = list(Action)
 N_ACTIONS = len(ACTIONS)   # 11
 
-# 액션 인덱스 상수 (매직 넘버 제거)
-IDX_STAY       = 0
-IDX_MOVE_UP    = 1
-IDX_MOVE_DOWN  = 2
-IDX_MOVE_LEFT  = 3
-IDX_MOVE_RIGHT = 4
-IDX_MINE       = 5
-IDX_ATTACK_UP  = 6
-IDX_ATTACK_DOWN  = 7
-IDX_ATTACK_LEFT  = 8
-IDX_ATTACK_RIGHT = 9
-IDX_SHIELD     = 10
+# 액션 인덱스 상수
+IDX_STAY       = ACTIONS.index(Action.STAY)
+IDX_MOVE_UP    = ACTIONS.index(Action.MOVE_UP)
+IDX_MOVE_DOWN  = ACTIONS.index(Action.MOVE_DOWN)
+IDX_MOVE_LEFT  = ACTIONS.index(Action.MOVE_LEFT)
+IDX_MOVE_RIGHT = ACTIONS.index(Action.MOVE_RIGHT)
+IDX_MINE       = ACTIONS.index(Action.MINE)
+IDX_ATTACK_UP  = ACTIONS.index(Action.ATTACK_UP)
+IDX_ATTACK_DOWN  = ACTIONS.index(Action.ATTACK_DOWN)
+IDX_ATTACK_LEFT  = ACTIONS.index(Action.ATTACK_LEFT)
+IDX_ATTACK_RIGHT = ACTIONS.index(Action.ATTACK_RIGHT)
+IDX_SHIELD     = ACTIONS.index(Action.SHIELD)
 
 # 5×5 시야 셀 인코딩 (연속값)
 CELL_ENCODING = {
@@ -109,6 +106,14 @@ _ADJ_DIRS = [
 
 # 시야 중심 좌표 (5×5 고정)
 _CX, _CY = 2, 2
+
+# 인접 4칸 (gx, gy) 집합 — encode() 단일 패스 안에서 인접 여부 O(1) 판별
+_ADJ_CELL_COORDS = frozenset(((_CX + dx, _CY + dy) for dx, dy, _, _ in _ADJ_DIRS))
+
+# 이동 액션 인덱스 → (dx, dy) 매핑 — get_action() hot-path 선형 탐색 제거
+_MOVE_TO_DELTA: dict[int, tuple[int, int]] = {
+    move_idx: (dx, dy) for dx, dy, move_idx, _ in _ADJ_DIRS
+}
 
 # ---------------------------------------------------------------------------
 # 수작업 튜닝된 초기 Q-가중치
@@ -277,39 +282,31 @@ class StateEncoder:
         score = my["score"]
         leaderboard = state.get("leaderboard", [])
 
-        # 시야 25개 특징 (row-major 플랫)
-        vision_feats: list[float] = [
-            CELL_ENCODING.get(cell, 0.0)
-            for row in grid
-            for cell in row
-        ]
+        # 시야 25개 특징 + 인접/전체 분석을 단일 패스로 처리
+        vision_feats: list[float] = []
+        enemy_in_adj = mineral_in_adj = mineral_rare_in_adj = 0.0
+        enemy_in_vision = mineral_in_vision = 0.0
 
-        # 인접 4칸 분석
-        enemy_in_adj = 0.0
-        mineral_in_adj = 0.0
-        mineral_rare_in_adj = 0.0
-        for dx, dy, _, _ in _ADJ_DIRS:
-            cell = grid[_CY + dy][_CX + dx]
-            if cell == "bot_enemy":
-                enemy_in_adj = 1.0
-            elif cell == "mineral_rare":
-                mineral_rare_in_adj = 1.0
-                mineral_in_adj = 1.0
-            elif cell == "mineral":
-                mineral_in_adj = 1.0
-
-        # 시야 전체 분석 (중심 제외)
-        enemy_in_vision = 0.0
-        mineral_in_vision = 0.0
         for gy in range(5):
             for gx in range(5):
+                cell = grid[gy][gx]
+                vision_feats.append(CELL_ENCODING.get(cell, 0.0))
                 if gy == _CY and gx == _CX:
                     continue
-                cell = grid[gy][gx]
+                is_adj = (gx, gy) in _ADJ_CELL_COORDS
                 if cell == "bot_enemy":
                     enemy_in_vision = 1.0
-                elif cell in ("mineral", "mineral_rare"):
+                    if is_adj:
+                        enemy_in_adj = 1.0
+                elif cell == "mineral_rare":
                     mineral_in_vision = 1.0
+                    if is_adj:
+                        mineral_rare_in_adj = 1.0
+                        mineral_in_adj = 1.0
+                elif cell == "mineral":
+                    mineral_in_vision = 1.0
+                    if is_adj:
+                        mineral_in_adj = 1.0
 
         # 자기장 내부 여부: 경계 안쪽(safe zone 밖)에 있으면 1
         # zone_boundary는 안전 영역의 최소/최대 좌표 마진값
@@ -419,6 +416,10 @@ class StrategyRouter:
 
         adjusted = q_values[:]
 
+        # 인접 4칸을 한 번만 읽어 이후 규칙에서 재활용
+        adj = [(dx, dy, move_idx, attack_idx, grid[_CY + dy][_CX + dx])
+               for dx, dy, move_idx, attack_idx in _ADJ_DIRS]
+
         # ------------------------------------------------------------------
         # 1. 현재 위치에 광물 있으면 즉시 MINE (에너지 여유 있을 때)
         # ------------------------------------------------------------------
@@ -429,12 +430,9 @@ class StrategyRouter:
         # 2. 위기 생존 규칙 (에너지 극도로 낮을 때)
         # ------------------------------------------------------------------
         if energy <= ENERGY_CRITICAL:
-            # 인접 광물 방향으로 이동
-            for dx, dy, move_idx, _ in _ADJ_DIRS:
-                cell = grid[_CY + dy][_CX + dx]
+            for _, _, move_idx, _, cell in adj:
                 if cell in ("mineral", "mineral_rare"):
                     return move_idx
-            # 광물 없으면 실드로 버팀
             return IDX_SHIELD
 
         # ------------------------------------------------------------------
@@ -451,21 +449,14 @@ class StrategyRouter:
                 return self._toward_center(pos_x, pos_y, safe_min, safe_max)
 
         # ------------------------------------------------------------------
-        # 4. 인접 적 공격 (에너지 여유 있을 때)
+        # 4. 인접 적 공격 (에너지 여유 있을 때) & 5. 인접 광물 Q값 보정
         # ------------------------------------------------------------------
-        if energy >= ENERGY_ATTACK_MIN:
-            for dx, dy, _, attack_idx in _ADJ_DIRS:
-                if grid[_CY + dy][_CX + dx] == "bot_enemy":
-                    if energy >= ENERGY_HIGH:
-                        return attack_idx
-                    adjusted[attack_idx] += 2.0
-
-        # ------------------------------------------------------------------
-        # 5. 인접 광물 방향 Q값 보정
-        # ------------------------------------------------------------------
-        for dx, dy, move_idx, _ in _ADJ_DIRS:
-            cell = grid[_CY + dy][_CX + dx]
-            if cell == "mineral_rare":
+        for _, _, move_idx, attack_idx, cell in adj:
+            if cell == "bot_enemy" and energy >= ENERGY_ATTACK_MIN:
+                if energy >= ENERGY_HIGH:
+                    return attack_idx
+                adjusted[attack_idx] += 2.0
+            elif cell == "mineral_rare":
                 adjusted[move_idx] += 3.0
             elif cell == "mineral":
                 adjusted[move_idx] += 1.5
@@ -504,9 +495,8 @@ class StrategyRouter:
         # ------------------------------------------------------------------
         # 7. 실행 불가 액션 마스킹
         # ------------------------------------------------------------------
-        # 인접에 적 없으면 공격 불가 수준으로 낮춤
-        for dx, dy, _, attack_idx in _ADJ_DIRS:
-            if grid[_CY + dy][_CX + dx] != "bot_enemy":
+        for _, _, _, attack_idx, cell in adj:
+            if cell != "bot_enemy":
                 adjusted[attack_idx] -= 10.0
 
         # 현재 위치에 광물 없으면 MINE 강하게 억제
@@ -697,10 +687,8 @@ class RLBossBot(BotInterface):
         my = state["my_bot"]
         grid = state["vision"]["grid"]
 
-        # --- 1. 현재 상태 인코딩 ---
         phi = self._encoder.encode(state)
 
-        # --- 2. 보상 계산 및 경험 저장 ---
         if self._prev_state is not None and self._prev_phi is not None:
             reward = self._reward_calc.compute(
                 self._prev_state, state, self._prev_action_idx or IDX_STAY
@@ -711,29 +699,19 @@ class RLBossBot(BotInterface):
                 reward,
                 phi,
             )
-
-            # --- 3. 온라인 TD 학습 ---
             if len(self._buffer) >= 10:
                 self._td_update(phi, reward)
 
-        # --- 4. Q값 계산 & 액션 선택 ---
         q_vals = self._qnet.q_values(phi)
         action_idx = self._router.select_action(q_vals, state, tick, self._on_mineral)
 
-        # --- 5. 다음 틱 MINE 오버라이드를 위해 이동 대상 셀 타입 기억 ---
-        self._on_mineral = False
-        if action_idx in (IDX_MOVE_UP, IDX_MOVE_DOWN, IDX_MOVE_LEFT, IDX_MOVE_RIGHT):
-            # 이동 방향의 대상 셀 확인
-            for dx, dy, move_idx, _ in _ADJ_DIRS:
-                if move_idx == action_idx:
-                    target_cell = grid[_CY + dy][_CX + dx]
-                    self._on_mineral = target_cell in ("mineral", "mineral_rare")
-                    break
-        elif action_idx == IDX_MINE:
-            # MINE을 수행했으므로 광물이 소진됨 — 다음 틱은 일반 판단
+        if action_idx in _MOVE_TO_DELTA:
+            dx, dy = _MOVE_TO_DELTA[action_idx]
+            target_cell = grid[_CY + dy][_CX + dx]
+            self._on_mineral = target_cell in ("mineral", "mineral_rare")
+        else:
             self._on_mineral = False
 
-        # --- 6. 상태 저장 ---
         self._prev_state = state
         self._prev_phi = phi
         self._prev_action_idx = action_idx

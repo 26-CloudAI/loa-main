@@ -13,6 +13,8 @@ import logging
 import os
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -74,16 +76,20 @@ class ContainerManager:
         return self._container_ip
 
     @property
+    def _port(self) -> int | str:
+        return self._host_port or self.config.container_port
+
+    @property
     def action_url(self) -> Optional[str]:
-        if self._container_ip is None: return None
-        port = self._host_port if self._host_port else self.config.container_port
-        return f"http://{self._container_ip}:{port}/action"
+        if self._container_ip is None:
+            return None
+        return f"http://{self._container_ip}:{self._port}/action"
 
     @property
     def health_url(self) -> Optional[str]:
-        if self._container_ip is None: return None
-        port = self._host_port if self._host_port else self.config.container_port
-        return f"http://{self._container_ip}:{port}/health"
+        if self._container_ip is None:
+            return None
+        return f"http://{self._container_ip}:{self._port}/health"
 
     @property
     def container_name(self) -> str:
@@ -252,9 +258,6 @@ class ContainerManager:
         )
 
         # HTTP 헬스체크 폴링
-        import urllib.request
-        import urllib.error
-
         health_url = self.health_url
         assert health_url is not None
 

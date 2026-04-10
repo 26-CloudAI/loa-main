@@ -131,7 +131,7 @@ class GameRepository:
 
     def get_participants(self, game_id: str) -> list[ParticipantRecord]:
         cursor = self.conn.execute(
-            "SELECT * FROM game_participants WHERE game_id = ? ORDER BY final_rank ASC NULLS LAST",
+            "SELECT * FROM game_participants WHERE game_id = ? ORDER BY COALESCE(final_rank, 9999) ASC",
             (game_id,),
         )
         return [self._row_to_participant(row) for row in cursor.fetchall()]

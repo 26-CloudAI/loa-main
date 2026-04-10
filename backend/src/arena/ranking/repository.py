@@ -108,8 +108,9 @@ class RankingRepository:
             prs.append(PlayerResult(player_id=p["bot_id"], rating_before=br.rating,
                                     games_played=br.games_played, final_rank=p["final_rank"]))
         changes = calculate_multiplayer_elo(prs, self.elo_config)
+        participants_by_id = {p["bot_id"]: p for p in participants}
         for ch in changes:
-            pd = next(p for p in participants if p["bot_id"] == ch.player_id)
+            pd = participants_by_id[ch.player_id]
             self.conn.execute(
                 """UPDATE bot_ratings SET rating=?, peak_rating=MAX(peak_rating,?),
                 games_played=games_played+1, wins=wins+?, top3_count=top3_count+?,
@@ -159,9 +160,8 @@ class RankingRepository:
     def get_bot_stats(self, bot_id: int, season_id: int) -> Optional[dict]:
         br = self.get_rating(bot_id, season_id)
         if not br: return None
-        recent = self.get_rating_history(bot_id, season_id, limit=5)
-        recent_trend = sum(h.rating_delta for h in recent)
         all_h = self.get_rating_history(bot_id, season_id, limit=100)
+        recent_trend = sum(h.rating_delta for h in all_h[:5])
         streak = 0
         if all_h:
             is_w = all_h[0].final_rank == 1

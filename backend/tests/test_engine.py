@@ -12,6 +12,11 @@ AI Arena — 게임 엔진 핵심 테스트
   8. 예외/악성 입력 처리
 """
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
 import pytest
 
 from src.arena.config import GameConfig, MapConfig, BotConfig, ZoneConfig, ActionCost

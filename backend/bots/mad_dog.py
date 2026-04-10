@@ -8,6 +8,15 @@ from __future__ import annotations
 import random
 
 from src.arena.bot_interface import BotInterface
+from src.arena.types import Action, CellType
+from bots.utils import CX, CY, ADJACENT_DIRS, MOVE_ACTIONS, move_toward
+
+_ENEMY = CellType.BOT_ENEMY
+_MINERAL = CellType.MINERAL
+_MINERAL_RARE = CellType.MINERAL_RARE
+_ENERGY_CRITICAL = 15  # 이 에너지 이하이면 긴급 채굴 모드
+_MAP_CENTER = 50        # 맵 중앙 좌표 (100×100 기준)
+_CENTER_RADIUS = 3      # 이 범위 안에 있으면 중앙 근처로 간주
 
 
 class MadDogBot(BotInterface):
@@ -24,70 +33,46 @@ class MadDogBot(BotInterface):
         grid = state["vision"]["grid"]
         pos_x, pos_y = my["position"]
         energy = my["energy"]
-        cx, cy = 2, 2  # 시야 중심
 
-        # 에너지 낮으면 광물 찾아서 회복 시도
-        if energy <= 15:
-            return self._emergency_mine(grid, cx, cy)
+        if energy <= _ENERGY_CRITICAL:
+            return self._emergency_mine(grid)
 
-        # 인접 4칸에 적 → 즉시 공격
-        adjacent_attacks = [
-            (0, -1, "ATTACK_UP"),
-            (0, 1, "ATTACK_DOWN"),
-            (-1, 0, "ATTACK_LEFT"),
-            (1, 0, "ATTACK_RIGHT"),
-        ]
-        for adx, ady, attack in adjacent_attacks:
-            if grid[cy + ady][cx + adx] == "bot_enemy":
+        # 인접 적 → 즉시 공격
+        for adx, ady, _, attack in ADJACENT_DIRS:
+            if grid[CY + ady][CX + adx] == _ENEMY:
                 return attack
 
-        # 시야 내 가장 가까운 적 방향으로 추적
-        closest_enemy = None
+        # 시야 내 가장 가까운 적 추적
+        closest = None
         closest_dist = 999
         for dy in range(5):
             for dx in range(5):
-                if grid[dy][dx] == "bot_enemy":
-                    dist = abs(dx - cx) + abs(dy - cy)
+                if grid[dy][dx] == _ENEMY:
+                    dist = abs(dx - CX) + abs(dy - CY)
                     if dist < closest_dist:
                         closest_dist = dist
-                        closest_enemy = (dx - cx, dy - cy)
+                        closest = (dx - CX, dy - CY)
 
-        if closest_enemy:
-            return self._move_toward(*closest_enemy)
+        if closest:
+            return move_toward(*closest)
 
-        # 적이 없으면 맵 중앙으로 이동 (적을 만날 확률 높임)
-        center_dx = 50 - pos_x
-        center_dy = 50 - pos_y
-        if abs(center_dx) > 3 or abs(center_dy) > 3:
-            return self._move_toward(center_dx, center_dy)
+        # 적 없으면 맵 중앙으로 이동
+        center_dx = _MAP_CENTER - pos_x
+        center_dy = _MAP_CENTER - pos_y
+        if abs(center_dx) > _CENTER_RADIUS or abs(center_dy) > _CENTER_RADIUS:
+            return move_toward(center_dx, center_dy)
 
-        # 중앙 근처면 배회
-        return self._rng.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
+        return self._rng.choice(MOVE_ACTIONS)
 
     def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
-        """맵의 중앙 (45-55 사이)에 스폰하여 교전 확률을 높입니다."""
-        center_min = 45
-        center_max = 55
-        x = self._rng.randint(center_min, center_max)
-        y = self._rng.randint(center_min, center_max)
+        """맵 중앙에 스폰하여 교전 확률을 높인다."""
+        x = self._rng.randint(45, 55)
+        y = self._rng.randint(45, 55)
         return (x, y)
 
-    def _move_toward(self, dx: int, dy: int) -> str:
-        if dx == 0 and dy == 0:
-            return "STAY"
-        if abs(dx) >= abs(dy):
-            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
-        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
-
-    def _emergency_mine(self, grid: list, cx: int, cy: int) -> str:
-        """에너지 위기 시 인접 광물 채굴 시도."""
-        adjacent = [
-            (0, -1, "MOVE_UP"),
-            (0, 1, "MOVE_DOWN"),
-            (-1, 0, "MOVE_LEFT"),
-            (1, 0, "MOVE_RIGHT"),
-        ]
-        for adx, ady, move in adjacent:
-            if grid[cy + ady][cx + adx] in ("mineral", "mineral_rare"):
+    def _emergency_mine(self, grid: list) -> str:
+        """에너지 위기 시 인접 광물로 이동. 없으면 실드."""
+        for adx, ady, move, _ in ADJACENT_DIRS:
+            if grid[CY + ady][CX + adx] in (_MINERAL, _MINERAL_RARE):
                 return move
-        return "SHIELD"  # 광물도 없으면 방어
+        return Action.SHIELD

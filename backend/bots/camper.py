@@ -10,6 +10,16 @@ from __future__ import annotations
 import random
 
 from src.arena.bot_interface import BotInterface
+from src.arena.types import Action, CellType
+from bots.utils import CX, CY, ADJACENT_DIRS, MOVE_ACTIONS, move_toward, flee
+
+_ENEMY = CellType.BOT_ENEMY
+_MINERAL = CellType.MINERAL
+_MINERAL_RARE = CellType.MINERAL_RARE
+_ENERGY_SHIELD_MIN = 20   # 실드 사용 최소 에너지
+_PHASE_LATE = 250          # 후반 채굴 모드 시작 틱
+_PHASE_EARLY_END = 100     # 초반 STAY 모드 종료 틱
+_ZONE_MARGIN = 2           # 자기장 경계 여유 칸
 
 
 class CamperBot(BotInterface):
@@ -28,68 +38,46 @@ class CamperBot(BotInterface):
         zone_boundary = state["zone_boundary"]
         pos_x, pos_y = my["position"]
         energy = my["energy"]
-        cx, cy = 2, 2  # 시야 중심
 
-        # 인접 적 감지 → 실드 또는 회피
+        # 인접 적 → 실드 또는 회피
         for dy in range(5):
             for dx in range(5):
-                if grid[dy][dx] == "bot_enemy":
-                    dist = abs(dx - cx) + abs(dy - cy)
+                if grid[dy][dx] == _ENEMY:
+                    dist = abs(dx - CX) + abs(dy - CY)
                     if dist == 1:
-                        # 바로 옆 → 실드 (에너지 여유 있으면)
-                        if energy > 20:
-                            return "SHIELD"
-                        return self._flee(dx - cx, dy - cy)
+                        return Action.SHIELD if energy > _ENERGY_SHIELD_MIN else flee(dx - CX, dy - CY)
                     if dist == 2:
-                        return self._flee(dx - cx, dy - cy)
+                        return flee(dx - CX, dy - CY)
 
-        # 자기장 회피: 안전 경계 안으로 이동
+        # 자기장 안전 경계 안으로 이동
         if zone_boundary > 0:
-            safe_min = zone_boundary + 2  # 여유 2칸
-            safe_max_x = 99 - zone_boundary - 2
-            safe_max_y = 99 - zone_boundary - 2
+            safe_min = zone_boundary + _ZONE_MARGIN
+            safe_max = 99 - zone_boundary - _ZONE_MARGIN
+            if pos_x < safe_min: return Action.MOVE_RIGHT
+            if pos_x > safe_max: return Action.MOVE_LEFT
+            if pos_y < safe_min: return Action.MOVE_DOWN
+            if pos_y > safe_max: return Action.MOVE_UP
 
-            if pos_x < safe_min:
-                return "MOVE_RIGHT"
-            if pos_x > safe_max_x:
-                return "MOVE_LEFT"
-            if pos_y < safe_min:
-                return "MOVE_DOWN"
-            if pos_y > safe_max_y:
-                return "MOVE_UP"
-
-        # 후반 (300틱 이후) → 채굴 모드
-        if tick >= 250:
-            adjacent = [
-                (0, -1, "MOVE_UP"),
-                (0, 1, "MOVE_DOWN"),
-                (-1, 0, "MOVE_LEFT"),
-                (1, 0, "MOVE_RIGHT"),
-            ]
-            for adx, ady, move in adjacent:
-                cell = grid[cy + ady][cx + adx]
-                if cell in ("mineral", "mineral_rare"):
+        # 후반 → 채굴 모드
+        if tick >= _PHASE_LATE:
+            for adx, ady, move, _ in ADJACENT_DIRS:
+                if grid[CY + ady][CX + adx] in (_MINERAL, _MINERAL_RARE):
                     return move
-
-            # 시야 내 광물 방향으로 이동
             for dy in range(5):
                 for dx in range(5):
-                    if grid[dy][dx] in ("mineral", "mineral_rare"):
-                        return self._move_toward(dx - cx, dy - cy)
+                    if grid[dy][dx] in (_MINERAL, _MINERAL_RARE):
+                        return move_toward(dx - CX, dy - CY, on_spot=Action.MINE)
 
-        # 초반: 에너지 절약 (STAY)
-        if tick < 100:
-            return "STAY"
+        if tick < _PHASE_EARLY_END:
+            return Action.STAY
 
-        # 중반: 느린 탐색
+        # 중반: 간헐적 탐색
         if self._rng.random() < 0.3:
-            return self._rng.choice(
-                ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"]
-            )
-        return "STAY"
+            return self._rng.choice(MOVE_ACTIONS)
+        return Action.STAY
 
     def get_spawn_position(self, grid: 'Grid') -> tuple[int, int] | None:
-        """맵의 네 코너 중 한 곳을 무작위로 선택하여 스폰합니다."""
+        """네 코너 중 하나에 스폰."""
         w, h = grid.width, grid.height
         margin = 5
         corners = [
@@ -99,15 +87,3 @@ class CamperBot(BotInterface):
             (w - 1 - margin, h - 1 - margin),
         ]
         return self._rng.choice(corners)
-
-    def _move_toward(self, dx: int, dy: int) -> str:
-        if dx == 0 and dy == 0:
-            return "MINE"
-        if abs(dx) >= abs(dy):
-            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
-        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
-
-    def _flee(self, enemy_dx: int, enemy_dy: int) -> str:
-        if abs(enemy_dx) >= abs(enemy_dy):
-            return "MOVE_LEFT" if enemy_dx > 0 else "MOVE_RIGHT"
-        return "MOVE_UP" if enemy_dy > 0 else "MOVE_DOWN"
