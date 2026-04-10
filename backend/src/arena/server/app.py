@@ -202,7 +202,10 @@ def create_app(
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_settings.CORS_ORIGINS,
+        allow_origins=[
+            "http://localhost:5173",  #로컬(개발용)
+            "https://ai-arena-b2b4b.web.app" #배포한 파이어베이스 주소(수정)
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
