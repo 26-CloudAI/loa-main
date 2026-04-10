@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import GamesPage from './pages/GamesPage'
+import GameNewPage from './pages/GameNewPage'
 
 function AppRoutes() {
   const { token } = useAuth()
@@ -14,6 +15,7 @@ function AppRoutes() {
         element={token ? <Navigate to="/games" replace /> : <LandingPage />}
       />
       <Route path="/games" element={<GamesPage />} />
+      <Route path="/games/new" element={<GameNewPage />} />
       {/* 기본 진입점 */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
