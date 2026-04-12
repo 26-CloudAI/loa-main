@@ -44,7 +44,8 @@ interface TickData {
 interface RankingEntry {
   rank: number
   id: string
-  score: number
+  score?: number
+  final_score?: number
   kills: number
   minerals_mined: number
   survival_ticks: number
@@ -595,7 +596,7 @@ function GameEndModal({
                   >
                     {r.id}
                   </td>
-                  <td className="py-1.5 text-right font-mono">{r.score.toFixed(1)}</td>
+                  <td className="py-1.5 text-right font-mono">{(r.final_score ?? r.score ?? 0).toFixed(1)}</td>
                   <td className="py-1.5 text-right text-gray-400">{r.kills}</td>
                   <td className="py-1.5 text-right text-gray-400">{r.minerals_mined}</td>
                   <td className="py-1.5 text-right text-gray-400">{r.survival_ticks}</td>
