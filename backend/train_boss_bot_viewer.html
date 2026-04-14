@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>RLBossBot 실시간 학습 뷰어</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Pretendard', 'Segoe UI', sans-serif;
+    background: #111;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    gap: 12px;
+    min-height: 100vh;
+  }
+
+  h1 { font-size: 1.3em; color: #fff; letter-spacing: 0.04em; }
+
+  /* ── 상단 컨트롤 바 ── */
+  .topbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: #1e1e1e;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 1200px;
+  }
+  .topbar label { font-size: 0.85em; color: #aaa; }
+  .topbar input[type=number] {
+    width: 70px; background: #2a2a2a; color: #fff;
+    border: 1px solid #444; border-radius: 4px; padding: 4px 6px;
+    font-size: 0.85em;
+  }
+  .topbar input[type=range] { width: 120px; cursor: pointer; }
+  button {
+    padding: 7px 18px; cursor: pointer;
+    background: #2563eb; border: none; color: white;
+    border-radius: 5px; font-weight: bold; font-size: 0.9em;
+  }
+  button:hover { background: #1d4ed8; }
+  button:disabled { background: #444; cursor: default; }
+  #btnStop { background: #dc2626; }
+  #btnStop:hover { background: #b91c1c; }
+  .status-badge {
+    font-size: 0.8em; padding: 3px 10px; border-radius: 12px;
+    font-weight: bold;
+  }
+  .badge-idle    { background:#333; color:#888; }
+  .badge-running { background:#166534; color:#4ade80; }
+  .badge-done    { background:#1e3a5f; color:#60a5fa; }
+  .badge-error   { background:#7f1d1d; color:#f87171; }
+
+  /* ── 메인 레이아웃 ── */
+  .main-layout {
+    display: flex; gap: 12px; width: 100%; max-width: 1200px;
+    align-items: flex-start;
+  }
+
+  /* ── 게임 캔버스 ── */
+  canvas {
+    background: #1a1a1a; border: 2px solid #444;
+    border-radius: 4px; flex-shrink: 0;
+  }
+
+  /* ── 우측 패널 ── */
+  .right-panel {
+    display: flex; flex-direction: column; gap: 10px;
+    flex: 1; min-width: 260px;
+  }
+
+  .panel-box {
+    background: #1e1e1e; border: 1px solid #333;
+    border-radius: 8px; padding: 12px;
+  }
+  .panel-box h3 {
+    font-size: 0.8em; color: #888; text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 8px;
+    border-bottom: 1px solid #2a2a2a; padding-bottom: 6px;
+  }
+
+  /* 에피소드 진행 */
+  .ep-progress-bar {
+    height: 6px; background: #2a2a2a; border-radius: 3px; margin-bottom: 8px;
+  }
+  .ep-progress-fill {
+    height: 100%; background: #3b82f6; border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+  .stat-row {
+    display: flex; justify-content: space-between;
+    font-size: 0.85em; padding: 2px 0;
+  }
+  .stat-label { color: #888; }
+  .stat-val   { color: #e0e0e0; font-weight: bold; }
+  .stat-val.rank-good { color: #4ade80; }
+  .stat-val.rank-bad  { color: #f87171; }
+
+  /* 리더보드 */
+  .lb-row {
+    display: flex; gap: 8px; font-size: 0.82em; padding: 3px 0;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  .lb-rank { color: #888; width: 20px; flex-shrink: 0; }
+  .lb-id   { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-boss { color: #facc15; font-weight: bold; }
+  .lb-score { color: #60a5fa; width: 60px; text-align: right; flex-shrink: 0; }
+
+  /* 차트 캔버스 */
+  #chartCanvas {
+    width: 100%; height: 120px; display: block;
+    background: #161616; border-radius: 4px;
+  }
+
+  /* 이벤트 로그 */
+  .event-log {
+    height: 130px; overflow-y: auto; font-size: 0.78em; line-height: 1.7;
+  }
+  .event-log div { border-bottom: 1px solid #1a1a1a; padding: 1px 0; }
+  .ev-kill    { color: #f87171; }
+  .ev-mine    { color: #facc15; }
+  .ev-death   { color: #6b7280; }
+  .ev-zone    { color: #fb923c; }
+  .ev-default { color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<h1>RLBossBot 실시간 학습 뷰어</h1>
+
+<!-- 컨트롤 바 -->
+<div class="topbar">
+  <label>에피소드
+    <input type="number" id="cfgEpisodes" value="100" min="1" max="5000">
+  </label>
+  <label>봇 수
+    <input type="number" id="cfgBots" value="5" min="2" max="20">
+  </label>
+  <label>시드
+    <input type="number" id="cfgSeed" value="42" min="0">
+  </label>
+  <label>속도
+    <input type="range" id="cfgSpeed" min="0" max="5" step="1" value="3">
+    <span id="speedLabel">보통</span>
+  </label>
+  <button id="btnStart">학습 시작</button>
+  <button id="btnStop" disabled>중지</button>
+  <span id="statusBadge" class="status-badge badge-idle">대기</span>
+</div>
+
+<!-- 메인 -->
+<div class="main-layout">
+  <!-- 게임 캔버스 (600×600) -->
+  <canvas id="arena" width="600" height="600"></canvas>
+
+  <!-- 우측 패널 -->
+  <div class="right-panel">
+
+    <!-- 학습 진행 -->
+    <div class="panel-box">
+      <h3>학습 진행</h3>
+      <div class="ep-progress-bar"><div class="ep-progress-fill" id="epFill" style="width:0%"></div></div>
+      <div class="stat-row"><span class="stat-label">에피소드</span><span class="stat-val" id="statEp">0 / 0</span></div>
+      <div class="stat-row"><span class="stat-label">현재 순위</span><span class="stat-val" id="statRank">-</span></div>
+      <div class="stat-row"><span class="stat-label">평균 순위 (최근 100)</span><span class="stat-val" id="statAvgRank">-</span></div>
+      <div class="stat-row"><span class="stat-label">평균 점수</span><span class="stat-val" id="statAvgScore">-</span></div>
+      <div class="stat-row"><span class="stat-label">경과 시간</span><span class="stat-val" id="statElapsed">0s</span></div>
+      <div class="stat-row"><span class="stat-label">현재 틱</span><span class="stat-val" id="statTick">-</span></div>
+    </div>
+
+    <!-- 순위 차트 -->
+    <div class="panel-box">
+      <h3>평균 순위 추이</h3>
+      <canvas id="chartCanvas"></canvas>
+    </div>
+
+    <!-- 리더보드 -->
+    <div class="panel-box">
+      <h3>현재 게임 리더보드</h3>
+      <div id="leaderboard"></div>
+    </div>
+
+    <!-- 이벤트 로그 -->
+    <div class="panel-box">
+      <h3>이벤트 로그</h3>
+      <div class="event-log" id="eventLog"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── 설정 ──────────────────────────────────────────────────────────
+const CELL = 6        // 100×100 맵, 600px 캔버스
+const MAP_PX = 600
+
+const SPEED_MAP = [
+  { label: '최고속', delay: 0.00 },
+  { label: '빠름',   delay: 0.01 },
+  { label: '보통',   delay: 0.03 },
+  { label: '보통',   delay: 0.05 },
+  { label: '느림',   delay: 0.10 },
+  { label: '매우느림', delay: 0.20 },
+]
+
+// ── DOM ──────────────────────────────────────────────────────────
+const canvas   = document.getElementById('arena')
+const ctx      = canvas.getContext('2d')
+const chartCvs = document.getElementById('chartCanvas')
+const chartCtx = chartCvs.getContext('2d')
+
+const btnStart = document.getElementById('btnStart')
+const btnStop  = document.getElementById('btnStop')
+const badge    = document.getElementById('statusBadge')
+const cfgSpeed = document.getElementById('cfgSpeed')
+const speedLbl = document.getElementById('speedLabel')
+
+const statEp       = document.getElementById('statEp')
+const statRank     = document.getElementById('statRank')
+const statAvgRank  = document.getElementById('statAvgRank')
+const statAvgScore = document.getElementById('statAvgScore')
+const statElapsed  = document.getElementById('statElapsed')
+const statTick     = document.getElementById('statTick')
+const epFill       = document.getElementById('epFill')
+const lbEl         = document.getElementById('leaderboard')
+const evLog        = document.getElementById('eventLog')
+
+// ── 상태 ──────────────────────────────────────────────────────────
+let ws = null
+let avgRankHistory = []   // 에피소드별 avg_rank
+let totalEpisodes = 0
+let botColors = {}
+
+// ── 헬퍼 ──────────────────────────────────────────────────────────
+function hashColor(id) {
+  let h = 5381
+  for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) | 0
+  return `hsl(${Math.abs(h) % 360}, 65%, 58%)`
+}
+
+function setBadge(text, cls) {
+  badge.textContent = text
+  badge.className = 'status-badge ' + cls
+}
+
+function addEvent(text, cls) {
+  const d = document.createElement('div')
+  d.textContent = text
+  d.className = cls
+  evLog.prepend(d)
+  while (evLog.children.length > 80) evLog.removeChild(evLog.lastChild)
+}
+
+// ── 캔버스 그리기 ─────────────────────────────────────────────────
+function drawArena(data) {
+  ctx.clearRect(0, 0, MAP_PX, MAP_PX)
+
+  // 배경
+  ctx.fillStyle = '#1a1a1a'
+  ctx.fillRect(0, 0, MAP_PX, MAP_PX)
+
+  // 자기장 (안전 구역 외부 어둡게)
+  if (data.zone_bounds) {
+    const [zx0, zy0, zx1, zy1] = data.zone_bounds
+    ctx.fillStyle = 'rgba(255,80,0,0.12)'
+    ctx.fillRect(0, 0, MAP_PX, MAP_PX)
+    ctx.fillStyle = '#1a1a1a'
+    ctx.fillRect(zx0 * CELL, zy0 * CELL, (zx1 - zx0) * CELL, (zy1 - zy0) * CELL)
+    // 자기장 경계선
+    ctx.strokeStyle = 'rgba(255,120,0,0.7)'
+    ctx.lineWidth = 1.5
+    ctx.strokeRect(zx0 * CELL, zy0 * CELL, (zx1 - zx0) * CELL, (zy1 - zy0) * CELL)
+  }
+
+  // 광물
+  if (data.minerals) {
+    for (const m of data.minerals) {
+      ctx.fillStyle = m.rare ? '#a78bfa' : '#6b7280'
+      ctx.fillRect(m.x * CELL + 1, m.y * CELL + 1, CELL - 1, CELL - 1)
+    }
+  }
+
+  // 봇
+  if (data.bots) {
+    for (const b of data.bots) {
+      if (!b.alive) continue
+      const color = botColors[b.id] || (botColors[b.id] = hashColor(b.id))
+      const isBoss = b.id === 'boss_rl'
+      const cx = b.x * CELL + CELL / 2
+      const cy = b.y * CELL + CELL / 2
+      const r  = isBoss ? CELL * 0.65 : CELL * 0.45
+
+      // 실드
+      if (b.shield_active) {
+        ctx.beginPath()
+        ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2)
+        ctx.strokeStyle = 'rgba(96,165,250,0.85)'
+        ctx.lineWidth = 2
+        ctx.stroke()
+      }
+
+      // 봇 원
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.fillStyle = color
+      if (isBoss) {
+        ctx.fillStyle = '#facc15'
+        ctx.shadowColor = '#facc15'
+        ctx.shadowBlur = 8
+      }
+      ctx.fill()
+      ctx.shadowBlur = 0
+
+      // 보스 별표
+      if (isBoss) {
+        ctx.fillStyle = '#111'
+        ctx.font = `bold ${Math.round(CELL * 0.7)}px sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('★', cx, cy)
+      }
+    }
+  }
+}
+
+// ── 차트 그리기 ───────────────────────────────────────────────────
+function drawChart() {
+  const w = chartCvs.offsetWidth || 300
+  const h = 120
+  chartCvs.width  = w
+  chartCvs.height = h
+
+  chartCtx.clearRect(0, 0, w, h)
+  chartCtx.fillStyle = '#161616'
+  chartCtx.fillRect(0, 0, w, h)
+
+  if (avgRankHistory.length < 2) return
+
+  const maxRank = totalEpisodes > 0 ? Math.max(...avgRankHistory) : 5
+  const minRank = Math.min(...avgRankHistory)
+  const pad = { l: 30, r: 10, t: 8, b: 8 }
+  const gw = w - pad.l - pad.r
+  const gh = h - pad.t - pad.b
+  const n  = avgRankHistory.length
+
+  // 축
+  chartCtx.strokeStyle = '#333'
+  chartCtx.lineWidth = 1
+  chartCtx.beginPath()
+  chartCtx.moveTo(pad.l, pad.t)
+  chartCtx.lineTo(pad.l, h - pad.b)
+  chartCtx.lineTo(w - pad.r, h - pad.b)
+  chartCtx.stroke()
+
+  // Y 눈금 레이블 (낮은 순위 = 좋음, 위에 표시)
+  chartCtx.fillStyle = '#666'
+  chartCtx.font = '10px monospace'
+  chartCtx.textAlign = 'right'
+  const labelVals = [1, Math.ceil((maxRank + 1) / 2), Math.ceil(maxRank + 1)]
+  for (const v of labelVals) {
+    const yy = pad.t + gh * (v - 1) / Math.max(maxRank, 1)
+    chartCtx.fillText(v, pad.l - 3, yy + 3)
+    chartCtx.strokeStyle = '#222'
+    chartCtx.beginPath()
+    chartCtx.moveTo(pad.l, yy)
+    chartCtx.lineTo(w - pad.r, yy)
+    chartCtx.stroke()
+  }
+
+  // 선
+  chartCtx.beginPath()
+  chartCtx.strokeStyle = '#3b82f6'
+  chartCtx.lineWidth = 1.5
+  for (let i = 0; i < n; i++) {
+    const x = pad.l + (i / (n - 1)) * gw
+    const y = pad.t + gh * (avgRankHistory[i] - 1) / Math.max(maxRank - 1, 1)
+    i === 0 ? chartCtx.moveTo(x, y) : chartCtx.lineTo(x, y)
+  }
+  chartCtx.stroke()
+
+  // 마지막 점 강조
+  const lx = pad.l + gw
+  const ly = pad.t + gh * (avgRankHistory[n - 1] - 1) / Math.max(maxRank - 1, 1)
+  chartCtx.beginPath()
+  chartCtx.arc(lx, ly, 3, 0, Math.PI * 2)
+  chartCtx.fillStyle = '#60a5fa'
+  chartCtx.fill()
+}
+
+// ── 리더보드 업데이트 ─────────────────────────────────────────────
+function updateLeaderboard(lb) {
+  lbEl.innerHTML = ''
+  for (const entry of lb) {
+    const isBoss = entry.id === 'boss_rl'
+    const row = document.createElement('div')
+    row.className = 'lb-row'
+    row.innerHTML = `
+      <span class="lb-rank">#${entry.rank}</span>
+      <span class="lb-id ${isBoss ? 'lb-boss' : ''}">${isBoss ? '★ ' : ''}${entry.id}</span>
+      <span class="lb-score">${Math.round(entry.score)}</span>
+    `
+    lbEl.appendChild(row)
+  }
+}
+
+// ── WebSocket 메시지 처리 ─────────────────────────────────────────
+function handleMessage(msg) {
+  switch (msg.type) {
+
+    case 'training_start':
+      totalEpisodes = msg.episodes
+      avgRankHistory = []
+      botColors = {}
+      setBadge('학습 중', 'badge-running')
+      statEp.textContent = `0 / ${msg.episodes}`
+      addEvent(`학습 시작 — 에피소드 ${msg.episodes}, 봇 ${msg.bots}개`, 'ev-default')
+      break
+
+    case 'episode_start':
+      addEvent(`[에피소드 ${msg.episode}] 시작 — ${msg.bot_ids.join(', ')}`, 'ev-default')
+      break
+
+    case 'tick':
+      drawArena(msg)
+      statTick.textContent = msg.tick
+      if (msg.leaderboard) updateLeaderboard(msg.leaderboard)
+      break
+
+    case 'episode_end': {
+      const pct = (msg.episode / msg.total * 100).toFixed(1)
+      epFill.style.width = pct + '%'
+      statEp.textContent = `${msg.episode} / ${msg.total}`
+      statElapsed.textContent = msg.elapsed + 's'
+
+      const isGood = msg.rank <= Math.ceil(msg.n_bots / 2)
+      statRank.textContent = `${msg.rank} / ${msg.n_bots}`
+      statRank.className = 'stat-val ' + (isGood ? 'rank-good' : 'rank-bad')
+      statAvgRank.textContent = msg.avg_rank
+      statAvgScore.textContent = msg.avg_score
+
+      avgRankHistory.push(msg.avg_rank)
+      drawChart()
+
+      addEvent(
+        `[ep ${msg.episode}] 순위 ${msg.rank}/${msg.n_bots} 점수 ${msg.score.toFixed(0)} 생존 ${msg.survival}틱 (${msg.reason})`,
+        isGood ? 'ev-mine' : 'ev-kill'
+      )
+      break
+    }
+
+    case 'training_complete':
+      setBadge('완료', 'badge-done')
+      btnStart.disabled = false
+      btnStop.disabled  = true
+      epFill.style.width = '100%'
+      addEvent(
+        `학습 완료! 전체 평균 순위 ${msg.total_avg_rank} / 평균 점수 ${msg.total_avg_score} / ${msg.elapsed}s`,
+        'ev-mine'
+      )
+      addEvent(`가중치 저장: ${msg.weights_saved}`, 'ev-default')
+      break
+
+    case 'error':
+      setBadge('오류', 'badge-error')
+      addEvent('오류: ' + msg.message, 'ev-kill')
+      btnStart.disabled = false
+      btnStop.disabled  = true
+      break
+  }
+}
+
+// ── 속도 슬라이더 ─────────────────────────────────────────────────
+cfgSpeed.addEventListener('input', () => {
+  const idx = parseInt(cfgSpeed.value)
+  speedLbl.textContent = SPEED_MAP[idx].label
+})
+speedLbl.textContent = SPEED_MAP[parseInt(cfgSpeed.value)].label
+
+// ── 학습 시작 ─────────────────────────────────────────────────────
+btnStart.addEventListener('click', () => {
+  const episodes  = parseInt(document.getElementById('cfgEpisodes').value) || 100
+  const bots      = parseInt(document.getElementById('cfgBots').value)     || 5
+  const seed      = parseInt(document.getElementById('cfgSeed').value)     || 42
+  const speedIdx  = parseInt(cfgSpeed.value)
+  const tickDelay = SPEED_MAP[speedIdx].delay
+
+  // 서버 포트는 현재 페이지 포트(직접 실행 시) or 8765
+  const port = location.port || 8765
+  const wsUrl = `ws://${location.hostname || '127.0.0.1'}:${port}/ws/train`
+    + `?episodes=${episodes}&bots=${bots}&seed=${seed}&tick_delay=${tickDelay}`
+
+  // 기존 연결 닫기
+  if (ws) { ws.close(); ws = null }
+
+  // 설정을 쿼리스트링으로 서버에 미리 전달 (GET /config 에 갱신 요청)
+  fetch(`http://${location.hostname || '127.0.0.1'}:${port}/config`)
+    .catch(() => {})  // 무시
+
+  ws = new WebSocket(wsUrl)
+
+  ws.onopen = () => {
+    btnStart.disabled = true
+    btnStop.disabled  = false
+    setBadge('연결 중...', 'badge-running')
+    evLog.innerHTML = ''
+
+    // 서버에 설정 전송
+    ws.send(JSON.stringify({ episodes, bots, seed, tick_delay: tickDelay }))
+  }
+
+  ws.onmessage = (ev) => {
+    try { handleMessage(JSON.parse(ev.data)) }
+    catch (e) { console.error('메시지 파싱 오류', e) }
+  }
+
+  ws.onerror = () => {
+    setBadge('연결 오류', 'badge-error')
+    addEvent('서버 연결 실패. 서버가 실행 중인지 확인하세요.', 'ev-kill')
+    btnStart.disabled = false
+    btnStop.disabled  = true
+  }
+
+  ws.onclose = () => {
+    if (badge.textContent === '학습 중') {
+      setBadge('대기', 'badge-idle')
+      btnStart.disabled = false
+      btnStop.disabled  = true
+    }
+  }
+})
+
+// ── 중지 ─────────────────────────────────────────────────────────
+btnStop.addEventListener('click', () => {
+  if (ws) { ws.close(); ws = null }
+  setBadge('중지됨', 'badge-idle')
+  btnStart.disabled = false
+  btnStop.disabled  = true
+  addEvent('학습 중지됨.', 'ev-default')
+})
+
+// ── 초기 캔버스 ───────────────────────────────────────────────────
+ctx.fillStyle = '#1a1a1a'
+ctx.fillRect(0, 0, MAP_PX, MAP_PX)
+ctx.fillStyle = '#444'
+ctx.font = '18px sans-serif'
+ctx.textAlign = 'center'
+ctx.textBaseline = 'middle'
+ctx.fillText('학습 시작 버튼을 눌러주세요', MAP_PX / 2, MAP_PX / 2)
+</script>
+</body>
+</html>
