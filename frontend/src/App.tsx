@@ -16,7 +16,7 @@ function AppRoutes() {
         path="/login"
         element={token ? <Navigate to="/games" replace /> : <LandingPage />}
       />
-      <Route path="/games/*" element={<GamesPage />} />
+      <Route path="/games" element={<GamesPage />} />
       <Route path="/games/new" element={<GameNewPage />} />
       <Route path="/games/:game_id/watch" element={<WatchPage />} />
       {/* 기본 진입점 */}
