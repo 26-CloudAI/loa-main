@@ -6,23 +6,53 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
 
 const MAX_CODE_BYTES = 50 * 1024 // 50KB
 
-const DEFAULT_CODE = `def action(state: dict) -> str:
-    """
-    state 구조:
-      - state["tick"]: 현재 틱 (int)
-      - state["my_bot"]["position"]: [x, y]
-      - state["my_bot"]["energy"]: 현재 에너지
-      - state["my_bot"]["score"]: 현재 점수
-      - state["vision"]["grid"]: 5x5 시야 배열
-        ("empty", "mineral", "mineral_rare", "bot_enemy", "ME", "wall", "zone")
-      - state["zone_boundary"]: 생존 구역 경계
-      - state["leaderboard"]: [{"rank", "id", "score"}, ...]
+const DEFAULT_CODE = `import random
 
-    반환값 (str):
-      "STAY", "MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT",
-      "MINE", "ATTACK_UP", "ATTACK_DOWN", "ATTACK_LEFT", "ATTACK_RIGHT", "SHIELD"
-    """
-    return "STAY"
+def action(state: dict) -> str:
+    my      = state["my_bot"]
+    pos_x, pos_y = my["position"]
+    energy  = my["energy"]
+    grid    = state["vision"]["grid"]
+    zone_bounds = state.get("zone_bounds", (0, 0, 99, 99))
+    min_x, min_y, max_x, max_y = zone_bounds
+
+    # 존 밖이면 중심으로 이동
+    in_zone = min_x <= pos_x <= max_x and min_y <= pos_y <= max_y
+    if not in_zone:
+        cx = (min_x + max_x) // 2
+        cy = (min_y + max_y) // 2
+        dx, dy = cx - pos_x, cy - pos_y
+        if abs(dx) >= abs(dy):
+            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
+        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+
+    # 에너지 위험 시 방어
+    if energy <= 20:
+        return "SHIELD"
+
+    # 인접 적 공격
+    dirs = [(0,-1,"ATTACK_UP"), (0,1,"ATTACK_DOWN"), (-1,0,"ATTACK_LEFT"), (1,0,"ATTACK_RIGHT")]
+    for dx, dy, atk in dirs:
+        if grid[2 + dy][2 + dx] == "bot_enemy":
+            return atk
+
+    # 인접 광물 채굴
+    for dx, dy, _ in dirs:
+        cell = grid[2 + dy][2 + dx]
+        if cell in ("mineral", "mineral_rare"):
+            return "MINE"
+
+    # 시야 내 광물로 이동
+    for row in range(5):
+        for col in range(5):
+            if grid[row][col] in ("mineral", "mineral_rare"):
+                dx, dy = col - 2, row - 2
+                if abs(dx) >= abs(dy):
+                    return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
+                return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+
+    # 랜덤 탐색
+    return random.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
 `
 
 function byteSize(str: string) {
