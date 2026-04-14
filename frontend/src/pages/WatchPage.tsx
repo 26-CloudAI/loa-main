@@ -36,7 +36,7 @@ interface TickData {
   tick: number
   bots: BotState[]
   minerals: Mineral[]
-  zone_boundary: number
+  zone_bounds: [number, number, number, number]  // [minX, minY, maxX, maxY]
   alive_count: number
   leaderboard: LeaderEntry[]
 }
@@ -106,24 +106,21 @@ function drawCanvas(
   ctx.fillStyle = '#0a0a0f'
   ctx.fillRect(0, 0, MAP_PX, MAP_PX)
 
-  // Zone danger overlay (4 border strips)
-  const zb = data.zone_boundary
-  if (zb > 0) {
+  // Zone danger overlay — backend: zone_bounds = [minX, minY, maxX, maxY] (safe zone)
+  const [minX, minY, maxX, maxY] = data.zone_bounds
+  const safeW = (maxX - minX + 1) * CELL
+  const safeH = (maxY - minY + 1) * CELL
+  if (minX > 0 || minY > 0 || maxX < 99 || maxY < 99) {
     ctx.fillStyle = 'rgba(220, 38, 38, 0.18)'
-    ctx.fillRect(0,                  0,                  MAP_PX,      zb * CELL)           // top
-    ctx.fillRect(0,                  (100 - zb) * CELL,  MAP_PX,      zb * CELL)           // bottom
-    ctx.fillRect(0,                  zb * CELL,          zb * CELL,   (100 - 2 * zb) * CELL) // left
-    ctx.fillRect((100 - zb) * CELL,  zb * CELL,          zb * CELL,   (100 - 2 * zb) * CELL) // right
+    ctx.fillRect(0,                MAP_PX - (100 - maxY - 1) * CELL, MAP_PX,             (100 - maxY - 1) * CELL) // bottom
+    ctx.fillRect(0,                0,                                  MAP_PX,             minY * CELL)             // top
+    ctx.fillRect(0,                minY * CELL,                        minX * CELL,        safeH)                   // left
+    ctx.fillRect((maxX + 1) * CELL, minY * CELL,                      MAP_PX - (maxX + 1) * CELL, safeH)          // right
 
     // Zone boundary line
     ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)'
     ctx.lineWidth = 1
-    ctx.strokeRect(
-      zb * CELL + 0.5,
-      zb * CELL + 0.5,
-      (100 - 2 * zb) * CELL - 1,
-      (100 - 2 * zb) * CELL - 1,
-    )
+    ctx.strokeRect(minX * CELL + 0.5, minY * CELL + 0.5, safeW - 1, safeH - 1)
   }
 
   // Minerals

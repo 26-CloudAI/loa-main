@@ -105,7 +105,7 @@ export function startMockSimulation(callbacks: {
     tick: number
     bots: MockBot[]
     minerals: MockMineral[]
-    zone_boundary: number
+    zone_bounds: [number, number, number, number]
     alive_count: number
     leaderboard: { rank: number; id: string; score: number }[]
   }) => void
@@ -124,10 +124,11 @@ export function startMockSimulation(callbacks: {
   const id = setInterval(() => {
     tick++
 
-    // Zone boundary
+    // Zone boundary → zone_bounds: [minX, minY, maxX, maxY]
     let zb = 0
     if (tick >= 76 && tick < 151)  zb = Math.floor((tick - 76) / 20) + 1
     if (tick >= 151)               zb = Math.floor((tick - 151) / 10) + 4
+    const zone_bounds: [number, number, number, number] = [zb, zb, 99 - zb, 99 - zb]
 
     const aliveBots = bots.filter((b) => b.alive)
 
@@ -140,7 +141,7 @@ export function startMockSimulation(callbacks: {
       bot.energy = clamp(bot.energy - 1, 0, 100)
 
       // Zone damage
-      if (zb > 0 && (bot.x < zb || bot.x >= 100 - zb || bot.y < zb || bot.y >= 100 - zb)) {
+      if (zb > 0 && (bot.x < zone_bounds[0] || bot.x > zone_bounds[2] || bot.y < zone_bounds[1] || bot.y > zone_bounds[3])) {
         bot.energy = clamp(bot.energy - 3, 0, 100)
         if (Math.random() < 0.1) {
           callbacks.onEvent({ event_type: 'zone_damage', actor_id: bot.id })
@@ -199,7 +200,7 @@ export function startMockSimulation(callbacks: {
       tick,
       bots: bots.map((b) => ({ ...b, score: Math.round(b.score * 10) / 10 })),
       minerals,
-      zone_boundary: zb,
+      zone_bounds,
       alive_count: aliveBots.length,
       leaderboard,
     })
