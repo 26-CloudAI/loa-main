@@ -211,6 +211,8 @@ def create_app(
         allow_headers=["*"],
     )
 
+    app.include_router(mock_auth_router)
+
     def _registry() -> GameRegistry:
         return state["registry"]
 
