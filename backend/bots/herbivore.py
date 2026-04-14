@@ -60,7 +60,7 @@ class HerbivoreBot(BotInterface):
         # 1. 시야 정보를 바탕으로 맵 기억(Memory) 업데이트
         for dy in range(5):
             for dx in range(5):
-                map_x, map_y = pos_x + (dx - cx), pos_y + (dy - cy)
+                map_x, map_y = pos_x + (dx - CX), pos_y + (dy - CY)
                 cell = grid[dy][dx]
                 if cell in ("mineral", "mineral_rare"):
                     self._memory[(map_x, map_y)] = cell
