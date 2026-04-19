@@ -209,12 +209,25 @@ class GameEngine:
     def get_rankings(self) -> list[dict]:
         """최종 점수 기준 랭킹 반환."""
         gc = self.config
+
+        # survival_ticks 기준으로 상위 3인 보너스 결정
+        sorted_by_survival = sorted(
+            self.bots.values(),
+            key=lambda b: b.survival_ticks,
+            reverse=True,
+        )
+        survival_bonus: dict[str, float] = {}
+        for i, bot in enumerate(sorted_by_survival):
+            if i < len(gc.survival_rank_bonus):
+                survival_bonus[bot.id] = gc.survival_rank_bonus[i]
+
         rankings = []
         for bot in self.bots.values():
             final_score = (
                 bot.score
                 + bot.survival_ticks * gc.score_per_survival_tick
                 + bot.kills * gc.score_per_kill
+                + survival_bonus.get(bot.id, 0)
             )
             rankings.append({
                 "id": bot.id,
@@ -222,6 +235,7 @@ class GameEngine:
                 "minerals_mined": bot.minerals_mined,
                 "kills": bot.kills,
                 "survival_ticks": bot.survival_ticks,
+                "survival_bonus": survival_bonus.get(bot.id, 0),
                 "energy": bot.energy,
                 "alive": bot.alive,
             })
