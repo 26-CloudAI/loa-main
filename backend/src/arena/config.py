@@ -83,6 +83,9 @@ class GameConfig:
     score_per_kill: float = 30.0        # 상향: 킬의 난이도와 리스크에 걸맞은 높은 보상
     score_per_guard: float = 10.0       # 가드 보너스: 상대 공격 방어 성공 시
 
+    # 최종 생존 순위 보너스 (survival_ticks 기준 상위 3인)
+    survival_rank_bonus: tuple = (100, 50, 25)
+
     map: MapConfig = field(default_factory=MapConfig)
     bot: BotConfig = field(default_factory=BotConfig)
     action_cost: ActionCost = field(default_factory=ActionCost)
