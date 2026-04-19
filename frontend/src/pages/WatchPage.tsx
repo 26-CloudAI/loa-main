@@ -49,6 +49,7 @@ interface RankingEntry {
   kills: number
   minerals_mined: number
   survival_ticks: number
+  survival_bonus?: number
 }
 
 interface GameEndData {
@@ -62,6 +63,7 @@ interface EventLog {
   type: string
   actor_id: string
   target_id?: string
+  detail?: string
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -79,19 +81,35 @@ const REASON_LABEL: Record<string, string> = {
 }
 
 const EVENT_STYLE: Record<string, string> = {
-  kill: 'text-red-400',
-  mine_success: 'text-yellow-400',
-  death: 'text-gray-400',
-  zone_damage: 'text-orange-400',
+  kill:          'text-red-400',
+  death:         'text-gray-400',
+  mine_success:  'text-yellow-300',
+  mine_fail:     'text-gray-500',
+  attack_hit:    'text-red-400',
+  attack_miss:   'text-red-300',
+  zone_damage:   'text-orange-400',
+  guard_success: 'text-cyan-400',
+  shield:        'text-cyan-400',
 }
 
-function formatEvent(ev: EventLog): string {
+function FormatEvent({ ev, colorMap }: { ev: EventLog; colorMap: Map<string, string> }) {
+  const Bot = ({ id }: { id: string }) => (
+    <span style={{ color: colorMap.get(id) ?? '#d1d5db' }} className="font-semibold">{id}</span>
+  )
+  const a = ev.actor_id
+  const t = ev.target_id ?? '?'
+  const detail = ev.detail ? <span className="text-gray-500"> ({ev.detail})</span> : null
   switch (ev.type) {
-    case 'kill':         return `${ev.actor_id} → ${ev.target_id ?? '?'} 킬`
-    case 'mine_success': return `${ev.actor_id} 광물 채굴`
-    case 'death':        return `${ev.actor_id} 사망`
-    case 'zone_damage':  return `${ev.actor_id} 존 피해`
-    default:             return `${ev.actor_id} ${ev.type}`
+    case 'kill':          return <span>💀 <Bot id={t} /> 이(가) <Bot id={a} />에게 사망</span>
+    case 'death':         return <span>🪦 <Bot id={a} /> 사망{detail}</span>
+    case 'mine_success':  return <span>⛏️ <Bot id={a} /> 광물 획득</span>
+    case 'mine_fail':     return <span><Bot id={a} /> 채굴 실패</span>
+    case 'attack_hit':    return <span>⚔️ <Bot id={a} /> → <Bot id={t} /> 적중</span>
+    case 'attack_miss':   return <span><Bot id={a} /> 공격 빗나감</span>
+    case 'zone_damage':   return <span>🌀 <Bot id={a} /> 자기장 피해</span>
+    case 'guard_success': return <span>🛡️ <Bot id={a} /> 방어 성공{detail}</span>
+    case 'shield':        return <span>🛡️ <Bot id={a} /> 실드 전개</span>
+    default:              return <span><Bot id={a} /> {ev.detail ?? ev.type}</span>
   }
 }
 
@@ -127,7 +145,7 @@ function drawCanvas(
   for (const m of data.minerals) {
     const cx = m.x * CELL + CELL / 2
     const cy = m.y * CELL + CELL / 2
-    ctx.fillStyle = m.rare ? '#fb923c' : '#facc15'
+    ctx.fillStyle = m.rare ? '#a855f7' : '#ffffff'
     ctx.beginPath()
     ctx.arc(cx, cy, m.rare ? CELL * 0.42 : CELL * 0.28, 0, Math.PI * 2)
     ctx.fill()
@@ -199,6 +217,7 @@ export default function WatchPage() {
   const [totalBots,  setTotalBots]  = useState(0)
   const [events,     setEvents]     = useState<EventLog[]>([])
   const [gameEnd,    setGameEnd]    = useState<GameEndData | null>(null)
+  const [showModal,  setShowModal]  = useState(false)
   const [loadError,  setLoadError]  = useState('')
 
   // 1) Fetch initial game info
@@ -227,6 +246,7 @@ export default function WatchPage() {
           if (res.ok) {
             const result = await res.json()
             setGameEnd(result)
+            setShowModal(true)
           }
         } else {
           setGameStatus(info.status ?? 'waiting')
@@ -259,19 +279,20 @@ export default function WatchPage() {
         onEvent: (ev) => {
           setEvents((prev) => {
             const entry: EventLog = {
-              uid: eventUidRef.current++,
-              tick: currentTickRef.current,
-              type: ev.event_type,
-              actor_id: ev.actor_id,
+              uid:       eventUidRef.current++,
+              tick:      currentTickRef.current,
+              type:      ev.event_type,
+              actor_id:  ev.actor_id,
               target_id: ev.target_id,
             }
-            return [entry, ...prev].slice(0, 50)
+            return [entry, ...prev].slice(0, 100)
           })
         },
         onEnd: (data) => {
           setGameStatus('finished')
           setWsStatus('disconnected')
           setGameEnd(data)
+          setShowModal(true)
         },
       })
       return stop
@@ -323,19 +344,21 @@ export default function WatchPage() {
             const ev = msg.data
             setEvents((prev) => {
               const entry: EventLog = {
-                uid:      eventUidRef.current++,
-                tick:     currentTickRef.current,
-                type:     ev.event_type,
-                actor_id: ev.actor_id,
+                uid:       eventUidRef.current++,
+                tick:      currentTickRef.current,
+                type:      ev.event_type,
+                actor_id:  ev.actor_id,
                 target_id: ev.target_id,
+                detail:    ev.detail,
               }
-              return [entry, ...prev].slice(0, 50)
+              return [entry, ...prev].slice(0, 100)
             })
             break
           }
           case 'game_end': {
             setGameStatus('finished')
             setGameEnd(msg.data)
+            setShowModal(true)
             ws.close()
             break
           }
@@ -411,7 +434,7 @@ export default function WatchPage() {
   // ── Main render ────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
       {/* Header */}
       <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3 shrink-0">
         <button
@@ -427,32 +450,41 @@ export default function WatchPage() {
 
       {/* Main area */}
       <main className="flex flex-1 overflow-hidden p-4 gap-4">
-        {/* Canvas */}
-        <div className="shrink-0 relative">
-          <canvas
-            ref={canvasRef}
-            width={MAP_PX}
-            height={MAP_PX}
-            className="rounded-lg border border-gray-800 block"
-            style={{ imageRendering: 'pixelated' }}
-          />
-          {/* Waiting overlay */}
-          {gameStatus === 'waiting' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-950/80 rounded-lg">
-              <p className="text-gray-400 text-sm">게임 시작 대기 중…</p>
-            </div>
-          )}
-          {/* Loading overlay */}
-          {gameStatus === null && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-950/80 rounded-lg">
-              <p className="text-gray-500 text-sm">불러오는 중…</p>
-            </div>
+        {/* Canvas column */}
+        <div className="shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-custom" style={{ width: MAP_PX }}>
+          {/* Canvas */}
+          <div className="relative shrink-0">
+            <canvas
+              ref={canvasRef}
+              width={MAP_PX}
+              height={MAP_PX}
+              className="rounded-lg border border-gray-800 block"
+              style={{ imageRendering: 'pixelated' }}
+            />
+            {gameStatus === 'waiting' && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-950/80 rounded-lg">
+                <p className="text-gray-400 text-sm">게임 시작 대기 중…</p>
+              </div>
+            )}
+            {gameStatus === null && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-950/80 rounded-lg">
+                <p className="text-gray-500 text-sm">불러오는 중…</p>
+              </div>
+            )}
+          </div>
+
+          {/* Game result panel (below canvas) */}
+          {gameEnd && (
+            <GameResultPanel
+              data={gameEnd}
+              colorMap={colorMapRef.current}
+            />
           )}
         </div>
 
         {/* Sidebar */}
         <aside
-          className="flex flex-col gap-3 overflow-hidden"
+          className="flex flex-col gap-3 overflow-hidden h-full"
           style={{ width: 264, minWidth: 264 }}
         >
           {/* Tick / alive */}
@@ -474,25 +506,29 @@ export default function WatchPage() {
           </div>
 
           {/* Leaderboard */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex flex-col gap-2">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex flex-col gap-2 shrink-0">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">리더보드</h3>
-            {(tickData?.leaderboard.length ?? 0) === 0 ? (
+            {(tickData?.bots.length ?? 0) === 0 ? (
               <p className="text-gray-600 text-xs">-</p>
             ) : (
-              tickData?.leaderboard.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-500 w-5 text-right shrink-0">#{entry.rank}</span>
-                  <span
-                    className="flex-1 truncate font-medium"
-                    style={{ color: colorMapRef.current.get(entry.id) ?? '#aaa' }}
-                  >
-                    {entry.id}
-                  </span>
-                  <span className="font-mono text-gray-300 shrink-0">
-                    {entry.score.toFixed(1)}
-                  </span>
-                </div>
-              ))
+              <div className="overflow-y-auto scrollbar-custom flex flex-col gap-1" style={{ maxHeight: 180 }}>
+                {[...( tickData?.bots ?? [])]
+                  .sort((a, b) => b.score - a.score)
+                  .map((bot, i) => (
+                    <div key={bot.id} className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-500 w-5 text-right shrink-0">#{i + 1}</span>
+                      <span
+                        className={`flex-1 truncate font-medium ${!bot.alive ? 'opacity-35 line-through' : ''}`}
+                        style={{ color: colorMapRef.current.get(bot.id) ?? '#aaa' }}
+                      >
+                        {bot.id}
+                      </span>
+                      <span className="font-mono text-gray-300 shrink-0 text-xs">
+                        {bot.score.toFixed(1)}
+                      </span>
+                    </div>
+                  ))}
+              </div>
             )}
           </div>
 
@@ -501,15 +537,15 @@ export default function WatchPage() {
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">
               이벤트 로그
             </h3>
-            <div className="overflow-y-auto flex flex-col gap-1 flex-1">
+            <div className="overflow-y-auto flex flex-col gap-1 flex-1 scrollbar-custom">
               {events.length === 0 ? (
                 <p className="text-gray-600 text-xs">이벤트 없음</p>
               ) : (
                 events.map((ev) => (
-                  <div key={ev.uid} className="text-xs leading-relaxed">
-                    <span className="text-gray-600 mr-1">[{ev.tick}]</span>
+                  <div key={ev.uid} className="text-xs leading-relaxed border-b border-gray-800/50 pb-1">
+                    <span className="text-orange-400 font-bold mr-1">{ev.tick}틱</span>
                     <span className={EVENT_STYLE[ev.type] ?? 'text-gray-300'}>
-                      {formatEvent(ev)}
+                      <FormatEvent ev={ev} colorMap={colorMapRef.current} />
                     </span>
                   </div>
                 ))
@@ -534,14 +570,109 @@ export default function WatchPage() {
       </footer>
 
       {/* Game end modal */}
-      {gameEnd && (
+      {gameEnd && showModal && (
         <GameEndModal
           data={gameEnd}
           colorMap={colorMapRef.current}
-          onClose={() => setGameEnd(null)}
+          onClose={() => setShowModal(false)}
           onGoList={() => navigate('/games')}
         />
       )}
+    </div>
+  )
+}
+
+// ── Game Result Panel (below canvas) ──────────────────────────────────
+
+function GameResultPanel({
+  data,
+  colorMap,
+}: {
+  data: GameEndData
+  colorMap: Map<string, string>
+}) {
+  const [openId, setOpenId] = useState<string | null>(null)
+  const winner = data.rankings[0]
+
+  return (
+    <div className="flex flex-col gap-4 pb-4">
+      {/* Winner banner */}
+      <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-6 py-5 text-center flex flex-col gap-1">
+        <p className="text-xs text-gray-500 uppercase tracking-widest">게임 종료 · {REASON_LABEL[data.reason] ?? data.reason}</p>
+        <p className="text-3xl font-bold mt-1" style={{ color: colorMap.get(winner?.id) ?? '#facc15' }}>
+          🏆 {winner?.id ?? '?'}
+        </p>
+        <p className="text-sm text-gray-400 mt-0.5">
+          최종 점수 <span className="text-white font-mono font-semibold">{(winner?.final_score ?? winner?.score ?? 0).toFixed(1)}</span>점
+        </p>
+      </div>
+
+      {/* Bot profile cards */}
+      <div className="flex flex-col gap-2">
+        {data.rankings.map((r) => {
+          const color = colorMap.get(r.id) ?? '#888'
+          const finalScore   = r.final_score ?? r.score ?? 0
+          const killPts      = r.kills * 30
+          const survivalPts  = r.survival_ticks * 0.1
+          const bonusPts     = r.survival_bonus ?? 0
+          const miningPts    = Math.max(0, finalScore - killPts - survivalPts - bonusPts)
+          const isOpen = openId === r.id
+          const isWinner = r.rank === 1
+
+          return (
+            <div
+              key={r.id}
+              className="rounded-xl border overflow-hidden cursor-pointer transition-colors"
+              style={{ borderColor: isOpen ? color + '66' : '#1f2937' }}
+              onClick={() => setOpenId(isOpen ? null : r.id)}
+            >
+              {/* Card header */}
+              <div
+                className="flex items-center gap-3 px-4 py-3"
+                style={{ background: isOpen ? color + '12' : undefined }}
+              >
+                <span className="text-gray-500 text-sm w-6 shrink-0">#{r.rank}</span>
+                {isWinner && <span className="text-base leading-none">🏆</span>}
+                <span className="flex-1 font-semibold text-sm truncate" style={{ color }}>
+                  {r.id}
+                </span>
+                <span className="font-mono text-sm text-white shrink-0">{finalScore.toFixed(1)}점</span>
+                <span className="text-gray-600 text-xs ml-1">{isOpen ? '▲' : '▼'}</span>
+              </div>
+
+              {/* Expanded detail */}
+              {isOpen && (
+                <div className="px-4 pb-4 pt-1 flex flex-col gap-2 border-t border-gray-800">
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <DetailItem icon="⛏️" label="채굴" value={`${r.minerals_mined}회`} pts={miningPts} color="#facc15" />
+                    <DetailItem icon="⚔️" label="킬" value={`${r.kills}회`} pts={killPts} color="#f87171" />
+                    <DetailItem icon="⏱️" label="생존 틱" value={`${r.survival_ticks}틱`} pts={survivalPts} color="#4ade80" />
+                    {bonusPts > 0 && (
+                      <DetailItem icon="🏅" label="생존 보너스" value={`생존 순위`} pts={bonusPts} color="#a78bfa" />
+                    )}
+                    <div className={`rounded-lg bg-gray-800/60 px-3 py-2 flex flex-col gap-0.5 ${bonusPts > 0 ? '' : ''}`}>
+                      <span className="text-gray-400 text-xs">합계</span>
+                      <span className="font-mono font-bold text-white text-sm">{finalScore.toFixed(1)}점</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DetailItem({ icon, label, value, pts, color }: {
+  icon: string; label: string; value: string; pts: number; color: string
+}) {
+  return (
+    <div className="rounded-lg bg-gray-800/60 px-3 py-2 flex flex-col gap-0.5">
+      <span className="text-gray-400 text-xs">{icon} {label}</span>
+      <span className="text-xs text-gray-300">{value}</span>
+      <span className="font-mono text-sm font-semibold" style={{ color }}>+{pts.toFixed(1)}점</span>
     </div>
   )
 }
