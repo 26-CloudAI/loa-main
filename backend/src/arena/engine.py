@@ -507,7 +507,7 @@ class GameEngine:
                         f"{'희귀 ' if mineral.rare else ''}"
                         f"광물 채굴 +{points_each:.1f}점"
                         f", 에너지 +{energy_gain // split_count}"
-                        f"{' (경합)' if split_count > 1 else ''}",
+                        f"{' (경합)' if split_count > 1 else ''}"
                     ),
                 ))
 

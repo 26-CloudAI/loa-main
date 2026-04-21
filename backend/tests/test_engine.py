@@ -56,7 +56,7 @@ class TestBasicTick:
         assert "tick" in state
         assert "my_bot" in state
         assert "vision" in state
-        assert "zone_boundary" in state
+        assert "zone_bounds" in state
         assert "leaderboard" in state
         assert state["my_bot"]["id"] == "a"
 
@@ -306,7 +306,9 @@ class TestZone:
         engine = GameEngine([bot, DummyBot("b")], config=small_config, seed=42)
 
         # 자기장이 활성화된 상태로 만들기
+        engine.zone.current_shrink = 3
         engine.zone.boundary = 3
+        engine.zone.bounds = (3, 3, 6, 6)
         engine.tick = 55  # phase2 구간
         engine.bots["a"].position = Position(0, 0)  # 경계 밖
 
@@ -321,7 +323,9 @@ class TestZone:
         bot = DummyBot("a", action="STAY")
         engine = GameEngine([bot, DummyBot("b")], config=small_config, seed=42)
 
+        engine.zone.current_shrink = 2
         engine.zone.boundary = 2
+        engine.zone.bounds = (2, 2, 7, 7)
         engine.tick = 55
         engine.bots["a"].position = Position(5, 5)  # 안전 구역
 

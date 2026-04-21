@@ -83,7 +83,7 @@ class TestSchemas(unittest.TestCase):
             tick=10,
             bots=[{"id": "a", "x": 5, "y": 5}],
             minerals=[],
-            zone_boundary=0,
+            zone_bounds=[0, 0, 9, 9],
             alive_count=1,
             leaderboard=[],
         )

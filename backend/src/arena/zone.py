@@ -40,9 +40,11 @@ class ZoneManager:
         self.final_radius = max(0, (min(w, h) - (self.max_shrinks * 2)) // 2)
         
         # 목표 중심점을 무작위로 선택 (최종 반경이 맵을 벗어나지 않도록 여유를 둠)
-        margin = self.final_radius + 2
-        self.target_x = self.rng.randint(margin, w - margin - 1)
-        self.target_y = self.rng.randint(margin, h - margin - 1)
+        # 작은 맵/소규모 수축에서 margin이 맵을 초과하는 경우를 방지.
+        margin_x = min(self.final_radius + 2, max(0, (w - 1) // 2))
+        margin_y = min(self.final_radius + 2, max(0, (h - 1) // 2))
+        self.target_x = self.rng.randint(margin_x, max(margin_x, w - margin_x - 1))
+        self.target_y = self.rng.randint(margin_y, max(margin_y, h - margin_y - 1))
 
     def update(self, tick: int) -> None:
         """현재 틱에 맞춰 자기장 경계를 업데이트한다."""
