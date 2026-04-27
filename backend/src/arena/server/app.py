@@ -78,8 +78,8 @@ class InProcessBot(BotInterface):
         self._load_error: Optional[str] = None
 
         try:
-            local_ns: dict = {}
-            exec(code, {"__builtins__": __builtins__}, local_ns)
+            local_ns: dict = {"__builtins__": __builtins__}
+            exec(code, local_ns)
             fn = local_ns.get("action")
             if fn is None or not callable(fn):
                 raise ValueError("action(state) 함수를 찾을 수 없습니다.")
@@ -107,9 +107,10 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
     from bots.herbivore import HerbivoreBot
     from bots.mad_dog import MadDogBot
     from bots.camper import CamperBot
+    from bots.predator import PredatorBot
 
-    bot_classes = [HerbivoreBot, MadDogBot, CamperBot]
-    labels = ["AI_초식", "AI_미친개", "AI_존버"]
+    bot_classes = [HerbivoreBot, MadDogBot, CamperBot, PredatorBot]
+    labels = ["AI_초식", "AI_미친개", "AI_존버", "AI_포식자"]
     fillers = []
 
     for i in range(count):
@@ -210,6 +211,8 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    app.include_router(mock_auth_router)
 
     def _registry() -> GameRegistry:
         return state["registry"]
@@ -389,9 +392,9 @@ def create_app(
             raise HTTPException(400, f"코드가 최대 크기({max_size}B)를 초과했습니다.")
         
         try:
-            local_ns: dict = {}
+            local_ns: dict = {"__builtins__": __builtins__}
             # 제한된 환경에서 코드를 실행하여 문법 오류 및 함수 존재 파악
-            exec(code, {"__builtins__": __builtins__}, local_ns)
+            exec(code, local_ns)
             fn = local_ns.get("action")
             if fn is None or not callable(fn):
                 raise ValueError("action(state) 함수를 찾을 수 없습니다.")

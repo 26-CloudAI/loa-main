@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { MOCK, MOCK_USER, MOCK_TOKEN } from '../dev/mock'
 
@@ -26,6 +26,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(
     () => localStorage.getItem('loa_token')
   )
+
+  // 새로고침 시 저장된 토큰으로 user 복원
+  useEffect(() => {
+    if (!token || user) return
+    if (MOCK) {
+      setUser(MOCK_USER)
+      return
+    }
+    fetch(`${API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.user) setUser(data.user)
+        else {
+          // 토큰이 만료됐으면 초기화
+          localStorage.removeItem('loa_token')
+          setToken(null)
+        }
+      })
+      .catch(() => {})
+  }, [token])
 
   async function login(email: string, password: string) {
     // ── mock mode ──────────────────────────────────────────────

@@ -209,12 +209,19 @@ class SpectatorManager:
     # ──────────────────────────────────────────────
 
     async def _subscribe_loop(self, game_id: str) -> None:
-        """Redis Pub/Sub에서 메시지를 수신하여 관전자에게 전달."""
-        channel = f"arena:tick:{game_id}"
+        """Redis Pub/Sub에서 tick·event 채널을 동시에 구독하여 관전자에게 전달."""
+        tick_channel  = f"arena:tick:{game_id}"
+        event_channel = f"arena:event:{game_id}"
 
-        try:
+        async def _forward(channel: str) -> None:
             async for message in self.pubsub.subscribe(channel):
                 self.broadcast_to_game(game_id, message)
+
+        try:
+            await asyncio.gather(
+                _forward(tick_channel),
+                _forward(event_channel),
+            )
         except asyncio.CancelledError:
             pass
         except Exception:

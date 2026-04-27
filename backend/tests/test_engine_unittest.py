@@ -80,7 +80,7 @@ class TestBasicTick(unittest.TestCase):
 
         self.assertEqual(len(bot_a.action_history), 1)
         state = bot_a.action_history[0]
-        for key in ("tick", "my_bot", "vision", "zone_boundary", "leaderboard"):
+        for key in ("tick", "my_bot", "vision", "zone_bounds", "leaderboard"):
             self.assertIn(key, state)
         self.assertEqual(state["my_bot"]["id"], "a")
 
@@ -303,7 +303,9 @@ class TestZone(unittest.TestCase):
     def test_zone_damage_outside(self):
         config = make_small_config()
         engine = GameEngine([DummyBot("a", "STAY"), DummyBot("b")], config=config, seed=42)
+        engine.zone.current_shrink = 3
         engine.zone.boundary = 3
+        engine.zone.bounds = (3, 3, 6, 6)
         engine.tick = 55
         engine.bots["a"].position = Position(0, 0)
 
@@ -316,7 +318,9 @@ class TestZone(unittest.TestCase):
     def test_zone_no_damage_inside(self):
         config = make_small_config()
         engine = GameEngine([DummyBot("a", "STAY"), DummyBot("b")], config=config, seed=42)
+        engine.zone.current_shrink = 2
         engine.zone.boundary = 2
+        engine.zone.bounds = (2, 2, 7, 7)
         engine.tick = 55
         engine.bots["a"].position = Position(5, 5)
 
