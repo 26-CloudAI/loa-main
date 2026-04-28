@@ -23,7 +23,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
-import uuid
 
 # FastAPI import를 안전하게 처리
 try:
@@ -45,6 +44,8 @@ from .config import DEFAULT_SERVER_CONFIG, ServerConfig
 from .game_session import GameRegistry, GameSession
 from fastapi import Depends
 from ..auth.firebase_handler import verify_firebase_token
+from ..db import init_db, UserRepository, BotRepository
+from ..auth.auth_service import FirebaseUserService
 
 from .redis_manager import (
     InMemoryPubSubBroker,
@@ -176,6 +177,14 @@ def create_app(
         state["registry"] = registry
         state["spectator_mgr"] = spectator_mgr
 
+        db_conn = init_db()
+        user_repo = UserRepository(db_conn)
+        bot_repo = BotRepository(db_conn)
+        firebase_user_svc = FirebaseUserService(user_repo)
+        state["db_conn"] = db_conn
+        state["bot_repo"] = bot_repo
+        state["firebase_user_svc"] = firebase_user_svc
+
         logger.info(
             "서버 시작 (Redis: %s)", "활성" if use_redis else "인메모리"
         )
@@ -191,6 +200,8 @@ def create_app(
         cleanup_task = asyncio.create_task(_cleanup_loop())
 
         yield
+        
+        db_conn.close()
 
         # 종료
         cleanup_task.cancel()
@@ -210,22 +221,26 @@ def create_app(
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",  #로컬(개발용)
-            "https://ai-arena-b2b4b.web.app" #배포한 파이어베이스 주소(수정)
-        ],
+        allow_origins=_settings.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    app.include_router(mock_auth_router)
+    if _settings.ENV != "production":
+        app.include_router(mock_auth_router)
 
     def _registry() -> GameRegistry:
         return state["registry"]
 
     def _spectator_mgr() -> SpectatorManager:
         return state["spectator_mgr"]
+
+    def _bot_repo() -> BotRepository:
+        return state["bot_repo"]
+
+    def _firebase_user_svc() -> FirebaseUserService:
+        return state["firebase_user_svc"]
 
     # ── REST API ──
 
@@ -395,97 +410,59 @@ def create_app(
             "total_spectators": _spectator_mgr().get_total_connections(),
         }
         
-    # 가상의 DB 객체 (실제로는 db/bot_repo.py의 객체를 사용)
-    # bot_repo = BotRepo() 
-    mock_db = {} # 테스트를 위한 임시 메모리 DB
-
-    def validate_bot_code(code: str, max_size: int):
-        """봇 코드의 크기와 action(state) 함수 존재 여부를 검증합니다."""
-        if len(code) > max_size:
-            raise HTTPException(400, f"코드가 최대 크기({max_size}B)를 초과했습니다.")
-        
-        try:
-            local_ns: dict = {"__builtins__": __builtins__}
-            # 제한된 환경에서 코드를 실행하여 문법 오류 및 함수 존재 파악
-            exec(code, local_ns)
-            fn = local_ns.get("action")
-            if fn is None or not callable(fn):
-                raise ValueError("action(state) 함수를 찾을 수 없습니다.")
-        except Exception as e:
-            raise HTTPException(400, f"유효하지 않은 봇 코드입니다: {str(e)}")
-
     # ── 봇 CRUD API ──
 
-    
     @app.post("/api/bots", status_code=201)
-    async def register_bot(
-        body: BotCreateRequest, 
-        user: dict = Depends(verify_firebase_token) # 의존성 주입!
-    ):
-        # 이제 user_id를 파이어베이스가 준 진짜 UID로 사용합니다.
-        user_id = user["uid"] 
-        
-        validate_bot_code(body.code, server_config.api.max_bot_code_size)
-        
-        # 2. DB 저장 로직 (bot_repo 활용)
-        bot_id = str(uuid.uuid4())
-        new_bot = {
-            "bot_id": bot_id,
-            "owner_id": user_id,
-            "name": body.name,
-            "code": body.code,
-            "version": 1
-        }
-        mock_db[bot_id] = new_bot # 실제: bot_repo.create(new_bot)
-        
-        return {"message": "봇이 성공적으로 등록되었습니다.", "bot": new_bot}
+    async def register_bot(body: BotCreateRequest, user: dict = Depends(verify_firebase_token)):
+        repo = _bot_repo()
+        ok, err = repo.validate_code(body.code)
+        if not ok:
+            raise HTTPException(400, err)
+        db_user = _firebase_user_svc().get_or_create_user(user)
+        bot = repo.create(user_id=db_user.id, name=body.name, code=body.code)
+        return {"message": "봇이 성공적으로 등록되었습니다.", "bot": {"id": bot.id, "name": bot.name, "version": bot.version}}
 
     @app.get("/api/bots")
-    async def list_my_bots(): # 실제 환경: user = Depends(get_current_user)
-        """내 봇 목록을 조회합니다."""
-        user_id = "mock_user_123" # user["user_id"]
-        
-        # 실제: bots = bot_repo.get_by_owner(user_id)
-        my_bots = [b for b in mock_db.values() if b["owner_id"] == user_id]
-        return {"bots": my_bots}
+    async def list_my_bots(user: dict = Depends(verify_firebase_token)):
+        db_user = _firebase_user_svc().get_or_create_user(user)
+        bots = _bot_repo().get_by_user(db_user.id)
+        return {"bots": [{"id": b.id, "name": b.name, "version": b.version, "win_rate": b.win_rate} for b in bots]}
 
     @app.get("/api/bots/{bot_id}")
-    async def get_bot(bot_id: str): # 실제 환경: user = Depends(get_current_user)
-        """특정 봇의 상세 정보를 조회합니다."""
-        # 실제: bot = bot_repo.get(bot_id)
-        bot = mock_db.get(bot_id)
-        if not bot:
+    async def get_bot(bot_id: int, user: dict = Depends(verify_firebase_token)):
+        bot = _bot_repo().get_by_id(bot_id)
+        if not bot or not bot.is_active:
             raise HTTPException(404, "봇을 찾을 수 없습니다.")
-            
-        # 권한 체크 로직 추가 가능 (내 봇만 볼 수 있게 하려면)
-        return bot
+        db_user = _firebase_user_svc().get_or_create_user(user)
+        if bot.user_id != db_user.id:
+            raise HTTPException(403, "접근 권한이 없습니다.")
+        return {"id": bot.id, "name": bot.name, "code": bot.code, "version": bot.version}
 
     @app.put("/api/bots/{bot_id}")
-    async def update_bot(bot_id: str, body: BotUpdateRequest): # 실제 환경: user = Depends(get_current_user)
-        """기존 봇의 코드를 업데이트하고 버전을 증가시킵니다."""
-        # 실제: bot = bot_repo.get(bot_id)
-        bot = mock_db.get(bot_id)
-        if not bot:
+    async def update_bot(bot_id: int, body: BotUpdateRequest, user: dict = Depends(verify_firebase_token)):
+        repo = _bot_repo()
+        bot = repo.get_by_id(bot_id)
+        if not bot or not bot.is_active:
             raise HTTPException(404, "봇을 찾을 수 없습니다.")
-            
-        # 1. 코드 검증
-        validate_bot_code(body.code, server_config.api.max_bot_code_size)
-        
-        # 2. 정보 업데이트 및 버전 1 증가
-        bot["code"] = body.code
-        bot["version"] += 1
-        # 실제: bot_repo.update(bot_id, bot)
-        
-        return {"message": "봇이 성공적으로 업데이트되었습니다.", "bot": bot}
+        db_user = _firebase_user_svc().get_or_create_user(user)
+        if bot.user_id != db_user.id:
+            raise HTTPException(403, "접근 권한이 없습니다.")
+        ok, err = repo.validate_code(body.code)
+        if not ok:
+            raise HTTPException(400, err)
+        updated = repo.update_code(bot_id, body.code)
+        return {"message": "봇이 성공적으로 업데이트되었습니다.", "bot": {"id": updated.id, "version": updated.version}}
 
     @app.delete("/api/bots/{bot_id}")
-    async def delete_bot(bot_id: str): # 실제 환경: user = Depends(get_current_user)
-        """봇을 삭제합니다."""
-        # 실제: success = bot_repo.delete(bot_id)
-        if bot_id not in mock_db:
+    async def delete_bot(bot_id: int, user: dict = Depends(verify_firebase_token)):
+        repo = _bot_repo()
+        bot = repo.get_by_id(bot_id)
+        if not bot or not bot.is_active:
             raise HTTPException(404, "봇을 찾을 수 없습니다.")
-            
-        del mock_db[bot_id]
+        db_user = _firebase_user_svc().get_or_create_user(user)
+        if bot.user_id != db_user.id:
+            raise HTTPException(403, "접근 권한이 없습니다.")
+        repo.soft_delete(bot_id)
         return {"message": "봇이 삭제되었습니다."}
 
     return app
