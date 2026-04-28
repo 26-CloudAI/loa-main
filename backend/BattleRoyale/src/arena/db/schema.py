@@ -371,6 +371,7 @@ def _init_postgresql():
     """PostgreSQL DB 초기화. psycopg2 필요."""
     try:
         import psycopg2
+        import psycopg2.extras
     except ImportError as e:
         raise ImportError(
             "psycopg2가 필요합니다: pip install psycopg2-binary"
