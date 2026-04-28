@@ -10,7 +10,7 @@ export default function LandingPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4">
       {/* 로고 / 타이틀 */}
       <div className="mb-8 text-center">
         <h1 className="text-4xl font-bold text-white tracking-tight">
@@ -22,7 +22,7 @@ export default function LandingPage() {
       </div>
 
       {/* 카드 */}
-      <div className="w-full max-w-sm bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+      <div className="w-full max-w-sm bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         {/* 탭 */}
         <div className="flex border-b border-gray-700">
           <button

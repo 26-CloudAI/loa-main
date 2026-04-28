@@ -419,7 +419,7 @@ export default function WatchPage() {
 
   if (gameStatus === 'error') {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{loadError || '게임을 찾을 수 없습니다.'}</p>
         <button
           onClick={() => navigate('/games')}
@@ -434,7 +434,7 @@ export default function WatchPage() {
   // ── Main render ────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
       <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3 shrink-0">
         <button
@@ -458,7 +458,7 @@ export default function WatchPage() {
               ref={canvasRef}
               width={MAP_PX}
               height={MAP_PX}
-              className="rounded-lg border border-gray-800 block"
+              className="rounded-lg border border-gray-700 block"
               style={{ imageRendering: 'pixelated' }}
             />
             {gameStatus === 'waiting' && (
@@ -488,7 +488,7 @@ export default function WatchPage() {
           style={{ width: 264, minWidth: 264 }}
         >
           {/* Tick / alive */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex flex-col gap-1">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-1">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">틱</span>
               <span className="font-mono font-medium">
@@ -506,7 +506,7 @@ export default function WatchPage() {
           </div>
 
           {/* Leaderboard */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex flex-col gap-2 shrink-0">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-2 shrink-0">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">리더보드</h3>
             {(tickData?.bots.length ?? 0) === 0 ? (
               <p className="text-gray-600 text-xs">-</p>
@@ -533,7 +533,7 @@ export default function WatchPage() {
           </div>
 
           {/* Event log */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex flex-col gap-2 flex-1 min-h-0">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-2 flex-1 min-h-0">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">
               이벤트 로그
             </h3>
