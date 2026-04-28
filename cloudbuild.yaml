@@ -64,17 +64,10 @@ steps:
       - '--set-secrets'
       - 'FIREBASE_CREDENTIALS_JSON=firebase-service-account:latest,DB_PASSWORD=db-password:latest'
 
-      # 환경변수
+      # 환경변수 (CORS_ORIGINS 값에 콤마가 포함되므로 | 를 구분자로 사용)
       - '--set-env-vars'
       - >-
-        USE_REDIS=true,
-        REDIS_HOST=${_REDIS_HOST},
-        LOG_FORMAT=json,
-        CORS_ORIGINS=${_CORS_ORIGINS},
-        DB_TYPE=postgresql,
-        DB_HOST=10.114.0.3,
-        DB_NAME=ai_arena,
-        DB_USER=arena_user
+        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=10.114.0.3|DB_NAME=ai_arena|DB_USER=arena_user|ENV=production
 
       - '--quiet'
 
