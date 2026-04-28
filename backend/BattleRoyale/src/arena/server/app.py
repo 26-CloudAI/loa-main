@@ -230,6 +230,24 @@ def create_app(
     if _settings.ENV != "production":
         app.include_router(mock_auth_router)
 
+        from ..auth.auth_service import decode_token, TokenConfig
+        from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+        _dev_bearer = HTTPBearer(auto_error=False)
+
+        async def _dev_verify_token(
+            credentials: Optional[HTTPAuthorizationCredentials] = Depends(_dev_bearer),
+        ) -> dict:
+            if not credentials:
+                raise HTTPException(401, "인증 토큰이 없습니다.")
+            config = TokenConfig(secret_key=_settings.JWT_SECRET)
+            payload = decode_token(credentials.credentials, config)
+            if not payload:
+                raise HTTPException(401, "유효하지 않거나 만료된 토큰입니다.")
+            return {"uid": payload.get("sub"), "email": payload.get("email", "")}
+
+        app.dependency_overrides[verify_firebase_token] = _dev_verify_token
+
     def _registry() -> GameRegistry:
         return state["registry"]
 
