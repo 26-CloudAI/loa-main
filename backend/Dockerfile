@@ -5,9 +5,9 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" redis firebase-admin psycopg2-binary
 
-COPY src/ ./src/
-COPY bots/ ./bots/
-COPY run_server.py ./
+COPY BattleRoyale/src/ ./src/
+COPY BattleRoyale/bots/ ./bots/
+COPY BattleRoyale/run_server.py ./
 
 EXPOSE 8080
 
