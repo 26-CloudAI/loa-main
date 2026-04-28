@@ -72,7 +72,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
       {/* Window */}
       <div
-        className="relative z-10 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        className="relative z-10 bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -271,7 +271,7 @@ export default function GameNewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-900 text-white">
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       {/* 헤더 */}
       <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3">
@@ -340,7 +340,7 @@ export default function GameNewPage() {
           </section>
 
           {/* 게임 옵션 */}
-          <section className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4 flex flex-col gap-4">
+          <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
 
             {/* AI 채우기 */}
@@ -376,7 +376,7 @@ export default function GameNewPage() {
                 max={100}
                 value={minBots}
                 onChange={(e) => setMinBots(Math.min(100, Math.max(2, parseInt(e.target.value) || 2)))}
-                className="bg-gray-800 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 w-20 text-center"
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 w-24 text-center"
               />
             </div>
 
@@ -415,7 +415,7 @@ export default function GameNewPage() {
                 value={seed}
                 onChange={(e) => setSeed(e.target.value)}
                 placeholder="랜덤"
-                className="bg-gray-800 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 w-24 text-center placeholder-gray-600"
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 w-24 text-center placeholder-gray-400"
               />
             </div>
           </section>

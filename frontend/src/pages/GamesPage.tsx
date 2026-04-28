@@ -68,7 +68,7 @@ export default function GamesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-900 text-white">
       {/* 헤더 */}
       <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
         <span className="font-bold text-lg">League of Agents</span>
@@ -140,7 +140,7 @@ function GameCard({ game }: { game: GameInfo }) {
   const shortId = game.game_id.slice(0, 8)
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+    <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
       {/* 왼쪽: 아이디 + 상태 */}
       <div className="flex items-center gap-3 min-w-0">
         <span className="font-mono text-sm text-gray-300">{shortId}…</span>
