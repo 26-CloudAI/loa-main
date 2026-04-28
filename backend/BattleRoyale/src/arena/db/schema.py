@@ -465,7 +465,7 @@ def get_schema_version(conn) -> int:
         with conn.cursor() as cur:
             cur.execute("SELECT version FROM schema_version LIMIT 1")
             row = cur.fetchone()
-            return row[0] if row else 0
+            return row["version"] if row else 0
     else:
         cursor = conn.execute("SELECT version FROM schema_version LIMIT 1")
         row = cursor.fetchone()
