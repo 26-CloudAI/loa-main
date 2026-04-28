@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_INFO, startMockSimulation } from '../dev/mock'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -201,6 +202,7 @@ function drawCanvas(
 
 export default function WatchPage() {
   const { game_id } = useParams<{ game_id: string }>()
+  const { token } = useAuth()
   const navigate = useNavigate()
 
   const canvasRef        = useRef<HTMLCanvasElement>(null)
@@ -232,7 +234,9 @@ export default function WatchPage() {
     }
     // ────────────────────────────────────────────────────────
 
-    fetch(`${API_BASE}/api/games/${game_id}`)
+    fetch(`${API_BASE}/api/games/${game_id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((r) => {
         if (r.status === 404) throw new Error('게임을 찾을 수 없습니다.')
         if (!r.ok) throw new Error(`서버 오류 (${r.status})`)
@@ -242,7 +246,9 @@ export default function WatchPage() {
         setTotalBots(info.total_bots ?? 0)
         if (info.status === 'finished') {
           setGameStatus('finished')
-          const res = await fetch(`${API_BASE}/api/games/${game_id}/result`)
+          const res = await fetch(`${API_BASE}/api/games/${game_id}/result`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
           if (res.ok) {
             const result = await res.json()
             setGameEnd(result)
@@ -256,7 +262,7 @@ export default function WatchPage() {
         setLoadError(e.message)
         setGameStatus('error')
       })
-  }, [game_id])
+  }, [game_id, token])
 
   // 2) Connect WebSocket (only once, when game is waiting or running)
   useEffect(() => {
@@ -306,7 +312,10 @@ export default function WatchPage() {
     function connect() {
       if (cancelled) return
       setWsStatus('connecting')
-      const ws = new WebSocket(`${WS_BASE}/ws/games/${game_id}`)
+      const wsUrl = token
+        ? `${WS_BASE}/ws/games/${game_id}?token=${encodeURIComponent(token)}`
+        : `${WS_BASE}/ws/games/${game_id}`
+      const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -387,7 +396,7 @@ export default function WatchPage() {
       if (retryTimer) clearTimeout(retryTimer)
       wsRef.current?.close()
     }
-  }, [game_id, gameStatus])
+  }, [game_id, gameStatus, token])
 
   // 3) Draw canvas on each tick
   useEffect(() => {

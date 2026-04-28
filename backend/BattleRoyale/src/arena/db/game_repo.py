@@ -13,6 +13,7 @@ from typing import Optional
 @dataclass
 class GameRecord:
     id: str
+    owner_user_id: Optional[int]
     status: str
     created_at: str
     started_at: Optional[str]
@@ -39,34 +40,55 @@ class ParticipantRecord:
 
 
 class GameRepository:
-    def __init__(self, conn: sqlite3.Connection):
+    def __init__(self, conn):
         self.conn = conn
+        self._is_pg = not isinstance(conn, sqlite3.Connection)
+
+    def _execute(self, sql: str, params=()):
+        """SQLite/psycopg2 공통 실행 헬퍼."""
+        if self._is_pg:
+            cur = self.conn.cursor()
+            cur.execute(sql.replace("?", "%s"), params)
+            return cur
+        return self.conn.execute(sql, params)
+
+    def _now(self) -> str:
+        return "NOW()" if self._is_pg else "datetime('now')"
 
     def create_game(
         self,
         game_id: str,
+        owner_user_id: int,
         total_bots: int,
         seed: Optional[int] = None,
         config_json: Optional[str] = None,
     ) -> GameRecord:
-        self.conn.execute(
+        self._execute(
             """
-            INSERT INTO games (id, total_bots, seed, config_json)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO games (id, owner_user_id, total_bots, seed, config_json)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (game_id, total_bots, seed, config_json),
+            (game_id, owner_user_id, total_bots, seed, config_json),
         )
         self.conn.commit()
         return self.get_game(game_id)
 
     def get_game(self, game_id: str) -> Optional[GameRecord]:
-        cursor = self.conn.execute("SELECT * FROM games WHERE id = ?", (game_id,))
+        cursor = self._execute("SELECT * FROM games WHERE id = ?", (game_id,))
+        row = cursor.fetchone()
+        return self._row_to_game(row) if row else None
+
+    def get_game_by_owner(self, game_id: str, owner_user_id: int) -> Optional[GameRecord]:
+        cursor = self._execute(
+            "SELECT * FROM games WHERE id = ? AND owner_user_id = ?",
+            (game_id, owner_user_id),
+        )
         row = cursor.fetchone()
         return self._row_to_game(row) if row else None
 
     def update_game_started(self, game_id: str) -> None:
-        self.conn.execute(
-            "UPDATE games SET status = 'running', started_at = datetime('now') WHERE id = ?",
+        self._execute(
+            f"UPDATE games SET status = 'running', started_at = {self._now()} WHERE id = ?",
             (game_id,),
         )
         self.conn.commit()
@@ -78,10 +100,10 @@ class GameRepository:
         end_reason: str,
         winner_bot_id: Optional[int] = None,
     ) -> None:
-        self.conn.execute(
+        self._execute(
             """
             UPDATE games
-            SET status = 'finished', finished_at = datetime('now'),
+            SET status = 'finished', finished_at = """ + self._now() + """,
                 final_tick = ?, end_reason = ?, winner_bot_id = ?
             WHERE id = ?
             """,
@@ -97,15 +119,27 @@ class GameRepository:
         is_ai_filler: bool = False,
     ) -> int:
         """참가자 추가. 생성된 participant ID를 반환."""
-        cursor = self.conn.execute(
-            """
-            INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler)
-            VALUES (?, ?, ?, ?)
-            """,
-            (game_id, bot_id, bot_name, int(is_ai_filler)),
-        )
+        if self._is_pg:
+            cursor = self._execute(
+                """
+                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler)
+                VALUES (?, ?, ?, ?)
+                RETURNING id
+                """,
+                (game_id, bot_id, bot_name, is_ai_filler),
+            )
+            participant_id = cursor.fetchone()["id"]
+        else:
+            cursor = self._execute(
+                """
+                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler)
+                VALUES (?, ?, ?, ?)
+                """,
+                (game_id, bot_id, bot_name, int(is_ai_filler)),
+            )
+            participant_id = cursor.lastrowid
         self.conn.commit()
-        return cursor.lastrowid
+        return participant_id
 
     def update_participant_result(
         self,
@@ -117,7 +151,7 @@ class GameRepository:
         minerals_mined: int = 0,
         survival_ticks: int = 0,
     ) -> None:
-        self.conn.execute(
+        self._execute(
             """
             UPDATE game_participants
             SET final_rank = ?, final_score = ?,
@@ -130,7 +164,7 @@ class GameRepository:
         self.conn.commit()
 
     def get_participants(self, game_id: str) -> list[ParticipantRecord]:
-        cursor = self.conn.execute(
+        cursor = self._execute(
             "SELECT * FROM game_participants WHERE game_id = ? ORDER BY COALESCE(final_rank, 9999) ASC",
             (game_id,),
         )
@@ -140,7 +174,7 @@ class GameRepository:
         self, bot_id: int, limit: int = 20
     ) -> list[dict]:
         """특정 봇의 최근 게임 기록."""
-        cursor = self.conn.execute(
+        cursor = self._execute(
             """
             SELECT gp.*, g.finished_at, g.end_reason
             FROM game_participants gp
@@ -167,15 +201,28 @@ class GameRepository:
         return results
 
     def get_recent_games(self, limit: int = 20) -> list[GameRecord]:
-        cursor = self.conn.execute(
+        cursor = self._execute(
             "SELECT * FROM games ORDER BY created_at DESC LIMIT ?",
             (limit,),
+        )
+        return [self._row_to_game(row) for row in cursor.fetchall()]
+
+    def list_games_by_owner(self, owner_user_id: int, limit: int = 50) -> list[GameRecord]:
+        cursor = self._execute(
+            """
+            SELECT * FROM games
+            WHERE owner_user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (owner_user_id, limit),
         )
         return [self._row_to_game(row) for row in cursor.fetchall()]
 
     def _row_to_game(self, row: sqlite3.Row) -> GameRecord:
         return GameRecord(
             id=row["id"],
+            owner_user_id=row["owner_user_id"],
             status=row["status"],
             created_at=row["created_at"],
             started_at=row["started_at"],

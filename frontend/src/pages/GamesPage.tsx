@@ -29,7 +29,7 @@ const STATUS_COLOR: Record<GameInfo['status'], string> = {
 }
 
 export default function GamesPage() {
-  const { user, logout } = useAuth()
+  const { user, token, logout } = useAuth()
   const navigate = useNavigate()
   const [games, setGames] = useState<GameInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,7 +44,9 @@ export default function GamesPage() {
     }
     // ──────────────────────────────────────────────────────────
     try {
-      const res = await fetch(`${API_BASE}/api/games`)
+      const res = await fetch(`${API_BASE}/api/games`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       const data = await res.json()
       setGames(data)
@@ -60,7 +62,7 @@ export default function GamesPage() {
     fetchGames()
     const id = setInterval(fetchGames, 3000)
     return () => clearInterval(id)
-  }, [])
+  }, [token])
 
   async function handleLogout() {
     await logout()
