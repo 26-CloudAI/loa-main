@@ -2,18 +2,22 @@
 MockStocks — FastAPI 서버
 
 엔드포인트:
-  POST /api/games         게임 생성 + 시작
-  GET  /api/games         활성 게임 목록
-  GET  /api/games/{id}    게임 정보
-  GET  /api/games/{id}/result  게임 결과
-  DELETE /api/games/{id}  게임 강제 종료
-  WS   /ws/games/{id}     실시간 관전
+  POST /api/stocks/prepare      뉴스 사전 생성 (게임 코드 페이지 진입 시)
+  GET  /api/stocks/prepare/{id} 준비 상태 확인
+  POST /api/games               게임 생성 + 시작
+  GET  /api/games               활성 게임 목록
+  GET  /api/games/{id}          게임 정보
+  GET  /api/games/{id}/result   게임 결과
+  DELETE /api/games/{id}        게임 강제 종료
+  WS   /ws/games/{id}           실시간 관전
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -21,11 +25,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..bot_interface import BotInterface
 from ..config import Config, DEFAULT_CONFIG
+from ..market import Market
 from .game_session import GameRegistry
 from .ws_manager import SpectatorManager
 
@@ -40,6 +44,7 @@ class CreateGameRequest(BaseModel):
     min_bots: int = 4
     tick_interval: float = 0.1
     seed: Optional[int] = None
+    prepare_id: Optional[str] = None  # 사전 생성된 뉴스 ID
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +122,33 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
     spectator_manager = SpectatorManager()
     registry = GameRegistry(spectator_manager)
 
+    # prepare_id → 사전 생성된 뉴스 큐 (None = 아직 생성 중)
+    _prepared_news: dict[str, list | None] = {}
+
+    # ── 뉴스 사전 생성 ──────────────────────────────────────────────────────────
+
+    @app.post("/api/stocks/prepare")
+    async def prepare_news():
+        prepare_id = str(uuid.uuid4())[:8]
+        _prepared_news[prepare_id] = None  # 생성 중 표시
+
+        async def _do_prepare():
+            market = Market(DEFAULT_CONFIG)
+            await asyncio.get_event_loop().run_in_executor(
+                None, market.pregenerate_news_batch, 20
+            )
+            _prepared_news[prepare_id] = market._news_queue
+            logger.info("뉴스 사전 생성 완료: prepare_id=%s, %d개", prepare_id, len(market._news_queue))
+
+        asyncio.create_task(_do_prepare())
+        return {"prepare_id": prepare_id}
+
+    @app.get("/api/stocks/prepare/{prepare_id}")
+    async def prepare_status(prepare_id: str):
+        news = _prepared_news.get(prepare_id)
+        ready = isinstance(news, list) and len(news) > 0
+        return {"ready": ready, "count": len(news) if ready else 0}
+
     # ── 엔드포인트 ──────────────────────────────────────────────────────────────
 
     @app.get("/health")
@@ -155,6 +187,11 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                 existing_ids.add(bot_id)
                 filler_bots.append(filler_classes[cls_idx](bot_id=bot_id))
 
+        # 사전 생성된 뉴스 꺼내기
+        prepared_news = None
+        if body.prepare_id and body.prepare_id in _prepared_news:
+            prepared_news = _prepared_news.pop(body.prepare_id)
+
         session = registry.create_game(
             config=cfg,
             tick_interval=body.tick_interval,
@@ -163,7 +200,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         session.register_bots(user_bots + filler_bots)
 
         try:
-            await session.start()
+            await session.start(prepared_news=prepared_news)
         except Exception as e:
             registry.remove_game(session.game_id)
             raise HTTPException(500, str(e))
