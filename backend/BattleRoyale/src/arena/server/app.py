@@ -107,10 +107,9 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
     from bots.herbivore import HerbivoreBot
     from bots.mad_dog import MadDogBot
     from bots.camper import CamperBot
-    from bots.predator import PredatorBot
 
-    bot_classes = [HerbivoreBot, MadDogBot, CamperBot, PredatorBot]
-    labels = ["AI_초식", "AI_미친개", "AI_존버", "AI_포식자"]
+    bot_classes = [HerbivoreBot, MadDogBot, CamperBot]
+    labels = ["AI_초식", "AI_미친개", "AI_존버"]
     fillers = []
 
     for i in range(count):
