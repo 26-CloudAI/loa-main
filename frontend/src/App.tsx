@@ -6,6 +6,8 @@ import GameSelectPage from './pages/GameSelectPage'
 import GameNewPage from './pages/GameNewPage'
 import BossBattlePage from './pages/BossBattlePage'
 import WatchPage from './pages/WatchPage'
+import MockStocksNewPage from './pages/MockStocksNewPage'
+import MockStocksWatchPage from './pages/MockStocksWatchPage'
 
 
 function AppRoutes() {
@@ -23,6 +25,8 @@ function AppRoutes() {
       <Route path="/games/new/battle-royale" element={<GameNewPage />} />
       <Route path="/games/new/boss-battle" element={<BossBattlePage />} />
       <Route path="/games/:game_id/watch" element={<WatchPage />} />
+      <Route path="/games/new/mock-stocks" element={<MockStocksNewPage />} />
+      <Route path="/games/:game_id/mock-stocks/watch" element={<MockStocksWatchPage />} />
       {/* 기본 진입점 */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

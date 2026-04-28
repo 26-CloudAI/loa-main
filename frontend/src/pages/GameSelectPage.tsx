@@ -32,7 +32,8 @@ const MODES: GameMode[] = [
     title: '모의주식',
     description: '실시간 시세를 예측하는 트레이딩 AI를 만들어 수익률을 겨뤄라.',
     icon: '📈',
-    available: false,
+    available: true,
+    route: '/games/new/mock-stocks',
   },
 ]
 
