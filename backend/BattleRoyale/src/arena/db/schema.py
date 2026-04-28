@@ -326,6 +326,7 @@ def get_connection(db_path: str | Path = "ai_arena.db"):
             password=settings.DB_PASSWORD,
         )
         conn.autocommit = False
+        conn.cursor_factory = psycopg2.extras.RealDictCursor
         return conn
 
     # 기본: SQLite
@@ -398,6 +399,7 @@ def _init_postgresql():
             )
 
     conn.commit()
+    conn.cursor_factory = psycopg2.extras.RealDictCursor
     return conn
 
 

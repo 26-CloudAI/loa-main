@@ -4,8 +4,8 @@ substitutions:
   _SERVICE_NAME: ai-arena-server
   _IMAGE_TAG: latest       # 트리거 실행 시 ${_IMAGE_TAG}로 덮어씀, 수동 실행 시 latest 사용
   # ↓ 인프라 생성 후 Cloud Build 트리거 설정에서 채워넣기
-  _REDIS_HOST: ''          # Memorystore IP (3-A 완료 후)
-  _CORS_ORIGINS: ''        # 예: https://<앱>.web.app,https://<앱>.firebaseapp.com
+  _REDIS_HOST: '10.197.54.43'
+  _CORS_ORIGINS: 'https://ai-arena-b2b4b.web.app,https://ai-arena-b2b4b.firebaseapp.com'
 
 steps:
   # 1. Docker 이미지 빌드
