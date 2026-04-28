@@ -278,6 +278,16 @@ class GameSession:
         )
         await self.pubsub.publish(self.tick_channel, end_msg)
 
+        # 봇 종료 훅 호출 (학습 봇이 순위 보상을 처리할 수 있도록)
+        n_bots = len(self._bot_interfaces)
+        rank_map = {entry["id"]: entry["rank"] for entry in result.rankings}
+        for bot in self._bot_interfaces:
+            rank = rank_map.get(bot.bot_id, n_bots)
+            try:
+                bot.on_episode_done(rank, n_bots)
+            except Exception:
+                logger.debug("봇 %s on_episode_done 오류 (무시)", bot.bot_id)
+
         logger.info(
             "게임 종료: %s — %s (틱 %d)",
             self.game_id, result.reason.value, result.final_tick,
