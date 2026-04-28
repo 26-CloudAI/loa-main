@@ -19,7 +19,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # ── SQLite DDL ─────────────────────────────────
 SCHEMA_SQL_SQLITE = """
@@ -68,6 +68,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bots_user_name ON bots(user_id, name);
 -- 게임 세션 기록
 CREATE TABLE IF NOT EXISTS games (
     id              TEXT    PRIMARY KEY,
+    owner_user_id   INTEGER,
     status          TEXT    NOT NULL DEFAULT 'waiting',
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     started_at      TEXT,
@@ -78,8 +79,11 @@ CREATE TABLE IF NOT EXISTS games (
     total_bots      INTEGER NOT NULL DEFAULT 0,
     seed            INTEGER,
     config_json     TEXT,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (winner_bot_id) REFERENCES bots(id) ON DELETE SET NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_games_owner_user_id ON games(owner_user_id);
 
 -- 게임 참가자 (봇-게임 매핑 + 결과)
 CREATE TABLE IF NOT EXISTS game_participants (
@@ -207,6 +211,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bots_user_name ON bots(user_id, name);
 -- 게임 세션 기록
 CREATE TABLE IF NOT EXISTS games (
     id              TEXT        PRIMARY KEY,
+    owner_user_id   INTEGER,
     status          TEXT        NOT NULL DEFAULT 'waiting',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     started_at      TIMESTAMPTZ,
@@ -217,8 +222,11 @@ CREATE TABLE IF NOT EXISTS games (
     total_bots      INTEGER     NOT NULL DEFAULT 0,
     seed            INTEGER,
     config_json     JSONB,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (winner_bot_id) REFERENCES bots(id) ON DELETE SET NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_games_owner_user_id ON games(owner_user_id);
 
 -- 게임 참가자 (봇-게임 매핑 + 결과)
 CREATE TABLE IF NOT EXISTS game_participants (
@@ -355,11 +363,17 @@ def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
 
     conn.executescript(SCHEMA_SQL_SQLITE)
+    _migrate_sqlite(conn)
 
     cursor = conn.execute("SELECT COUNT(*) FROM schema_version")
     if cursor.fetchone()[0] == 0:
         conn.execute(
             "INSERT INTO schema_version (version, applied_at) VALUES (?, datetime('now'))",
+            (SCHEMA_VERSION,),
+        )
+    else:
+        conn.execute(
+            "UPDATE schema_version SET version = ?, applied_at = datetime('now')",
             (SCHEMA_VERSION,),
         )
 
@@ -392,16 +406,55 @@ def _init_postgresql():
             if stmt:
                 cur.execute(stmt)
 
+        _migrate_postgresql(cur)
+
         cur.execute("SELECT COUNT(*) FROM schema_version")
         if cur.fetchone()[0] == 0:
             cur.execute(
                 "INSERT INTO schema_version (version) VALUES (%s)",
                 (SCHEMA_VERSION,),
             )
+        else:
+            cur.execute(
+                "UPDATE schema_version SET version = %s, applied_at = NOW()",
+                (SCHEMA_VERSION,),
+            )
 
     conn.commit()
     conn.cursor_factory = psycopg2.extras.RealDictCursor
     return conn
+
+
+def _migrate_sqlite(conn: sqlite3.Connection) -> None:
+    """SQLite 기존 DB에 필요한 컬럼/인덱스를 보강한다."""
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(games)").fetchall()
+    }
+    if "owner_user_id" not in columns:
+        conn.execute(
+            "ALTER TABLE games ADD COLUMN owner_user_id INTEGER REFERENCES users(id)"
+        )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_games_owner_user_id ON games(owner_user_id)"
+    )
+
+
+def _migrate_postgresql(cur) -> None:
+    """PostgreSQL 기존 DB에 필요한 컬럼/인덱스를 보강한다."""
+    cur.execute(
+        """
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'games' AND column_name = 'owner_user_id'
+        """
+    )
+    if cur.fetchone() is None:
+        cur.execute(
+            "ALTER TABLE games ADD COLUMN owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE"
+        )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_games_owner_user_id ON games(owner_user_id)"
+    )
 
 
 def get_schema_version(conn) -> int:
@@ -412,7 +465,7 @@ def get_schema_version(conn) -> int:
         with conn.cursor() as cur:
             cur.execute("SELECT version FROM schema_version LIMIT 1")
             row = cur.fetchone()
-            return row[0] if row else 0
+            return row["version"] if row else 0
     else:
         cursor = conn.execute("SELECT version FROM schema_version LIMIT 1")
         row = cursor.fetchone()

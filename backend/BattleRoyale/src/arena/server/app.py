@@ -42,10 +42,15 @@ from ..config import DEFAULT_CONFIG
 from . import settings as _settings
 from .config import DEFAULT_SERVER_CONFIG, ServerConfig
 from .game_session import GameRegistry, GameSession
+from .game_views import (
+    game_info_from_record,
+    game_info_from_state,
+    game_result_from_record,
+)
 from fastapi import Depends
-from ..auth.firebase_handler import verify_firebase_token
-from ..db import init_db, UserRepository, BotRepository
-from ..auth.auth_service import FirebaseUserService
+from ..auth.firebase_handler import verify_firebase_token, verify_firebase_token_value
+from ..db import init_db, UserRepository, BotRepository, GameRepository
+from ..auth.auth_service import FirebaseUserService, decode_token, TokenConfig
 
 from .redis_manager import (
     InMemoryPubSubBroker,
@@ -53,10 +58,7 @@ from .redis_manager import (
     create_pubsub_broker,
     create_state_store,
 )
-from .schemas import (
-    GameStatus,
-    make_error_message,
-)
+from .schemas import GameInfo, GameStatus, make_error_message
 from .ws_manager import SpectatorManager
 from ..mock_auth.router import router as mock_auth_router
 
@@ -180,9 +182,11 @@ def create_app(
         db_conn = init_db()
         user_repo = UserRepository(db_conn)
         bot_repo = BotRepository(db_conn)
+        game_repo = GameRepository(db_conn)
         firebase_user_svc = FirebaseUserService(user_repo)
         state["db_conn"] = db_conn
         state["bot_repo"] = bot_repo
+        state["game_repo"] = game_repo
         state["firebase_user_svc"] = firebase_user_svc
 
         logger.info(
@@ -257,13 +261,61 @@ def create_app(
     def _bot_repo() -> BotRepository:
         return state["bot_repo"]
 
+    def _game_repo() -> GameRepository:
+        return state["game_repo"]
+
     def _firebase_user_svc() -> FirebaseUserService:
         return state["firebase_user_svc"]
+
+    def _current_db_user(decoded_token: dict):
+        return _firebase_user_svc().get_or_create_user(decoded_token)
+
+    def _decode_auth_token(token: str) -> dict:
+        if _settings.ENV != "production":
+            config = TokenConfig(secret_key=_settings.JWT_SECRET)
+            payload = decode_token(token, config)
+            if not payload:
+                raise HTTPException(401, "유효하지 않거나 만료된 토큰입니다.")
+            return {"uid": payload.get("sub"), "email": payload.get("email", "")}
+        return verify_firebase_token_value(token)
+
+    async def _list_owned_game_infos(owner_user_id: int) -> list[GameInfo]:
+        registry = _registry()
+        infos: list[GameInfo] = []
+        for record in _game_repo().list_games_by_owner(owner_user_id):
+            state_data = None
+            if record.status in (GameStatus.WAITING.value, GameStatus.RUNNING.value):
+                state_data = await registry.state_store.get_game_state(record.id)
+
+            if state_data:
+                infos.append(game_info_from_state(record.id, state_data))
+                continue
+
+            participants = _game_repo().get_participants(record.id)
+            infos.append(game_info_from_record(record, participants))
+        return infos
+
+    async def _resolve_owned_game_info(game_id: str, owner_user_id: int) -> Optional[GameInfo]:
+        registry = _registry()
+        record = _game_repo().get_game_by_owner(game_id, owner_user_id)
+        if not record:
+            return None
+
+        state_data = await registry.state_store.get_game_state(game_id)
+        if state_data:
+            return game_info_from_state(game_id, state_data)
+
+        participants = _game_repo().get_participants(game_id)
+        return game_info_from_record(record, participants)
 
     # ── REST API ──
 
     @app.post("/api/games")
-    async def create_game(request: Request, body: dict):
+    async def create_game(
+        request: Request,
+        body: dict,
+        user: dict = Depends(verify_firebase_token),
+    ):
         """
         게임을 생성하고 시작한다.
 
@@ -291,6 +343,8 @@ def create_app(
         timestamps.append(now)
 
         registry = _registry()
+        repo = _game_repo()
+        db_user = _current_db_user(user)
         bots_data = body.get("bots", [])
         tick_interval = body.get("tick_interval", 0.05)
         seed = body.get("seed")
@@ -309,6 +363,7 @@ def create_app(
 
         # 게임 세션 생성
         session = registry.create_game(
+            game_repo=repo,
             tick_interval=tick_interval,
             seed=seed,
         )
@@ -316,25 +371,43 @@ def create_app(
         # 유저 봇 등록
         bot_interfaces: list[BotInterface] = []
         existing_ids: set[str] = set()
+        participant_specs: list[tuple[str, bool]] = []
 
         for b in bots_data:
             bot = InProcessBot(b["bot_id"], b["code"])
             bot_interfaces.append(bot)
             existing_ids.add(b["bot_id"])
+            participant_specs.append((b["bot_id"], False))
 
         if mode == "boss":
             # 보스전: 유저 봇 1명 + RLBossBot 1명
             if len(bot_interfaces) != 1:
                 raise HTTPException(400, "보스전은 봇 1개만 등록할 수 있습니다.")
-            bot_interfaces.append(_create_boss_bot(existing_ids))
+            boss_bot = _create_boss_bot(existing_ids)
+            bot_interfaces.append(boss_bot)
+            participant_specs.append((boss_bot.bot_id, True))
         elif fill_with_ai and len(bot_interfaces) < min_bots:
             # 배틀로얄: AI 봇으로 빈 슬롯 채우기
             filler_count = min_bots - len(bot_interfaces)
             fillers = _create_filler_bots(filler_count, existing_ids)
             bot_interfaces.extend(fillers)
+            participant_specs.extend((bot.bot_id, True) for bot in fillers)
 
         if len(bot_interfaces) < 2:
             raise HTTPException(400, "최소 2개의 봇이 필요합니다.")
+
+        repo.create_game(
+            session.game_id,
+            owner_user_id=db_user.id,
+            total_bots=len(bot_interfaces),
+            seed=seed,
+        )
+        for bot_name, is_ai_filler in participant_specs:
+            repo.add_participant(
+                session.game_id,
+                bot_name,
+                is_ai_filler=is_ai_filler,
+            )
 
         session.register_bots(bot_interfaces)
         await session.start()
@@ -342,35 +415,57 @@ def create_app(
         return session.get_info().to_dict()
 
     @app.get("/api/games")
-    async def list_games():
-        """활성 게임 목록."""
-        return [g.to_dict() for g in _registry().list_games()]
+    async def list_games(user: dict = Depends(verify_firebase_token)):
+        """현재 로그인 사용자의 게임 기록 목록."""
+        db_user = _current_db_user(user)
+        return [g.to_dict() for g in await _list_owned_game_infos(db_user.id)]
 
     @app.get("/api/games/{game_id}")
-    async def get_game(game_id: str):
+    async def get_game(game_id: str, user: dict = Depends(verify_firebase_token)):
         """게임 정보."""
-        session = _registry().get_game(game_id)
-        if not session:
+        db_user = _current_db_user(user)
+        info = await _resolve_owned_game_info(game_id, db_user.id)
+        if not info:
             raise HTTPException(404, "게임을 찾을 수 없습니다.")
-        return session.get_info().to_dict()
+        return info.to_dict()
 
     @app.get("/api/games/{game_id}/result")
-    async def get_game_result(game_id: str):
+    async def get_game_result(game_id: str, user: dict = Depends(verify_firebase_token)):
         """게임 결과."""
+        db_user = _current_db_user(user)
         registry = _registry()
+        record = _game_repo().get_game_by_owner(game_id, db_user.id)
+        if not record:
+            raise HTTPException(404, "게임을 찾을 수 없습니다.")
+
         session = registry.get_game(game_id)
 
         if session and session.status != GameStatus.FINISHED:
             raise HTTPException(400, "게임이 아직 진행 중입니다.")
 
         result = await registry.state_store.get_game_result(game_id)
-        if not result:
-            raise HTTPException(404, "게임 결과를 찾을 수 없습니다.")
-        return result
+        if result:
+            return result
+
+        state_data = await registry.state_store.get_game_state(game_id)
+        if state_data:
+            if record.status != GameStatus.FINISHED.value:
+                raise HTTPException(400, "게임이 아직 진행 중입니다.")
+            participants = _game_repo().get_participants(game_id)
+            return game_result_from_record(record, participants)
+
+        if record.status != GameStatus.FINISHED.value:
+            raise HTTPException(400, "게임이 아직 진행 중입니다.")
+
+        participants = _game_repo().get_participants(game_id)
+        return game_result_from_record(record, participants)
 
     @app.delete("/api/games/{game_id}")
-    async def stop_game(game_id: str):
+    async def stop_game(game_id: str, user: dict = Depends(verify_firebase_token)):
         """게임을 강제 종료."""
+        db_user = _current_db_user(user)
+        if not _game_repo().get_game_by_owner(game_id, db_user.id):
+            raise HTTPException(404, "게임을 찾을 수 없습니다.")
         session = _registry().get_game(game_id)
         if not session:
             raise HTTPException(404, "게임을 찾을 수 없습니다.")
@@ -384,9 +479,25 @@ def create_app(
         """게임 실시간 관전 WebSocket."""
         registry = _registry()
         mgr = _spectator_mgr()
+        token = websocket.query_params.get("token")
+        if not token:
+            await websocket.close(code=4001, reason="인증 토큰이 없습니다.")
+            return
+
+        try:
+            decoded = _decode_auth_token(token)
+            db_user = _current_db_user(decoded)
+        except HTTPException:
+            await websocket.close(code=4001, reason="유효하지 않은 인증 토큰입니다.")
+            return
+
+        if not _game_repo().get_game_by_owner(game_id, db_user.id):
+            await websocket.close(code=4004, reason="게임을 찾을 수 없습니다.")
+            return
 
         session = registry.get_game(game_id)
-        if not session:
+        current = await registry.state_store.get_game_state(game_id)
+        if not session and not current:
             await websocket.close(code=4004, reason="게임을 찾을 수 없습니다.")
             return
 
@@ -401,7 +512,6 @@ def create_app(
 
         try:
             # 현재 상태 즉시 전송 (중간 참여 지원)
-            current = await registry.state_store.get_game_state(game_id)
             if current:
                 await websocket.send_json({
                     "type": "tick",

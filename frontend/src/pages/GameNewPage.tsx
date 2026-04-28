@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_ID } from '../dev/mock'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -211,6 +212,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 }
 
 export default function GameNewPage() {
+  const { token } = useAuth()
   const navigate = useNavigate()
 
   const [botId, setBotId] = useState('')
@@ -253,7 +255,10 @@ export default function GameNewPage() {
 
       const res = await fetch(`${API_BASE}/api/games`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(body),
       })
 
