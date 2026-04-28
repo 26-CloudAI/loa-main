@@ -39,6 +39,16 @@ class BotInterface(ABC):
         """
         return None
 
+    def on_episode_done(self, rank: int, n_bots: int) -> None:
+        """
+        게임 종료 시 엔진이 호출하는 훅. 기본 구현은 아무것도 하지 않음.
+        학습 봇은 이 메서드를 오버라이드해 종료 보상 처리와 가중치 저장을 수행한다.
+
+        Args:
+            rank:   이번 게임 최종 순위 (1이 1등)
+            n_bots: 이번 게임 총 봇 수
+        """
+
     @abstractmethod
     def get_action(self, state: dict) -> str:
         """

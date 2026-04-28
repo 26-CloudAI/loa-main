@@ -107,10 +107,9 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
     from bots.herbivore import HerbivoreBot
     from bots.mad_dog import MadDogBot
     from bots.camper import CamperBot
-    from bots.predator import PredatorBot
 
-    bot_classes = [HerbivoreBot, MadDogBot, CamperBot, PredatorBot]
-    labels = ["AI_초식", "AI_미친개", "AI_존버", "AI_포식자"]
+    bot_classes = [HerbivoreBot, MadDogBot, CamperBot]
+    labels = ["AI_초식", "AI_미친개", "AI_존버"]
     fillers = []
 
     for i in range(count):
@@ -123,6 +122,14 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
         fillers.append(bot_classes[cls_idx](bot_id=bot_id, seed=i))
 
     return fillers
+
+
+def _create_boss_bot(existing_ids: set[str]) -> BotInterface:
+    """보스전용 RLBossBot 1개 생성."""
+    from bots.rl_boss_bot import RLBossBot
+    bot_id = "AI_보스"
+    existing_ids.add(bot_id)
+    return RLBossBot(bot_id=bot_id, seed=0)
 
 # ──────────────────────────────────────────────
 #  Pydantic 스키마 (데이터 검증용) -> 클라이언트가 보낸 JSON울 파이썬 객체로 변환
@@ -256,6 +263,7 @@ def create_app(
         seed = body.get("seed")
         fill_with_ai = body.get("fill_with_ai", True)
         min_bots = body.get("min_bots", 4)
+        mode = body.get("mode", "battle-royale")
 
         # 봇 코드 크기 검증
         max_size = server_config.api.max_bot_code_size
@@ -281,8 +289,13 @@ def create_app(
             bot_interfaces.append(bot)
             existing_ids.add(b["bot_id"])
 
-        # AI 봇으로 빈 슬롯 채우기
-        if fill_with_ai and len(bot_interfaces) < min_bots:
+        if mode == "boss":
+            # 보스전: 유저 봇 1명 + RLBossBot 1명
+            if len(bot_interfaces) != 1:
+                raise HTTPException(400, "보스전은 봇 1개만 등록할 수 있습니다.")
+            bot_interfaces.append(_create_boss_bot(existing_ids))
+        elif fill_with_ai and len(bot_interfaces) < min_bots:
+            # 배틀로얄: AI 봇으로 빈 슬롯 채우기
             filler_count = min_bots - len(bot_interfaces)
             fillers = _create_filler_bots(filler_count, existing_ids)
             bot_interfaces.extend(fillers)
