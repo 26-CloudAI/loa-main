@@ -391,12 +391,16 @@ class RewardCalculator:
 
         reward = 0.0
 
-        # 점수 변화
-        score_delta = curr_my["score"] - prev_my["score"]
-        if score_delta >= 25:
-            reward += 10.0      # 킬 보상
-        elif score_delta > 0:
-            reward += score_delta * 0.3
+        # 킬 보상 (kills 필드가 있으면 직접 사용, 없으면 score_delta 휴리스틱으로 폴백)
+        kill_delta = curr_my.get("kills", -1) - prev_my.get("kills", -1)
+        if kill_delta > 0:
+            reward += 10.0 * kill_delta
+        else:
+            score_delta = curr_my["score"] - prev_my["score"]
+            if score_delta >= 25:
+                reward += 10.0
+            elif score_delta > 0:
+                reward += score_delta * 0.3
 
         # 에너지 변화
         energy_delta = curr_my["energy"] - prev_my["energy"]
@@ -786,6 +790,9 @@ class RLBossBot(BotInterface):
         if self._epsilon_override is None:
             self._epsilon = max(EPSILON_MIN,
                                 self._epsilon * EPSILON_DECAY)
+
+        # 학습 지속성: 게임 종료마다 가중치 저장
+        self.save_weights()
 
     # -----------------------------------------------------------------------
     # 하드코딩 헬퍼 (최소한만)

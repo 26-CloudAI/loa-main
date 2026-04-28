@@ -107,6 +107,9 @@ def build_bot_state(
             "energy": bot.energy,
             "score": bot.score,
             "shield_active": bot.shield_active,
+            "kills": bot.kills,
+            "survival_ticks": bot.survival_ticks,
+            "minerals_mined": bot.minerals_mined,
         },
         "vision": {
             "grid": vision_grid,

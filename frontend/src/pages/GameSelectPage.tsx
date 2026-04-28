@@ -19,6 +19,14 @@ const MODES: GameMode[] = [
     route: '/games/new/battle-royale',
   },
   {
+    id: 'boss-battle',
+    title: '보스전',
+    description: '강화학습으로 훈련된 보스 봇과 1대1로 맞붙어라. 이길 수 있겠어?',
+    icon: '👾',
+    available: true,
+    route: '/games/new/boss-battle',
+  },
+  {
     id: 'mock-stock',
     title: '모의주식',
     description: '실시간 시세를 예측하는 트레이딩 AI를 만들어 수익률을 겨뤄라.',
@@ -31,7 +39,7 @@ export default function GameSelectPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
       <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3 shrink-0">
         <button
           onClick={() => navigate('/games')}
@@ -68,8 +76,8 @@ function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
         className={[
           'w-full rounded-2xl border p-6 flex flex-col gap-4 text-left transition-all',
           mode.available
-            ? 'border-gray-700 bg-gray-900 hover:border-indigo-500 hover:bg-gray-800 cursor-pointer'
-            : 'border-gray-800 bg-gray-900 cursor-default',
+            ? 'border-gray-600 bg-gray-800 hover:border-indigo-500 hover:bg-gray-700 cursor-pointer'
+            : 'border-gray-700 bg-gray-800 cursor-default',
         ].join(' ')}
       >
         <span className="text-4xl">{mode.icon}</span>

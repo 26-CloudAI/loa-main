@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 /* Custom scrollbar */
 .scrollbar-custom {
   scrollbar-width: thin;
