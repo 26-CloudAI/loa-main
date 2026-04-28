@@ -50,6 +50,14 @@ class GameSession:
             raise ValueError(f"최소 {self._cfg.game.min_bots}개의 봇이 필요합니다.")
 
         self._engine = GameEngine(self._bots, config=self._cfg, seed=self.seed)
+
+        # Gemini 뉴스 사전 생성 (로딩 단계)
+        self.status = GameStatus.LOADING
+        logger.info("게임 로딩 중 (Gemini 뉴스 생성): %s", self.game_id)
+        await asyncio.get_event_loop().run_in_executor(
+            None, self._engine.market.pregenerate_news_batch, 20
+        )
+
         self.status = GameStatus.RUNNING
         self._task = asyncio.create_task(self._run_loop())
         logger.info("게임 시작: %s (%d봇)", self.game_id, len(self._bots))

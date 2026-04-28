@@ -42,6 +42,7 @@ Thumbs.db
 firebase-adminsdk*.json
 gcloud-key*.json
 secrets/
+gemini_key.py
 
 # 로그
 logs/

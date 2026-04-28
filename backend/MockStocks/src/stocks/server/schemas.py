@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 class GameStatus(str, Enum):
     WAITING  = "waiting"
+    LOADING  = "loading"
     RUNNING  = "running"
     FINISHED = "finished"
     ERROR    = "error"

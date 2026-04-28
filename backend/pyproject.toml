@@ -3,7 +3,7 @@ name = "ai-arena"
 version = "1.0.0"
 description = "AI 봇 배틀로얄 실시간 관전 플랫폼"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["google-genai>=1.0"]
 
 [project.optional-dependencies]
 server = ["fastapi>=0.104", "uvicorn[standard]>=0.24", "redis>=5.0", "psycopg2-binary>=2.9"]
