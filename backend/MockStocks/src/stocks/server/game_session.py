@@ -45,18 +45,22 @@ class GameSession:
         for bot in bots:
             self.register_bot(bot)
 
-    async def start(self) -> None:
+    async def start(self, prepared_news: list | None = None) -> None:
         if len(self._bots) < self._cfg.game.min_bots:
             raise ValueError(f"최소 {self._cfg.game.min_bots}개의 봇이 필요합니다.")
 
         self._engine = GameEngine(self._bots, config=self._cfg, seed=self.seed)
 
-        # Gemini 뉴스 사전 생성 (로딩 단계)
-        self.status = GameStatus.LOADING
-        logger.info("게임 로딩 중 (Gemini 뉴스 생성): %s", self.game_id)
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._engine.market.pregenerate_news_batch, 20
-        )
+        if prepared_news:
+            # 프론트에서 사전 생성된 뉴스 주입 → 즉시 시작
+            self._engine.market._news_queue = list(prepared_news)
+            logger.info("사전 생성 뉴스 %d개 주입: %s", len(prepared_news), self.game_id)
+        else:
+            # 폴백: 게임 시작 직전 생성 (Gemini 키 없으면 템플릿 사용)
+            self.status = GameStatus.LOADING
+            await asyncio.get_event_loop().run_in_executor(
+                None, self._engine.market.pregenerate_news_batch, 20
+            )
 
         self.status = GameStatus.RUNNING
         self._task = asyncio.create_task(self._run_loop())
