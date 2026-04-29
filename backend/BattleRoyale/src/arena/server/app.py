@@ -51,6 +51,7 @@ from fastapi import Depends
 from ..auth.firebase_handler import verify_firebase_token, verify_firebase_token_value
 from ..db import init_db, UserRepository, BotRepository, GameRepository
 from ..auth.auth_service import FirebaseUserService, decode_token, TokenConfig
+from ..ranking.elo import calculate_multiplayer_elo, PlayerResult, EloConfig, get_k_factor, expected_score
 
 from .redis_manager import (
     InMemoryPubSubBroker,
@@ -140,6 +141,7 @@ def _create_boss_bot(existing_ids: set[str]) -> BotInterface:
 class BotCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="봇 이름")
     code: str = Field(..., description="봇 파이썬 코드")
+    is_public: bool = Field(False, description="봇 코드 공개 여부")
 
 class BotUpdateRequest(BaseModel):
     code: str = Field(..., description="업데이트할 봇 파이썬 코드")
@@ -185,6 +187,7 @@ def create_app(
         game_repo = GameRepository(db_conn)
         firebase_user_svc = FirebaseUserService(user_repo)
         state["db_conn"] = db_conn
+        state["user_repo"] = user_repo
         state["bot_repo"] = bot_repo
         state["game_repo"] = game_repo
         state["firebase_user_svc"] = firebase_user_svc
@@ -260,6 +263,9 @@ def create_app(
 
     def _spectator_mgr() -> SpectatorManager:
         return state["spectator_mgr"]
+
+    def _user_repo() -> UserRepository:
+        return state["user_repo"]
 
     def _bot_repo() -> BotRepository:
         return state["bot_repo"]
@@ -364,6 +370,27 @@ def create_app(
                     f"봇 {b.get('bot_id', '?')} 코드가 {max_size}B를 초과합니다.",
                 )
 
+        # 유저 봇을 DB에 저장/업데이트하여 bot_id 확보
+        bot_repo_inst = _bot_repo()
+        bot_name_to_db_id: dict[str, int] = {}
+        for b in bots_data:
+            bot_name = b["bot_id"]
+            is_public = bool(b.get("is_public", False))
+            existing = bot_repo_inst.get_by_user_and_name(db_user.id, bot_name)
+            if existing:
+                bot_repo_inst.update_code(existing.id, b["code"])
+                if is_public != existing.is_public:
+                    bot_repo_inst.set_public(existing.id, is_public)
+                bot_name_to_db_id[bot_name] = existing.id
+            else:
+                new_bot = bot_repo_inst.create(
+                    user_id=db_user.id,
+                    name=bot_name,
+                    code=b["code"],
+                    is_public=is_public,
+                )
+                bot_name_to_db_id[bot_name] = new_bot.id
+
         # 게임 세션 생성
         session = registry.create_game(
             game_repo=repo,
@@ -406,16 +433,94 @@ def create_app(
             seed=seed,
         )
         for bot_name, is_ai_filler in participant_specs:
+            db_bot_id = bot_name_to_db_id.get(bot_name) if not is_ai_filler else None
             repo.add_participant(
                 session.game_id,
                 bot_name,
+                bot_id=db_bot_id,
                 is_ai_filler=is_ai_filler,
             )
 
         session.register_bots(bot_interfaces)
         await session.start()
 
+        # 게임 완료 후 ELO 업데이트 (백그라운드)
+        asyncio.create_task(
+            _update_elo_after_game(session.game_id, db_user.id)
+        )
+
         return session.get_info().to_dict()
+
+    async def _update_elo_after_game(game_id: str, owner_user_id: int) -> None:
+        """게임 완료를 기다렸다가 유저 ELO를 갱신한다."""
+        registry = _registry()
+        for _ in range(300):
+            await asyncio.sleep(1)
+            session = registry.get_game(game_id)
+            if session is None or session.status == GameStatus.FINISHED:
+                break
+
+        game_record = _game_repo().get_game(game_id)
+        if not game_record or game_record.status != GameStatus.FINISHED.value:
+            return
+
+        participants = _game_repo().get_participants(game_id)
+        real_participants = [p for p in participants if not p.is_ai_filler and p.bot_id and p.final_rank]
+        if not real_participants:
+            return
+
+        bot_repo_inst = _bot_repo()
+        user_repo = _user_repo()
+
+        # bot_id → user_id 매핑
+        bot_user_map: dict[int, int] = {}
+        for p in real_participants:
+            bot = bot_repo_inst.get_by_id(p.bot_id)
+            if bot:
+                bot_user_map[p.bot_id] = bot.user_id
+
+        # 유저별 최고 순위 집계
+        user_best_rank: dict[int, int] = {}
+        for p in real_participants:
+            uid = bot_user_map.get(p.bot_id)
+            if uid is None:
+                continue
+            if uid not in user_best_rank or p.final_rank < user_best_rank[uid]:
+                user_best_rank[uid] = p.final_rank
+
+        if not user_best_rank:
+            return
+
+        winner_rank = min(user_best_rank.values())
+
+        if len(user_best_rank) >= 2:
+            # 다수 유저: 표준 멀티플레이어 ELO
+            elo_config = EloConfig()
+            player_results = []
+            for uid, rank in user_best_rank.items():
+                u = user_repo.get_by_id(uid)
+                if u:
+                    player_results.append(PlayerResult(uid, float(u.elo), u.games_played, rank))
+            changes = calculate_multiplayer_elo(player_results, elo_config)
+            for change in changes:
+                won = user_best_rank.get(change.player_id, 999) == winner_rank
+                user_repo.update_elo(change.player_id, int(change.rating_after), won)
+        else:
+            # 1인 vs AI: AI 평균 레이팅(1000) 기준 ELO 계산
+            uid = next(iter(user_best_rank))
+            rank = user_best_rank[uid]
+            u = user_repo.get_by_id(uid)
+            if not u:
+                return
+            won = (rank == 1)
+            k = get_k_factor(u.games_played)
+            exp = expected_score(float(u.elo), 1000.0)
+            actual = 1.0 if won else 0.0
+            delta = k * (actual - exp)
+            new_elo = max(100, int(u.elo + delta))
+            user_repo.update_elo(uid, new_elo, won)
+
+        logger.info("게임 %s ELO 업데이트 완료: %d명", game_id, len(user_best_rank))
 
     @app.get("/api/games")
     async def list_games(user: dict = Depends(verify_firebase_token)):
@@ -550,14 +655,26 @@ def create_app(
         if not ok:
             raise HTTPException(400, err)
         db_user = _firebase_user_svc().get_or_create_user(user)
-        bot = repo.create(user_id=db_user.id, name=body.name, code=body.code)
-        return {"message": "봇이 성공적으로 등록되었습니다.", "bot": {"id": bot.id, "name": bot.name, "version": bot.version}}
+        bot = repo.create(user_id=db_user.id, name=body.name, code=body.code, is_public=body.is_public)
+        return {"message": "봇이 성공적으로 등록되었습니다.", "bot": {"id": bot.id, "name": bot.name, "version": bot.version, "is_public": bot.is_public}}
 
     @app.get("/api/bots")
     async def list_my_bots(user: dict = Depends(verify_firebase_token)):
         db_user = _firebase_user_svc().get_or_create_user(user)
         bots = _bot_repo().get_by_user(db_user.id)
-        return {"bots": [{"id": b.id, "name": b.name, "version": b.version, "win_rate": b.win_rate} for b in bots]}
+        return {"bots": [
+            {
+                "id": b.id,
+                "name": b.name,
+                "version": b.version,
+                "is_public": b.is_public,
+                "wins": b.wins,
+                "losses": b.losses,
+                "games_played": b.games_played,
+                "win_rate": round(b.win_rate, 3),
+            }
+            for b in bots
+        ]}
 
     @app.get("/api/bots/{bot_id}")
     async def get_bot(bot_id: int, user: dict = Depends(verify_firebase_token)):
@@ -595,5 +712,80 @@ def create_app(
             raise HTTPException(403, "접근 권한이 없습니다.")
         repo.soft_delete(bot_id)
         return {"message": "봇이 삭제되었습니다."}
+
+    @app.patch("/api/bots/{bot_id}/visibility")
+    async def set_bot_visibility(
+        bot_id: int,
+        body: dict,
+        user: dict = Depends(verify_firebase_token),
+    ):
+        """봇 공개 여부를 변경한다."""
+        repo = _bot_repo()
+        bot = repo.get_by_id(bot_id)
+        if not bot or not bot.is_active:
+            raise HTTPException(404, "봇을 찾을 수 없습니다.")
+        db_user = _firebase_user_svc().get_or_create_user(user)
+        if bot.user_id != db_user.id:
+            raise HTTPException(403, "접근 권한이 없습니다.")
+        is_public = bool(body.get("is_public", False))
+        repo.set_public(bot_id, is_public)
+        return {"message": "변경되었습니다.", "is_public": is_public}
+
+    # ── 랭킹 API ──
+
+    @app.get("/api/rankings")
+    async def get_rankings():
+        """ELO 순 전체 유저 랭킹을 반환한다. (인증 불필요)"""
+        users = _user_repo().get_rankings(limit=100)
+        return {
+            "rankings": [
+                {
+                    "rank": idx + 1,
+                    "user_id": u.id,
+                    "username": u.username,
+                    "display_name": u.display_name,
+                    "elo": u.elo,
+                    "wins": u.wins,
+                    "losses": u.losses,
+                    "games_played": u.games_played,
+                    "win_rate": round(u.wins / u.games_played, 3) if u.games_played > 0 else 0.0,
+                }
+                for idx, u in enumerate(users)
+            ]
+        }
+
+    @app.get("/api/users/{user_id}/bots")
+    async def get_user_public_bots(user_id: int):
+        """특정 유저의 공개 봇 목록과 코드를 반환한다. (인증 불필요)"""
+        user = _user_repo().get_by_id(user_id)
+        if not user or not user.is_active:
+            raise HTTPException(404, "유저를 찾을 수 없습니다.")
+        bots = _bot_repo().get_public_bots_by_user(user_id)
+        return {
+            "user": {
+                "user_id": user.id,
+                "username": user.username,
+                "display_name": user.display_name,
+                "elo": user.elo,
+                "wins": user.wins,
+                "losses": user.losses,
+                "games_played": user.games_played,
+            },
+            "bots": [
+                {
+                    "id": b.id,
+                    "name": b.name,
+                    "description": b.description,
+                    "code": b.code,
+                    "version": b.version,
+                    "wins": b.wins,
+                    "losses": b.losses,
+                    "games_played": b.games_played,
+                    "win_rate": round(b.win_rate, 3),
+                    "updated_at": b.updated_at,
+                }
+                for b in bots
+            ],
+        }
 
     return app

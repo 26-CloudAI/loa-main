@@ -8,6 +8,8 @@ import BossBattlePage from './pages/BossBattlePage'
 import WatchPage from './pages/WatchPage'
 import MockStocksNewPage from './pages/MockStocksNewPage'
 import MockStocksWatchPage from './pages/MockStocksWatchPage'
+import RankingPage from './pages/RankingPage'
+import UserBotDetailPage from './pages/UserBotDetailPage'
 
 
 function AppRoutes() {
@@ -27,6 +29,8 @@ function AppRoutes() {
       <Route path="/games/:game_id/watch" element={<WatchPage />} />
       <Route path="/games/new/mock-stocks" element={<MockStocksNewPage />} />
       <Route path="/games/:game_id/mock-stocks/watch" element={<MockStocksWatchPage />} />
+      <Route path="/rankings" element={<RankingPage />} />
+      <Route path="/users/:user_id/bots" element={<UserBotDetailPage />} />
       {/* 기본 진입점 */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
