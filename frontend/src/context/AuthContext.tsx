@@ -1,8 +1,10 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { MOCK, MOCK_USER, MOCK_TOKEN } from '../dev/mock'
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { auth } from '../firebaseConfig'
+import { signInWithEmailAndPassword, signOut, onIdTokenChanged } from 'firebase/auth'
 
 interface User {
   id: number
@@ -23,67 +25,55 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem('loa_token')
-  )
+  const [token, setToken] = useState<string | null>(null)
 
-  // 새로고침 시 저장된 토큰으로 user 복원
   useEffect(() => {
-    if (!token || user) return
     if (MOCK) {
       setUser(MOCK_USER)
+      setToken(MOCK_TOKEN)
       return
     }
-    fetch(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+
+    // Firebase 인증 상태 및 토큰 갱신 감지 (로그인/로그아웃/1시간마다 자동 갱신)
+    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const idToken = await firebaseUser.getIdToken()
+        setToken(idToken)
+        setUser({
+          id: 0,
+          username: firebaseUser.email ?? '',
+          display_name: firebaseUser.displayName ?? firebaseUser.email ?? '',
+          email: firebaseUser.email ?? '',
+          role: 'user',
+        })
+      } else {
+        setToken(null)
+        setUser(null)
+      }
     })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.user) setUser(data.user)
-        else {
-          // 토큰이 만료됐으면 초기화
-          localStorage.removeItem('loa_token')
-          setToken(null)
-        }
-      })
-      .catch(() => {})
-  }, [token])
+
+    return () => unsubscribe()
+  }, [])
 
   async function login(email: string, password: string) {
-    // ── mock mode ──────────────────────────────────────────────
     if (MOCK) {
       await new Promise((r) => setTimeout(r, 400))
-      localStorage.setItem('loa_token', MOCK_TOKEN)
       setToken(MOCK_TOKEN)
       setUser(MOCK_USER)
       return
     }
-    // ──────────────────────────────────────────────────────────
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.detail ?? '로그인에 실패했습니다.')
-    }
-    const data = await res.json()
-    localStorage.setItem('loa_token', data.access_token)
-    setToken(data.access_token)
-    setUser(data.user)
+    await signInWithEmailAndPassword(auth, email, password)
+    // onIdTokenChanged가 자동으로 token/user 상태를 업데이트함
   }
 
   async function logout() {
-    if (token) {
-      await fetch(`${API_BASE}/auth/logout`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {})
+    if (MOCK) {
+      setToken(null)
+      setUser(null)
+      return
     }
-    localStorage.removeItem('loa_token')
-    setToken(null)
-    setUser(null)
+    await signOut(auth)
+    // onIdTokenChanged가 자동으로 null 상태로 업데이트함
   }
 
   return (
