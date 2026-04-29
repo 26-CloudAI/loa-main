@@ -453,19 +453,24 @@ def create_app(
 
     async def _update_elo_after_game(game_id: str, owner_user_id: int) -> None:
         """게임 완료를 기다렸다가 유저 ELO를 갱신한다."""
-        registry = _registry()
+        # DB에 finished 상태가 기록될 때까지 폴링 (session status 대신 DB 기준)
         for _ in range(300):
             await asyncio.sleep(1)
-            session = registry.get_game(game_id)
-            if session is None or session.status == GameStatus.FINISHED:
+            game_record = _game_repo().get_game(game_id)
+            if game_record and game_record.status == GameStatus.FINISHED.value:
                 break
-
-        game_record = _game_repo().get_game(game_id)
-        if not game_record or game_record.status != GameStatus.FINISHED.value:
+        else:
             return
 
-        participants = _game_repo().get_participants(game_id)
-        real_participants = [p for p in participants if not p.is_ai_filler and p.bot_id and p.final_rank]
+        # participant final_rank가 모두 기록될 때까지 대기 (최대 5초)
+        real_participants = []
+        for _ in range(10):
+            participants = _game_repo().get_participants(game_id)
+            real_participants = [p for p in participants if not p.is_ai_filler and p.bot_id and p.final_rank]
+            if real_participants:
+                break
+            await asyncio.sleep(0.5)
+
         if not real_participants:
             return
 
@@ -492,6 +497,12 @@ def create_app(
             return
 
         winner_rank = min(user_best_rank.values())
+
+        # 봇 테이블 전적 업데이트 (전체 1위 = 승리)
+        for p in real_participants:
+            if bot_user_map.get(p.bot_id) is None:
+                continue
+            bot_repo_inst.record_game_result(p.bot_id, p.final_rank == 1)
 
         if len(user_best_rank) >= 2:
             # 다수 유저: 표준 멀티플레이어 ELO

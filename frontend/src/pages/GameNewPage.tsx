@@ -217,7 +217,7 @@ export default function GameNewPage() {
 
   const [botId, setBotId] = useState('')
   const [code, setCode] = useState(DEFAULT_CODE)
-  const [isPublic, setIsPublic] = useState(false)
+  const [isPublic, setIsPublic] = useState(true)
   const [fillWithAi, setFillWithAi] = useState(true)
   const [minBots, setMinBots] = useState(4)
   const [tickInterval, setTickInterval] = useState(0.05)
