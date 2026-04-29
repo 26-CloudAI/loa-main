@@ -43,9 +43,13 @@ export default function GamesPage() {
       return
     }
     // ──────────────────────────────────────────────────────────
+    if (!token) {
+      setLoading(false)
+      return
+    }
     try {
       const res = await fetch(`${API_BASE}/api/games`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       const data = await res.json()

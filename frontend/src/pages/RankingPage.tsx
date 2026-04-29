@@ -28,7 +28,7 @@ function getTierLabel(elo: number): { label: string; color: string } {
 }
 
 export default function RankingPage() {
-  const { user, token, logout } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [rankings, setRankings] = useState<RankingEntry[]>([])
   const [loading, setLoading] = useState(true)
