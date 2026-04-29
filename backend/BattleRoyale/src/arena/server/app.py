@@ -234,7 +234,6 @@ def create_app(
     if _settings.ENV != "production":
         app.include_router(mock_auth_router)
 
-        from ..auth.auth_service import decode_token, TokenConfig
         from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
         _dev_bearer = HTTPBearer(auto_error=False)
