@@ -27,6 +27,10 @@ class User:
     is_active: bool
     banned_reason: Optional[str]
     banned_at: Optional[str]
+    elo: int = 1200
+    wins: int = 0
+    losses: int = 0
+    games_played: int = 0
 
 
 class UserRepository:
@@ -117,6 +121,31 @@ class UserRepository:
         )
         return cursor.fetchone() is not None
 
+    def update_elo(self, user_id: int, new_elo: int, won: bool) -> None:
+        """ELO 점수와 전적을 갱신한다."""
+        if won:
+            self._execute(
+                f"UPDATE users SET elo = ?, wins = wins + 1, games_played = games_played + 1, updated_at = {self._now()} WHERE id = ?",
+                (new_elo, user_id),
+            )
+        else:
+            self._execute(
+                f"UPDATE users SET elo = ?, losses = losses + 1, games_played = games_played + 1, updated_at = {self._now()} WHERE id = ?",
+                (new_elo, user_id),
+            )
+        self.conn.commit()
+
+    def get_rankings(self, limit: int = 50) -> list[User]:
+        """ELO 순으로 정렬된 유저 목록을 반환한다."""
+        cursor = self._execute(
+            "SELECT * FROM users WHERE is_active = ? ORDER BY elo DESC, wins DESC LIMIT ?",
+            (self._bool_true(), limit),
+        )
+        return [self._row_to_user(row) for row in cursor.fetchall()]
+
+    def _bool_true(self):
+        return True if self._is_pg else 1
+
     def _row_to_user(self, row: sqlite3.Row) -> User:
         return User(
             id=row["id"],
@@ -134,4 +163,8 @@ class UserRepository:
             is_active=bool(row["is_active"]),
             banned_reason=row["banned_reason"],
             banned_at=row["banned_at"],
+            elo=row["elo"] if "elo" in row.keys() else 1200,
+            wins=row["wins"] if "wins" in row.keys() else 0,
+            losses=row["losses"] if "losses" in row.keys() else 0,
+            games_played=row["games_played"] if "games_played" in row.keys() else 0,
         )
