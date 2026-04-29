@@ -30,7 +30,7 @@ interface UserInfo {
 export default function UserBotDetailPage() {
   const { user_id } = useParams<{ user_id: string }>()
   const navigate = useNavigate()
-  const { user, token, logout } = useAuth()
+  const { user, logout } = useAuth()
 
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
   const [bots, setBots] = useState<BotInfo[]>([])
