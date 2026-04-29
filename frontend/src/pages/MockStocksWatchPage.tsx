@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8090'
@@ -46,7 +46,7 @@ interface TickData {
 
 // ── SVG 차트 ─────────────────────────────────────────────────────────────────
 
-function StockChart({ history, symbol, color }: { history: number[]; symbol: string; color: string }) {
+function StockChart({ history, color }: { history: number[]; symbol: string; color: string }) {
   if (history.length < 2) {
     return (
       <div className="flex items-center justify-center h-full text-gray-600 text-sm">
