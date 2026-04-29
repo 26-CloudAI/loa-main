@@ -226,8 +226,6 @@ CREATE TABLE IF NOT EXISTS games (
     FOREIGN KEY (winner_bot_id) REFERENCES bots(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_games_owner_user_id ON games(owner_user_id);
-
 -- 게임 참가자 (봇-게임 매핑 + 결과)
 CREATE TABLE IF NOT EXISTS game_participants (
     id                  BIGSERIAL        PRIMARY KEY,
