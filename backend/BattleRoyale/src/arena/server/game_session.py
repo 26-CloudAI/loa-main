@@ -240,7 +240,6 @@ class GameSession:
         assert self._engine.game_result is not None
 
         result = self._engine.game_result
-        self.status = GameStatus.FINISHED
 
         result_data = GameResultResponse(
             game_id=self.game_id,
@@ -249,7 +248,7 @@ class GameSession:
             rankings=result.rankings,
         )
 
-        # 결과 저장
+        # DB 쓰기 먼저 완료 후 상태 변경 (ELO 업데이트 타이밍 버그 방지)
         await self.state_store.save_game_result(self.game_id, result_data.to_dict())
         if self.game_repo:
             self.game_repo.update_game_finished(
@@ -267,6 +266,8 @@ class GameSession:
                     minerals_mined=entry["minerals_mined"],
                     survival_ticks=entry["survival_ticks"],
                 )
+
+        self.status = GameStatus.FINISHED
 
         # 종료 메시지 브로드캐스팅
         end_msg = make_game_end_message(
