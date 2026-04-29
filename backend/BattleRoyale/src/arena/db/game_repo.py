@@ -200,6 +200,17 @@ class GameRepository:
             })
         return results
 
+    def cleanup_stale_games(self) -> int:
+        """서버 재시작 시 미완료 게임을 error 상태로 변경. 변경된 수를 반환."""
+        cursor = self._execute(
+            """
+            UPDATE games SET status = 'error', end_reason = 'server_restart'
+            WHERE status IN ('waiting', 'running')
+            """,
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
     def get_recent_games(self, limit: int = 20) -> list[GameRecord]:
         cursor = self._execute(
             "SELECT * FROM games ORDER BY created_at DESC LIMIT ?",

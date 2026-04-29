@@ -189,6 +189,10 @@ def create_app(
         state["game_repo"] = game_repo
         state["firebase_user_svc"] = firebase_user_svc
 
+        stale = game_repo.cleanup_stale_games()
+        if stale:
+            logger.info("서버 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
+
         logger.info(
             "서버 시작 (Redis: %s)", "활성" if use_redis else "인메모리"
         )
