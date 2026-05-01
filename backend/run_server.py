@@ -96,7 +96,7 @@ def main():
     from fastapi import FastAPI
     from src.arena.server.app import create_app as create_br_app
     from src.arena.server.config import ServerConfig, RedisConfig, APIConfig
-    from stocks.server.app import create_app as create_ms_app
+    from src.stocks.server.app import create_app as create_ms_app
 
     redis_host = args.redis_host or os.environ.get("REDIS_HOST", "localhost")
     redis_cfg = RedisConfig(host=redis_host, port=args.redis_port)
