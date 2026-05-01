@@ -42,7 +42,7 @@ export default function GameSelectPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      <header className="h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3 shrink-0">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3 shrink-0">
         <button
           onClick={() => navigate('/games')}
           className="text-gray-400 hover:text-white text-sm transition-colors"

@@ -209,7 +209,7 @@ export default function MockStocksNewPage() {
     <div className="min-h-screen bg-gray-900 text-white">
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
-      <header className="h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3">
         <button onClick={() => navigate('/games/new')} className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 모드 선택
         </button>
