@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_INFO, startMockSimulation } from '../dev/mock'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
-const WS_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8080').replace(/^http/, 'ws')
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+const WS_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale').replace(/^http/, 'ws')
 
 const CELL = 6          // px per grid cell
 const MAP_PX = CELL * 100  // 600px canvas

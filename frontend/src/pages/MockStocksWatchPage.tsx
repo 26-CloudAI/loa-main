@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8090'
+const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 const STOCKS_WS  = STOCKS_API.replace(/^http/, 'ws')
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8090'
+const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 const MAX_CODE_BYTES = 50 * 1024
 
 const DEFAULT_CODE = `def action(state: dict) -> dict:

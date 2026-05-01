@@ -14,13 +14,14 @@ from .types import StockData, NewsEvent
 
 logger = logging.getLogger(__name__)
 
-# Gemini API 키 로드 (없으면 None)
+# Gemini API 키 로드: 파일 우선, 없으면 환경변수(Docker/GCP)
 try:
     from gemini_key import GEMINI_API_KEY as _GEMINI_KEY
     if _GEMINI_KEY == "여기에_Gemini_API_키_입력":
         _GEMINI_KEY = None
 except ImportError:
-    _GEMINI_KEY = None
+    import os as _os
+    _GEMINI_KEY = _os.getenv("GEMINI_API_KEY") or None
 
 # 폴백용 템플릿 (Gemini 미사용 시)
 _NEWS_TEMPLATES = [
