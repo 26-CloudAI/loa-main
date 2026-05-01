@@ -16,6 +16,7 @@ import argparse
 import logging
 import os
 import sys
+import types
 from contextlib import asynccontextmanager
 from pathlib import Path
 
