@@ -15,7 +15,9 @@
 firebase-adminsdk*.json
 .firebase/
 gcloud-key*.json
-secrets/
+secrets/*
+!secrets/*.example.json
+!secrets/*.example.py
 
 # 환경변수
 .env
