@@ -6,7 +6,7 @@ type Tab = 'login' | 'signup'
 
 export default function LandingPage() {
   const [tab, setTab] = useState<Tab>('login')
-  const { login } = useAuth()
+  const { login, signup } = useAuth()
   const navigate = useNavigate()
 
   return (
@@ -51,7 +51,7 @@ export default function LandingPage() {
           {tab === 'login' ? (
             <LoginForm onSuccess={() => navigate('/games')} login={login} />
           ) : (
-            <SignupForm />
+            <SignupForm signup={signup} onSuccess={() => navigate('/games')} />
           )}
         </div>
       </div>
@@ -127,15 +127,32 @@ function LoginForm({
   )
 }
 
-/* ── 회원가입 폼 (백엔드 미구현 — UI 플레이스홀더) ── */
-function SignupForm() {
+/* ── 회원가입 폼 ── */
+function SignupForm({
+  signup,
+  onSuccess,
+}: {
+  signup: (email: string, username: string, password: string) => Promise<void>
+  onSuccess: () => void
+}) {
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    alert('회원가입 기능은 준비 중입니다.')
+    setError('')
+    setLoading(true)
+    try {
+      await signup(email, username, password)
+      onSuccess()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '회원가입에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -159,6 +176,10 @@ function SignupForm() {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           required
+          minLength={3}
+          maxLength={30}
+          pattern="[a-zA-Z0-9_]+"
+          title="3~30자, 영문/숫자/밑줄만 사용 가능"
           placeholder="my_bot_master"
           className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600"
         />
@@ -171,21 +192,22 @@ function SignupForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          minLength={6}
           placeholder="••••••••"
           className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600"
         />
       </div>
 
-      <p className="text-yellow-500 text-xs text-center bg-yellow-500/10 rounded-lg py-2 px-3">
-        회원가입은 현재 준비 중입니다.
-      </p>
+      {error && (
+        <p className="text-red-400 text-xs text-center">{error}</p>
+      )}
 
       <button
         type="submit"
-        disabled
-        className="mt-1 bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-2"
+        disabled={loading}
+        className="mt-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-2 transition-colors"
       >
-        회원가입
+        {loading ? '가입 중...' : '회원가입'}
       </button>
     </form>
   )

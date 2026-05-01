@@ -146,6 +146,16 @@ class BotCreateRequest(BaseModel):
 class BotUpdateRequest(BaseModel):
     code: str = Field(..., description="업데이트할 봇 파이썬 코드")
 
+class UserRegisterRequest(BaseModel):
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_]+$",
+        description="사용자 이름 (3-30자, 영문/숫자/밑줄)",
+    )
+    display_name: Optional[str] = Field(None, max_length=50)
+
 # ──────────────────────────────────────────────
 #  FastAPI 앱 생성
 # ──────────────────────────────────────────────
@@ -766,6 +776,41 @@ def create_app(
                 }
                 for idx, u in enumerate(users)
             ]
+        }
+
+    @app.post("/api/users/register", status_code=201)
+    async def register_user(
+        body: UserRegisterRequest,
+        user: dict = Depends(verify_firebase_token),
+    ):
+        """Firebase 인증 후 DB에 유저를 등록한다. (최초 1회)"""
+        firebase_uid = user.get("uid") or user.get("user_id", "")
+        repo = _user_repo()
+
+        if repo.get_by_firebase_uid(firebase_uid):
+            raise HTTPException(409, "이미 등록된 계정입니다.")
+        if repo.username_exists(body.username):
+            raise HTTPException(409, "이미 사용 중인 사용자 이름입니다.")
+
+        auth_provider = user.get("firebase", {}).get("sign_in_provider", "password")
+        display_name = body.display_name or body.username
+
+        new_user = repo.create(
+            firebase_uid=firebase_uid,
+            username=body.username,
+            display_name=display_name,
+            email=user.get("email", ""),
+            auth_provider=auth_provider,
+            photo_url=user.get("picture"),
+        )
+
+        return {
+            "id": new_user.id,
+            "username": new_user.username,
+            "display_name": new_user.display_name,
+            "email": new_user.email,
+            "role": new_user.role,
+            "elo": new_user.elo,
         }
 
     @app.get("/api/users/{user_id}/bots")
