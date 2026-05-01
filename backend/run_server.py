@@ -16,7 +16,6 @@ import argparse
 import logging
 import os
 import sys
-import types
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -96,7 +95,7 @@ def main():
     from fastapi import FastAPI
     from src.arena.server.app import create_app as create_br_app
     from src.arena.server.config import ServerConfig, RedisConfig, APIConfig
-    from src.stocks.server.app import create_app as create_ms_app
+    from stocks.server.app import create_app as create_ms_app
 
     redis_host = args.redis_host or os.environ.get("REDIS_HOST", "localhost")
     redis_cfg = RedisConfig(host=redis_host, port=args.redis_port)
@@ -106,6 +105,8 @@ def main():
     br_app = create_br_app(server_config=server_cfg, use_redis=use_redis)
     ms_app = create_ms_app()
 
+    # 서브앱을 mount()하면 각 앱의 lifespan이 자동 실행되지 않으므로
+    # 부모 앱 lifespan에서 명시적으로 호출
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         async with br_app.router.lifespan_context(br_app):
