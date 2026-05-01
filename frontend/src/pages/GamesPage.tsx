@@ -43,9 +43,13 @@ export default function GamesPage() {
       return
     }
     // ──────────────────────────────────────────────────────────
+    if (!token) {
+      setLoading(false)
+      return
+    }
     try {
       const res = await fetch(`${API_BASE}/api/games`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       const data = await res.json()
@@ -74,7 +78,13 @@ export default function GamesPage() {
       {/* 헤더 */}
       <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
         <span className="font-bold text-lg">League of Agents</span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/rankings')}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            리더보드
+          </button>
           {user && (
             <span className="text-sm text-gray-400">
               {user.display_name ?? user.username}

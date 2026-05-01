@@ -1,9 +1,10 @@
+import React from 'react'
 import { useNavigate } from 'react-router-dom'
 
 interface GameMode {
   id: string
   title: string
-  description: string
+  description: React.ReactNode
   icon: string
   available: boolean
   route?: string
@@ -21,7 +22,7 @@ const MODES: GameMode[] = [
   {
     id: 'boss-battle',
     title: '보스전',
-    description: '강화학습으로 훈련된 보스 봇과 1대1로 맞붙어라. 이길 수 있겠어?',
+    description: <>강화학습으로 훈련된 보스 봇과 1대1로 맞붙어라. <span className="whitespace-nowrap">이길 수 있겠어?</span></>,
     icon: '👾',
     available: true,
     route: '/games/new/boss-battle',
@@ -31,7 +32,8 @@ const MODES: GameMode[] = [
     title: '모의주식',
     description: '실시간 시세를 예측하는 트레이딩 AI를 만들어 수익률을 겨뤄라.',
     icon: '📈',
-    available: false,
+    available: true,
+    route: '/games/new/mock-stocks',
   },
 ]
 
@@ -80,7 +82,7 @@ function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
             : 'border-gray-700 bg-gray-800 cursor-default',
         ].join(' ')}
       >
-        <span className="text-4xl">{mode.icon}</span>
+        <span className="text-4xl leading-none -ml-1">{mode.icon}</span>
         <div className="flex flex-col gap-1">
           <span className="font-bold text-lg">{mode.title}</span>
           <span className="text-gray-400 text-sm leading-relaxed">{mode.description}</span>

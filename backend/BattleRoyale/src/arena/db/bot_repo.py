@@ -19,6 +19,7 @@ class BotRecord:
     description: str
     version: int
     is_active: bool
+    is_public: bool
     created_at: str
     updated_at: str
     wins: int
@@ -57,18 +58,19 @@ class BotRepository:
         name: str,
         code: str,
         description: str = "",
+        is_public: bool = False,
     ) -> BotRecord:
         """봇을 생성하고 반환."""
         if self._is_pg:
             cur = self._execute(
-                "INSERT INTO bots (user_id, name, code, description) VALUES (?, ?, ?, ?) RETURNING id",
-                (user_id, name, code, description),
+                "INSERT INTO bots (user_id, name, code, description, is_public) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                (user_id, name, code, description, self._bool(is_public)),
             )
             bot_id = cur.fetchone()["id"]
         else:
             cur = self._execute(
-                "INSERT INTO bots (user_id, name, code, description) VALUES (?, ?, ?, ?)",
-                (user_id, name, code, description),
+                "INSERT INTO bots (user_id, name, code, description, is_public) VALUES (?, ?, ?, ?, ?)",
+                (user_id, name, code, description, self._bool(is_public)),
             )
             bot_id = cur.lastrowid
         self.conn.commit()
@@ -140,6 +142,22 @@ class BotRepository:
             )
         self.conn.commit()
 
+    def set_public(self, bot_id: int, is_public: bool) -> None:
+        """봇 공개 여부를 변경한다."""
+        self._execute(
+            f"UPDATE bots SET is_public = ?, updated_at = {self._now()} WHERE id = ?",
+            (self._bool(is_public), bot_id),
+        )
+        self.conn.commit()
+
+    def get_public_bots_by_user(self, user_id: int) -> list[BotRecord]:
+        """특정 유저의 공개된 활성 봇 목록을 반환한다."""
+        cursor = self._execute(
+            "SELECT * FROM bots WHERE user_id = ? AND is_active = ? AND is_public = ? ORDER BY updated_at DESC",
+            (user_id, self._bool(True), self._bool(True)),
+        )
+        return [self._row_to_bot(row) for row in cursor.fetchall()]
+
     def get_leaderboard(self, limit: int = 20) -> list[BotRecord]:
         """승률 기준 상위 봇 목록."""
         cursor = self._execute(
@@ -181,6 +199,7 @@ class BotRepository:
         return True, ""
 
     def _row_to_bot(self, row: sqlite3.Row) -> BotRecord:
+        keys = row.keys() if hasattr(row, "keys") else []
         return BotRecord(
             id=row["id"],
             user_id=row["user_id"],
@@ -189,6 +208,7 @@ class BotRepository:
             description=row["description"],
             version=row["version"],
             is_active=bool(row["is_active"]),
+            is_public=bool(row["is_public"]) if "is_public" in keys else False,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             wins=row["wins"],

@@ -19,7 +19,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # ── SQLite DDL ─────────────────────────────────
 SCHEMA_SQL_SQLITE = """
@@ -39,7 +39,11 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at   TEXT,
     is_active       INTEGER NOT NULL DEFAULT 1,
     banned_reason   TEXT,
-    banned_at       TEXT
+    banned_at       TEXT,
+    elo             INTEGER NOT NULL DEFAULT 1200,
+    wins            INTEGER NOT NULL DEFAULT 0,
+    losses          INTEGER NOT NULL DEFAULT 0,
+    games_played    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -54,6 +58,7 @@ CREATE TABLE IF NOT EXISTS bots (
     description     TEXT    NOT NULL DEFAULT '',
     version         INTEGER NOT NULL DEFAULT 1,
     is_active       INTEGER NOT NULL DEFAULT 1,
+    is_public       INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     wins            INTEGER NOT NULL DEFAULT 0,
@@ -182,7 +187,11 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at   TIMESTAMPTZ,
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
     banned_reason   TEXT,
-    banned_at       TIMESTAMPTZ
+    banned_at       TIMESTAMPTZ,
+    elo             INTEGER      NOT NULL DEFAULT 1200,
+    wins            INTEGER      NOT NULL DEFAULT 0,
+    losses          INTEGER      NOT NULL DEFAULT 0,
+    games_played    INTEGER      NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -197,6 +206,7 @@ CREATE TABLE IF NOT EXISTS bots (
     description     TEXT        NOT NULL DEFAULT '',
     version         INTEGER     NOT NULL DEFAULT 1,
     is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
+    is_public       BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     wins            INTEGER     NOT NULL DEFAULT 0,
@@ -425,16 +435,34 @@ def _init_postgresql():
 
 def _migrate_sqlite(conn: sqlite3.Connection) -> None:
     """SQLite 기존 DB에 필요한 컬럼/인덱스를 보강한다."""
-    columns = {
+    game_cols = {
         row[1] for row in conn.execute("PRAGMA table_info(games)").fetchall()
     }
-    if "owner_user_id" not in columns:
+    if "owner_user_id" not in game_cols:
         conn.execute(
             "ALTER TABLE games ADD COLUMN owner_user_id INTEGER REFERENCES users(id)"
         )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_games_owner_user_id ON games(owner_user_id)"
     )
+
+    user_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+    }
+    for col, definition in [
+        ("elo", "INTEGER NOT NULL DEFAULT 1200"),
+        ("wins", "INTEGER NOT NULL DEFAULT 0"),
+        ("losses", "INTEGER NOT NULL DEFAULT 0"),
+        ("games_played", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        if col not in user_cols:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+
+    bot_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(bots)").fetchall()
+    }
+    if "is_public" not in bot_cols:
+        conn.execute("ALTER TABLE bots ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0")
 
 
 def _migrate_postgresql(cur) -> None:
@@ -453,6 +481,25 @@ def _migrate_postgresql(cur) -> None:
     cur.execute(
         "CREATE INDEX IF NOT EXISTS idx_games_owner_user_id ON games(owner_user_id)"
     )
+
+    for col, definition in [
+        ("elo", "INTEGER NOT NULL DEFAULT 1200"),
+        ("wins", "INTEGER NOT NULL DEFAULT 0"),
+        ("losses", "INTEGER NOT NULL DEFAULT 0"),
+        ("games_played", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name=%s",
+            (col,),
+        )
+        if cur.fetchone() is None:
+            cur.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+
+    cur.execute(
+        "SELECT 1 FROM information_schema.columns WHERE table_name='bots' AND column_name='is_public'"
+    )
+    if cur.fetchone() is None:
+        cur.execute("ALTER TABLE bots ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT FALSE")
 
 
 def get_schema_version(conn) -> int:
