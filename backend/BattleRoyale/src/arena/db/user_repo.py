@@ -136,9 +136,9 @@ class UserRepository:
         self.conn.commit()
 
     def get_rankings(self, limit: int = 50) -> list[User]:
-        """ELO 순으로 정렬된 유저 목록을 반환한다."""
+        """ELO 순으로 정렬된 유저 목록을 반환한다. 게임 기록이 없는 유저는 제외."""
         cursor = self._execute(
-            "SELECT * FROM users WHERE is_active = ? ORDER BY elo DESC, wins DESC LIMIT ?",
+            "SELECT * FROM users WHERE is_active = ? AND games_played > 0 ORDER BY elo DESC, wins DESC LIMIT ?",
             (self._bool_true(), limit),
         )
         return [self._row_to_user(row) for row in cursor.fetchall()]
