@@ -445,7 +445,7 @@ export default function WatchPage() {
   return (
     <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3 shrink-0">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3 shrink-0">
         <button
           onClick={() => navigate('/games')}
           className="text-gray-400 hover:text-white text-sm transition-colors"
@@ -458,7 +458,7 @@ export default function WatchPage() {
       </header>
 
       {/* Main area */}
-      <main className="flex flex-1 overflow-hidden p-4 gap-4">
+      <main className="flex flex-1 overflow-hidden p-4 gap-4 justify-center">
         {/* Canvas column */}
         <div className="shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-custom" style={{ width: MAP_PX }}>
           {/* Canvas */}

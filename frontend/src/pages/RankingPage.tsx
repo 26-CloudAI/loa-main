@@ -52,7 +52,7 @@ export default function RankingPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center justify-between">
         <span
           className="font-bold text-lg cursor-pointer hover:text-indigo-300 transition-colors"
           onClick={() => navigate('/games')}
