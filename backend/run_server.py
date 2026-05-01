@@ -16,17 +16,48 @@ import argparse
 import logging
 import os
 import sys
+import types
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 _base = Path(__file__).parent
 
-# Docker:  /app/src/arena, /app/src/stocks 가 모두 /app/src/ 아래에 평탄화돼 있음
-# 로컬:    BattleRoyale/src/arena, MockStocks/src/stocks 가 각 서브폴더에 분리돼 있음
-sys.path.insert(0, str(_base))                        # Docker: src.arena, src.stocks
-sys.path.insert(0, str(_base / "BattleRoyale"))       # 로컬: src.arena
-sys.path.insert(0, str(_base / "MockStocks" / "src")) # 로컬: stocks.*
-sys.path.insert(0, str(_base / "src"))                # Docker: stocks.* (/app/src/stocks)
+if (_base / "BattleRoyale").exists():
+    # ── 로컬 개발 ────────────────────────────────────────────────────────────
+    # Docker에서는 /app/BattleRoyale/ 가 존재하지 않으므로 이 블록은 실행 안 됨.
+    #
+    # 로컬 구조:
+    #   BattleRoyale/src/arena/   →  src.arena.*
+    #   MockStocks/src/stocks/    →  src.stocks.*
+    #   BattleRoyale/bots/        →  bots.camper / bots.herbivore / bots.mad_dog
+    #   MockStocks/bots/          →  bots.long_term / bots.short_trader
+    #
+    # Docker 구조:
+    #   /app/src/arena/ + /app/src/stocks/  (Dockerfile에서 병합)
+    #   /app/bots/                          (Dockerfile에서 병합)
+    #
+    # 가상 `src` 패키지: __path__를 두 디렉토리로 설정해 서브패키지를 양쪽에서 검색
+    _src_pkg = types.ModuleType("src")
+    _src_pkg.__path__ = [
+        str(_base / "BattleRoyale" / "src"),
+        str(_base / "MockStocks" / "src"),
+    ]
+    _src_pkg.__package__ = "src"
+    sys.modules["src"] = _src_pkg
+
+    # 가상 `bots` 패키지: 양쪽 봇 디렉토리를 모두 검색
+    _bots_pkg = types.ModuleType("bots")
+    _bots_pkg.__path__ = [
+        str(_base / "BattleRoyale" / "bots"),
+        str(_base / "MockStocks" / "bots"),
+    ]
+    _bots_pkg.__package__ = "bots"
+    sys.modules["bots"] = _bots_pkg
+
+else:
+    # ── Docker ───────────────────────────────────────────────────────────────
+    # /app/src/ 와 /app/bots/ 에 모든 파일이 이미 통합되어 있음
+    sys.path.insert(0, str(_base))
 
 from src.arena.server import settings
 from src.arena.server.logging_config import configure_logging
@@ -61,7 +92,7 @@ def main():
     from fastapi.middleware.cors import CORSMiddleware
     from src.arena.server.app import create_app as create_br_app
     from src.arena.server.config import ServerConfig, RedisConfig, APIConfig
-    from stocks.server.app import create_app as create_ms_app
+    from src.stocks.server.app import create_app as create_ms_app
 
     redis_host = args.redis_host or os.environ.get("REDIS_HOST", "localhost")
     redis_cfg = RedisConfig(host=redis_host, port=args.redis_port)
@@ -71,8 +102,6 @@ def main():
     br_app = create_br_app(server_config=server_cfg, use_redis=use_redis)
     ms_app = create_ms_app()
 
-    # 서브앱을 mount()하면 각 앱의 lifespan이 자동 실행되지 않으므로
-    # 부모 앱 lifespan에서 명시적으로 호출
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         async with br_app.router.lifespan_context(br_app):
