@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 import firebase_admin
 from fastapi import Depends, HTTPException
@@ -13,10 +14,8 @@ if _creds_json:
     cred = credentials.Certificate(json.loads(_creds_json))
 else:
     # 로컬: 파일 경로 사용
-    _creds_path = os.environ.get(
-        "FIREBASE_CREDENTIALS_PATH",
-        "src/arena/server/secrets/serviceAccountKey.json",
-    )
+    _default_path = Path(__file__).parent.parent / "server" / "secrets" / "serviceAccountKey.json"
+    _creds_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", str(_default_path))
     cred = credentials.Certificate(_creds_path)
 
 firebase_admin.initialize_app(cred)
