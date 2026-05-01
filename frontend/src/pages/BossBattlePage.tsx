@@ -144,7 +144,7 @@ export default function BossBattlePage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3">
+      <header className="h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3">
         <button
           onClick={() => navigate('/games/new')}
           className="text-gray-400 hover:text-white text-sm transition-colors"

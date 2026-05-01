@@ -96,7 +96,7 @@ function LoginForm({
           onChange={(e) => setEmail(e.target.value)}
           required
           placeholder="alice@arena.dev"
-          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600"
+          className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600"
         />
       </div>
 
@@ -108,7 +108,7 @@ function LoginForm({
           onChange={(e) => setPassword(e.target.value)}
           required
           placeholder="••••••••"
-          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600"
+          className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600"
         />
       </div>
 
@@ -148,7 +148,7 @@ function SignupForm() {
           onChange={(e) => setEmail(e.target.value)}
           required
           placeholder="you@arena.dev"
-          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600"
+          className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600"
         />
       </div>
 
@@ -160,7 +160,7 @@ function SignupForm() {
           onChange={(e) => setUsername(e.target.value)}
           required
           placeholder="my_bot_master"
-          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600"
+          className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600"
         />
       </div>
 
@@ -172,7 +172,7 @@ function SignupForm() {
           onChange={(e) => setPassword(e.target.value)}
           required
           placeholder="••••••••"
-          className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600"
+          className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600"
         />
       </div>
 

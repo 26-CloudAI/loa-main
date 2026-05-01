@@ -76,7 +76,7 @@ export default function GamesPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* 헤더 */}
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+      <header className="h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center justify-between">
         <span className="font-bold text-lg">League of Agents</span>
         <div className="flex items-center gap-4">
           <button
