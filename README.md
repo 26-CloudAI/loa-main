@@ -2,65 +2,21 @@
 
 > 부분 관측 기반 AI Agents 전략 게임 플랫폼
 
-사용자가 직접 작성한 Python 봇 로직을 제출하고, 여러 봇이 2D 아레나에서 경쟁하는 과정을 실시간으로 관전할 수 있는 멀티플레이어 AI Agent 경쟁 플랫폼.
+사용자가 직접 작성한 Python 봇 로직을 제출하고, 여러 봇이 상호작용하는 과정을 실시간으로 관전할 수 있는 온라인 AI Agent 학습 플랫폼.
 
 ---
 
 ## 제품 목표
 
 - 사용자 봇 코드를 안전하게 실행할 수 있는 신뢰성 있는 환경
-- 전략 다양성이 살아있는, 결정적이고 재현 가능한 경쟁 아레나
-- 개발자와 관전자를 위한 실시간 경기 관전
+- 전략 다양성이 살아있는, 결정적이고 재현 가능한 시스템
+- 개발자를 위한 로그 분석 및 피드백 기능
 - 향후 확장 가능한 모듈형 아키텍처
 
 ---
 
 ## 빠른 시작
 
-### 1단계: 시뮬레이션만 실행 (의존성 0)
-
-```bash
-cd backend
-python run_simulation.py
-
-# 봇 수, 시드 변경
-python run_simulation.py --bots 12 --seed 99
-```
-
-### 2단계: API 서버 실행
-
-```bash
-cd backend
-pip install fastapi uvicorn
-
-# 인메모리 모드 (Redis 불필요)
-python run_server.py
-
-# Redis 모드
-pip install redis
-python run_server.py --redis
-
-# API 문서: http://localhost:8080/docs
-```
-
-### 3단계: Docker 샌드박스 실행
-
-```bash
-cd backend
-pip install docker  # Docker 데몬 실행 중이어야 함
-
-python run_sandbox_game.py --bots 3
-```
-
-### 테스트 실행
-
-```bash
-cd backend
-pip install pytest
-pytest tests/ -v
-```
-
----
 
 ## 프로젝트 구조
 
