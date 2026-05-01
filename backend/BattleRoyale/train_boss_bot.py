@@ -120,6 +120,9 @@ def train(
         ep_seed = rng.randint(0, 1_000_000)
         n_opponents = n_bots - 1
 
+        # 틱 상태만 초기화 — 버퍼·가중치는 에피소드 간 유지
+        boss_bot.reset_for_episode()
+
         opponent_bots = _create_opponent_bots(n_opponents, ep_seed, rng)
         all_bots = [boss_bot] + opponent_bots
 
@@ -135,24 +138,15 @@ def train(
             print(
                 f"  [ep {ep:4d}] 순위: {rank}/{n_bots} | "
                 f"점수: {score:7.1f} | 생존틱: {survival:3d} | "
+                f"버퍼: {len(boss_bot._buffer):5d} | "
                 f"종료: {result.reason.value}"
             )
 
-        # 에피소드 종료 후 가중치를 꺼내서 다음 boss bot에게 전달
-        learned_weights = boss_bot.get_weights()
-
-        # 다음 에피소드용 boss bot 생성 (학습된 가중치 인계)
-        boss_bot = RLBossBot(
-            bot_id=BOSS_BOT_ID,
-            seed=rng.randint(0, 10_000),
-            weights_path=None,          # 파일에서 로드하지 않음 (직접 전달)
-            epsilon_override=TRAIN_EPSILON,
-        )
-        # 파일 로드를 건너뛰고 직접 가중치 주입
-        boss_bot.set_weights(learned_weights)
+        # 종료 보상 push + 추가 학습(×4) + 가중치 저장(버퍼 제외)
+        boss_bot.on_episode_done(rank, n_bots)
 
         # ------------------------------------------------------------------
-        # 100 에피소드마다 진행 상황 출력 + 중간 체크포인트 저장
+        # 100 에피소드마다 진행 상황 출력
         # ------------------------------------------------------------------
         if ep % 100 == 0 or ep == n_episodes:
             window = min(100, ep)
@@ -166,6 +160,7 @@ def train(
                 f"최근{window}ep 평균 순위: {avg_rank:.2f}/{n_bots} | "
                 f"평균 점수: {avg_score:8.1f} | "
                 f"평균 생존틱: {avg_survival:.1f} | "
+                f"버퍼: {len(boss_bot._buffer):5d} | "
                 f"경과: {elapsed:.1f}s"
             )
 
@@ -176,7 +171,7 @@ def train(
                 print(f"  -> 베스트 가중치 갱신 (평균 순위 {avg_rank:.2f})")
 
     # ------------------------------------------------------------------
-    # 훈련 완료 — 최종 가중치 저장
+    # 훈련 완료 — 베스트 가중치 + 누적 버퍼 최종 저장
     # ------------------------------------------------------------------
     print()
     print("=" * 65)
@@ -185,7 +180,8 @@ def train(
     # 저장할 가중치 결정: 베스트가 있으면 베스트, 없으면 마지막
     save_weights = best_weights if best_weights is not None else boss_bot.get_weights()
     boss_bot.set_weights(save_weights)
-    boss_bot.save_weights(WEIGHTS_PATH)
+    # 최종 저장은 버퍼 포함 — 다음 훈련 시 ep1부터 즉시 학습 가능
+    boss_bot.save_weights(WEIGHTS_PATH, save_buffer=True)
 
     total_avg_rank = sum(rank_history) / len(rank_history)
     total_avg_score = sum(score_history) / len(score_history)

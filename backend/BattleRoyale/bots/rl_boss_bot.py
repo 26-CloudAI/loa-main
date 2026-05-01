@@ -68,7 +68,7 @@ CELL_ENCODING: dict[str, float] = {
     "empty":        0.0,
     "mineral":      0.5,
     "mineral_rare": 1.0,
-    "ME":           0.0,
+    "ME":           0.2,
     "bot_enemy":   -1.0,
     "wall":        -0.5,
     "zone":        -0.8,
@@ -196,17 +196,16 @@ class DQNetwork:
 
         total_loss = float(np.mean(deltas ** 2))
 
-        # --- W2, b2 gradient ---
-        for i in range(B):
-            self.W2[:, actions[i]] += (alpha / B) * deltas[i] * h[i]
-            self.b2[actions[i]]    += (alpha / B) * deltas[i]
+        # dh를 W2 업데이트 전에 계산 (원본 가중치 기준 gradient — 표준 역전파)
+        scale = (alpha / B) * deltas                          # (B,)
+        dh    = deltas[:, None] * self.W2[:, actions].T      # (B, N_HIDDEN)
 
-        # --- W1, b1 gradient (벡터화) ---
-        dh = np.zeros_like(h)                                 # (B, N_HIDDEN)
-        for i in range(B):
-            dh[i] = deltas[i] * self.W2[:, actions[i]]
-        dh_relu = dh * (h > 0.0)                              # (B, N_HIDDEN)
+        # --- W2, b2 scatter-add (중복 action 인덱스 정확히 누산) ---
+        np.add.at(self.W2.T, actions, scale[:, None] * h)
+        np.add.at(self.b2,   actions, scale)
 
+        # --- W1, b1 gradient ---
+        dh_relu = dh * (h > 0.0)                             # (B, N_HIDDEN)
         self.W1 += (alpha / B) * phis.T @ dh_relu
         self.b1 += (alpha / B) * dh_relu.mean(axis=0)
 
@@ -735,12 +734,14 @@ class RLBossBot(BotInterface):
         phis_next  = np.array([e[3] for e in batch], dtype=np.float32)
         dones      = np.array([e[4] for e in batch], dtype=np.float32)
 
-        # TD target: r + γ * max_a Q_target(s', a)  (done이면 r만)
-        q_next = self._target.forward(phis_next[0])   # placeholder
-        td_targets = np.zeros(BATCH_SIZE, dtype=np.float32)
-        for i in range(BATCH_SIZE):
-            q_next = self._target.forward(phis_next[i])
-            td_targets[i] = rewards[i] + (1.0 - dones[i]) * GAMMA * float(np.max(q_next))
+        # Double DQN: 배치 행렬 연산으로 벡터화 (128 forward() 호출 → 행렬 곱 2회)
+        B = len(phis)
+        h_on  = np.maximum(0.0, phis_next @ self._online.W1 + self._online.b1)
+        q_on  = h_on @ self._online.W2 + self._online.b2              # (B, N_ACTIONS)
+        best_actions = np.argmax(q_on, axis=1)                        # (B,)
+        h_tgt = np.maximum(0.0, phis_next @ self._target.W1 + self._target.b1)
+        q_tgt = h_tgt @ self._target.W2 + self._target.b2             # (B, N_ACTIONS)
+        td_targets = rewards + (1.0 - dones) * GAMMA * q_tgt[np.arange(B), best_actions]
 
         self._online.update_batch(phis, actions, td_targets, ALPHA)
         self._step_count += 1
@@ -791,8 +792,8 @@ class RLBossBot(BotInterface):
             self._epsilon = max(EPSILON_MIN,
                                 self._epsilon * EPSILON_DECAY)
 
-        # 학습 지속성: 게임 종료마다 가중치 저장
-        self.save_weights()
+        # 학습 지속성: 게임 종료마다 가중치 저장 (버퍼는 제외 — IO 최적화)
+        self.save_weights(save_buffer=False)
 
     # -----------------------------------------------------------------------
     # 하드코딩 헬퍼 (최소한만)
@@ -816,10 +817,12 @@ class RLBossBot(BotInterface):
     # 체크포인트 저장 / 로드 (학습 지속성)
     # -----------------------------------------------------------------------
 
-    def save_weights(self, path: Optional[str | Path] = None) -> None:
+    def save_weights(self, path: Optional[str | Path] = None,
+                     save_buffer: bool = True) -> None:
         """
-        현재 신경망 가중치 + 학습 통계 + 버퍼를 JSON으로 저장.
-        다음 서버 실행 시 자동으로 이어받는다.
+        현재 신경망 가중치 + 학습 통계를 JSON으로 저장.
+        save_buffer=True (기본): 리플레이 버퍼도 포함 — 다음 실행 시 즉시 학습 가능
+        save_buffer=False      : 가중치만 저장 — 빠른 에피소드 단위 체크포인트용
         """
         save_path = Path(path) if path is not None else _DEFAULT_WEIGHTS_PATH
         save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -834,7 +837,7 @@ class RLBossBot(BotInterface):
             "epsilon":        self._epsilon,
             "online":         self._online.to_dict(),
             "target":         self._target.to_dict(),
-            "buffer":         self._buffer.to_list(),
+            "buffer":         self._buffer.to_list() if save_buffer else [],
         }
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump(data, f)
