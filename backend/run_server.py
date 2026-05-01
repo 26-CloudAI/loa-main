@@ -21,12 +21,47 @@ from pathlib import Path
 
 _base = Path(__file__).parent
 
-# Docker:  /app/src/arena, /app/src/stocks 가 모두 /app/src/ 아래에 평탄화돼 있음
-# 로컬:    BattleRoyale/src/arena, MockStocks/src/stocks 가 각 서브폴더에 분리돼 있음
-sys.path.insert(0, str(_base))                        # Docker: src.arena, src.stocks
-sys.path.insert(0, str(_base / "BattleRoyale"))       # 로컬: src.arena
-sys.path.insert(0, str(_base / "MockStocks" / "src")) # 로컬: stocks.*
-sys.path.insert(0, str(_base / "src"))                # Docker: stocks.* (/app/src/stocks)
+if (_base / "BattleRoyale").exists():
+    # ── 로컬 개발 ────────────────────────────────────────────────────────────
+    # 로컬 구조:
+    #   BattleRoyale/src/arena/   →  src.arena.*
+    #   MockStocks/src/stocks/    →  src.stocks.*
+    #   BattleRoyale/bots/        →  bots.camper / bots.herbivore / bots.mad_dog
+    #   MockStocks/bots/          →  bots.long_term / bots.short_trader
+    #
+    # 가상 `src` 패키지: __path__를 두 디렉토리로 설정해 서브패키지를 양쪽에서 검색
+    _src_pkg = types.ModuleType("src")
+    _src_pkg.__path__ = [
+        str(_base / "BattleRoyale" / "src"),
+        str(_base / "MockStocks" / "src"),
+    ]
+    _src_pkg.__package__ = "src"
+    sys.modules["src"] = _src_pkg
+
+    _bots_pkg = types.ModuleType("bots")
+    _bots_pkg.__path__ = [
+        str(_base / "BattleRoyale" / "bots"),
+        str(_base / "MockStocks" / "bots"),
+    ]
+    _bots_pkg.__package__ = "bots"
+    sys.modules["bots"] = _bots_pkg
+
+else:
+    # ── Docker ───────────────────────────────────────────────────────────────
+    # Docker 구조:
+    #   /app/src/arena/ + /app/src/stocks/  (Dockerfile에서 병합)
+    #   /app/bots/                          (Dockerfile에서 병합)
+    #
+    # 로컬과 동일하게 가상 패키지로 명시적 경로 설정
+    _src_pkg = types.ModuleType("src")
+    _src_pkg.__path__ = [str(_base / "src")]
+    _src_pkg.__package__ = "src"
+    sys.modules["src"] = _src_pkg
+
+    _bots_pkg = types.ModuleType("bots")
+    _bots_pkg.__path__ = [str(_base / "bots")]
+    _bots_pkg.__package__ = "bots"
+    sys.modules["bots"] = _bots_pkg
 
 from src.arena.server import settings
 from src.arena.server.logging_config import configure_logging
@@ -58,7 +93,6 @@ def main():
         sys.exit(1)
 
     from fastapi import FastAPI
-    from fastapi.middleware.cors import CORSMiddleware
     from src.arena.server.app import create_app as create_br_app
     from src.arena.server.config import ServerConfig, RedisConfig, APIConfig
     from stocks.server.app import create_app as create_ms_app
@@ -80,13 +114,7 @@ def main():
                 yield
 
     app = FastAPI(title="League of Agents", lifespan=lifespan)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # CORS는 각 서브앱(br_app, ms_app)이 자체 미들웨어로 처리
 
     app.mount("/battleroyale", br_app)
     app.mount("/stocks", ms_app)
