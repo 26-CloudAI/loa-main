@@ -26,3 +26,5 @@ secrets/
 .DS_Store
 Thumbs.db
 server/secrets/
+
+CLAUDE.md

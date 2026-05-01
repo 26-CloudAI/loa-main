@@ -52,7 +52,7 @@ export default function RankingPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center justify-between">
         <span
           className="font-bold text-lg cursor-pointer hover:text-indigo-300 transition-colors"
           onClick={() => navigate('/games')}
@@ -104,14 +104,14 @@ export default function RankingPage() {
           <div className="overflow-hidden rounded-xl border border-gray-700">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-800 text-gray-400 text-left">
-                  <th className="px-4 py-3 w-12">#</th>
+                <tr className="bg-gray-800 text-gray-400 text-center">
+                  <th className="px-2 py-3">순위</th>
                   <th className="px-4 py-3">유저</th>
                   <th className="px-4 py-3">티어</th>
-                  <th className="px-4 py-3 text-right">ELO</th>
-                  <th className="px-4 py-3 text-right">전적</th>
-                  <th className="px-4 py-3 text-right">승률</th>
-                  <th className="px-4 py-3 text-right">봇 보기</th>
+                  <th className="px-4 py-3">ELO</th>
+                  <th className="px-4 py-3">전적</th>
+                  <th className="px-4 py-3">승률</th>
+                  <th className="px-4 py-3">봇 보기</th>
                 </tr>
               </thead>
               <tbody>
@@ -127,7 +127,7 @@ export default function RankingPage() {
                           : 'hover:bg-gray-800/60'
                       }`}
                     >
-                      <td className="px-4 py-3 font-mono text-gray-400">
+                      <td className="px-4 py-3 font-mono text-gray-400 text-center">
                         {i < 3 ? (
                           <span
                             className={
@@ -144,7 +144,7 @@ export default function RankingPage() {
                           entry.rank
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-center">
                         <div className="font-medium text-white">
                           {entry.display_name}
                           {isMe && (
@@ -155,21 +155,21 @@ export default function RankingPage() {
                         </div>
                         <div className="text-xs text-gray-500">{entry.username}</div>
                       </td>
-                      <td className={`px-4 py-3 font-medium ${tier.color}`}>
+                      <td className={`px-4 py-3 text-center font-medium ${tier.color}`}>
                         {tier.label}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold text-white">
+                      <td className="px-4 py-3 text-center font-mono font-semibold text-white">
                         {entry.elo}
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-300">
+                      <td className="px-4 py-3 text-center text-gray-300">
                         <span className="text-green-400">{entry.wins}승</span>
                         {' / '}
                         <span className="text-red-400">{entry.losses}패</span>
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-300">
+                      <td className="px-4 py-3 text-center text-gray-300">
                         {(entry.win_rate * 100).toFixed(1)}%
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => navigate(`/users/${entry.user_id}/bots`)}
                           className="text-xs text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition-colors"

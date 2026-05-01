@@ -445,8 +445,11 @@ def create_app(
         await session.start()
 
         # 게임 완료 후 ELO 업데이트 (백그라운드)
-        asyncio.create_task(
+        task = asyncio.create_task(
             _update_elo_after_game(session.game_id, db_user.id)
+        )
+        task.add_done_callback(
+            lambda t: logger.error("ELO 업데이트 오류: %s", t.exception()) if t.exception() else None
         )
 
         return session.get_info().to_dict()
