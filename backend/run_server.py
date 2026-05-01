@@ -18,7 +18,14 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+_base = Path(__file__).parent
+
+# Docker:  /app/src/arena, /app/src/stocks 가 모두 /app/src/ 아래에 평탄화돼 있음
+# 로컬:    BattleRoyale/src/arena, MockStocks/src/stocks 가 각 서브폴더에 분리돼 있음
+sys.path.insert(0, str(_base))                        # Docker: src.arena, src.stocks
+sys.path.insert(0, str(_base / "BattleRoyale"))       # 로컬: src.arena
+sys.path.insert(0, str(_base / "MockStocks" / "src")) # 로컬: stocks.*
+sys.path.insert(0, str(_base / "src"))                # Docker: stocks.* (/app/src/stocks)
 
 from src.arena.server import settings
 from src.arena.server.logging_config import configure_logging
@@ -53,7 +60,7 @@ def main():
     from fastapi.middleware.cors import CORSMiddleware
     from src.arena.server.app import create_app as create_br_app
     from src.arena.server.config import ServerConfig, RedisConfig, APIConfig
-    from src.stocks.server.app import create_app as create_ms_app
+    from stocks.server.app import create_app as create_ms_app  # 로컬/Docker 공통
 
     redis_host = args.redis_host or os.environ.get("REDIS_HOST", "localhost")
     redis_cfg = RedisConfig(host=redis_host, port=args.redis_port)
