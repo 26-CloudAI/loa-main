@@ -14,7 +14,7 @@ if _creds_json:
     cred = credentials.Certificate(json.loads(_creds_json))
 else:
     # 로컬: 파일 경로 사용
-    _default_path = Path(__file__).parent.parent / "server" / "secrets" / "serviceAccountKey.json"
+    _default_path = Path(__file__).parents[4] / "secrets" / "serviceAccountKey.json"
     _creds_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", str(_default_path))
     cred = credentials.Certificate(_creds_path)
 

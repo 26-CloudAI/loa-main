@@ -64,6 +64,11 @@ else:
     _bots_pkg.__package__ = "bots"
     sys.modules["bots"] = _bots_pkg
 
+# secrets/ 폴더를 sys.path에 추가해 gemini_key 등 시크릿 모듈을 임포트 가능하게 함
+_secrets_dir = str(_base / "secrets")
+if _secrets_dir not in sys.path:
+    sys.path.insert(0, _secrets_dir)
+
 from src.arena.server import settings
 from src.arena.server.logging_config import configure_logging
 
