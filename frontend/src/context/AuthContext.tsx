@@ -4,7 +4,7 @@ import { MOCK, MOCK_USER, MOCK_TOKEN } from '../dev/mock'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import { auth } from '../firebaseConfig'
-import { signInWithEmailAndPassword, signOut, onIdTokenChanged } from 'firebase/auth'
+import { signInWithEmailAndPassword, signOut, onIdTokenChanged, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 
 interface User {
   id: number
@@ -19,6 +19,7 @@ interface AuthContextValue {
   token: string | null
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  signup: (email: string, username: string, password: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -66,6 +67,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // onIdTokenChanged가 자동으로 token/user 상태를 업데이트함
   }
 
+  async function signup(email: string, username: string, password: string) {
+    const credential = await createUserWithEmailAndPassword(auth, email, password)
+    const firebaseUser = credential.user
+    await updateProfile(firebaseUser, { displayName: username })
+
+    const idToken = await firebaseUser.getIdToken()
+    const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
+    const res = await fetch(`${apiBase}/api/users/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ username }),
+    })
+
+    if (!res.ok) {
+      await firebaseUser.delete()
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail ?? '회원가입에 실패했습니다.')
+    }
+    // onIdTokenChanged가 자동으로 token/user 상태를 업데이트함
+  }
+
   async function logout() {
     if (MOCK) {
       setToken(null)
@@ -77,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, token, login, logout, signup }}>
       {children}
     </AuthContext.Provider>
   )

@@ -13,6 +13,7 @@
 *-key.json
 *_key.json
 firebase-adminsdk*.json
+.firebase/
 gcloud-key*.json
 secrets/
 
