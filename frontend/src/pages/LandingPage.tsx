@@ -1,6 +1,8 @@
-import React, { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
 
 type Tab = 'login' | 'signup'
 
@@ -72,7 +74,7 @@ function LoginForm({
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -128,6 +130,8 @@ function LoginForm({
 }
 
 /* ── 회원가입 폼 ── */
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error'
+
 function SignupForm({
   signup,
   onSuccess,
@@ -140,9 +144,41 @@ function SignupForm({
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  // username 입력 후 500ms debounce로 중복 체크
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    const trimmed = username.trim()
+    if (trimmed.length < 3) {
+      setUsernameStatus('idle')
+      return
+    }
+
+    setUsernameStatus('checking')
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/users/check-username?username=${encodeURIComponent(trimmed)}`
+        )
+        if (!res.ok) throw new Error()
+        const data = await res.json()
+        setUsernameStatus(data.available ? 'available' : 'taken')
+      } catch {
+        setUsernameStatus('error')
+      }
+    }, 500)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [username])
+
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
+    if (usernameStatus === 'taken') return  // 이중 방어
     setError('')
     setLoading(true)
     try {
@@ -154,6 +190,15 @@ function SignupForm({
       setLoading(false)
     }
   }
+
+  const usernameHint: Record<UsernameStatus, { text: string; color: string } | null> = {
+    idle: null,
+    checking: { text: '확인 중...', color: 'text-gray-400' },
+    available: { text: '사용 가능한 이름입니다', color: 'text-green-400' },
+    taken: { text: '이미 사용 중인 이름입니다', color: 'text-red-400' },
+    error: { text: '중복 확인에 실패했습니다', color: 'text-yellow-400' },
+  }
+  const hint = usernameHint[usernameStatus]
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -181,8 +226,17 @@ function SignupForm({
           pattern="[a-zA-Z0-9_]+"
           title="3~30자, 영문/숫자/밑줄만 사용 가능"
           placeholder="my_bot_master"
-          className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600"
+          className={`bg-gray-900 border text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-600 ${
+            usernameStatus === 'taken'
+              ? 'border-red-500'
+              : usernameStatus === 'available'
+              ? 'border-green-500'
+              : 'border-gray-700'
+          }`}
         />
+        {hint && (
+          <p className={`text-xs ${hint.color}`}>{hint.text}</p>
+        )}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -204,7 +258,7 @@ function SignupForm({
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={loading || usernameStatus === 'taken'}
         className="mt-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-2 transition-colors"
       >
         {loading ? '가입 중...' : '회원가입'}
