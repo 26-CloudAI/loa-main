@@ -813,6 +813,28 @@ def create_app(
             "elo": new_user.elo,
         }
 
+    @app.get("/api/me")
+    async def get_current_user(user: dict = Depends(verify_firebase_token)):
+        """현재 인증된 유저의 DB 정보를 반환한다."""
+        firebase_uid = user.get("uid") or user.get("user_id", "")
+        db_user = _user_repo().get_by_firebase_uid(firebase_uid)
+        if not db_user:
+            raise HTTPException(404, "등록되지 않은 유저입니다.")
+        return {
+            "id": db_user.id,
+            "username": db_user.username,
+            "display_name": db_user.display_name,
+            "email": db_user.email,
+            "role": db_user.role,
+            "elo": db_user.elo,
+        }
+
+    @app.get("/api/users/check-username")
+    async def check_username(username: str):
+        """username 사용 가능 여부를 반환한다. (인증 불필요)"""
+        available = not _user_repo().username_exists(username)
+        return {"available": available}
+
     @app.get("/api/users/{user_id}/bots")
     async def get_user_public_bots(user_id: int):
         """특정 유저의 공개 봇 목록과 코드를 반환한다. (인증 불필요)"""
