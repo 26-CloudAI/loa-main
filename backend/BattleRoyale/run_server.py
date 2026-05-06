@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -41,7 +42,7 @@ def main():
     )
     parser.add_argument("--host", type=str, default="0.0.0.0", help="호스트")
     parser.add_argument("--redis", action="store_true", help="Redis 사용 (기본: 인메모리)")
-    parser.add_argument("--redis-host", type=str, default="localhost")
+    parser.add_argument("--redis-host", type=str, default=None)
     parser.add_argument("--redis-port", type=int, default=6379)
     parser.add_argument("--reload", action="store_true", help="개발 모드 (자동 리로드)")
     args = parser.parse_args()
@@ -63,7 +64,8 @@ def main():
 
     from src.arena.server.config import ServerConfig, RedisConfig, APIConfig
 
-    redis_cfg = RedisConfig(host=args.redis_host, port=args.redis_port)
+    redis_host = args.redis_host or os.environ.get("REDIS_HOST", "localhost")
+    redis_cfg = RedisConfig(host=redis_host, port=args.redis_port)
     api_cfg = APIConfig(host=args.host, port=args.port)
     server_cfg = ServerConfig(redis=redis_cfg, api=api_cfg)
 

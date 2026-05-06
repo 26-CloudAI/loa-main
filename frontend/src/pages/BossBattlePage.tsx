@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_ID } from '../dev/mock'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
 const MAX_CODE_BYTES = 50 * 1024
 
@@ -84,6 +85,7 @@ function BossInfoBanner() {
 }
 
 export default function BossBattlePage() {
+  const { token } = useAuth()
   const navigate = useNavigate()
 
   const [botId, setBotId] = useState('')
@@ -120,7 +122,10 @@ export default function BossBattlePage() {
 
       const res = await fetch(`${API_BASE}/api/games`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(body),
       })
 
@@ -138,8 +143,8 @@ export default function BossBattlePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3">
+    <div className="min-h-screen bg-gray-900 text-white">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3">
         <button
           onClick={() => navigate('/games/new')}
           className="text-gray-400 hover:text-white text-sm transition-colors"
@@ -191,7 +196,7 @@ export default function BossBattlePage() {
           </Section>
 
           {/* 게임 옵션 */}
-          <section className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4 flex flex-col gap-4">
+          <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
 
             <div className="flex flex-col gap-2">
@@ -227,7 +232,7 @@ export default function BossBattlePage() {
                 value={seed}
                 onChange={(e) => setSeed(e.target.value)}
                 placeholder="랜덤"
-                className="bg-gray-800 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-24 text-center placeholder-gray-600"
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-24 text-center placeholder-gray-400"
               />
             </div>
           </section>

@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 import firebase_admin
 from fastapi import Depends, HTTPException
@@ -13,25 +14,25 @@ if _creds_json:
     cred = credentials.Certificate(json.loads(_creds_json))
 else:
     # 로컬: 파일 경로 사용
-    _creds_path = os.environ.get(
-        "FIREBASE_CREDENTIALS_PATH",
-        "src/arena/server/secrets/serviceAccountKey.json",
-    )
+    _default_path = Path(__file__).parents[4] / "secrets" / "serviceAccountKey.json"
+    _creds_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", str(_default_path))
     cred = credentials.Certificate(_creds_path)
 
 firebase_admin.initialize_app(cred)
 
 security = HTTPBearer()
 
-async def verify_firebase_token(res: HTTPAuthorizationCredentials = Depends(security)):
-    """프론트엔드에서 보낸 Firebase ID 토큰을 검증합니다."""
-    token = res.credentials
+def verify_firebase_token_value(token: str) -> dict:
+    """Firebase ID 토큰 문자열을 검증하고 디코딩된 페이로드를 반환한다."""
     try:
-        # 토큰 검증 및 디코딩
-        decoded_token = auth.verify_id_token(token)
-        return decoded_token  # 유저 정보 반환 (uid, email 등 포함)
+        return auth.verify_id_token(token)
     except Exception as e:
         raise HTTPException(
             status_code=401,
             detail=f"유효하지 않은 인증 토큰입니다: {str(e)}"
-        )
+        ) from e
+
+
+async def verify_firebase_token(res: HTTPAuthorizationCredentials = Depends(security)):
+    """프론트엔드에서 보낸 Firebase ID 토큰을 검증합니다."""
+    return verify_firebase_token_value(res.credentials)

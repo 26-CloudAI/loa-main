@@ -14,6 +14,7 @@ import asyncio
 import logging
 import random
 import uuid
+from typing import TYPE_CHECKING
 from typing import Optional
 
 from ..bot_interface import BotInterface
@@ -34,6 +35,9 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from ..db.game_repo import GameRepository
+
 
 class GameSession:
     """
@@ -49,6 +53,7 @@ class GameSession:
         state_store: StateStore,
         pubsub: PubSubBroker,
         server_config: ServerConfig,
+        game_repo: Optional["GameRepository"] = None,
         game_config: GameConfig = DEFAULT_CONFIG,
         tick_interval: float = 0.05,
         seed: Optional[int] = None,
@@ -57,6 +62,7 @@ class GameSession:
         self.state_store = state_store
         self.pubsub = pubsub
         self.server_config = server_config
+        self.game_repo = game_repo
         self.game_config = game_config
         self.tick_interval = tick_interval
         self.seed = seed or random.randint(0, 2**31)
@@ -107,6 +113,12 @@ class GameSession:
         )
 
         self.status = GameStatus.RUNNING
+        if self.game_repo:
+            self.game_repo.update_game_started(self.game_id)
+        await self.state_store.save_game_state(
+            self.game_id,
+            self._build_state_payload(),
+        )
         self._task = asyncio.create_task(self._run_loop())
         logger.info("게임 시작: %s (%d봇)", self.game_id, len(self._bot_interfaces))
 
@@ -118,6 +130,12 @@ class GameSession:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        if self.game_repo and self._engine:
+            self.game_repo.update_game_finished(
+                self.game_id,
+                self._engine.tick,
+                "stopped",
+            )
         self.status = GameStatus.FINISHED
 
     async def wait_until_done(self) -> None:
@@ -196,48 +214,10 @@ class GameSession:
 
     async def _broadcast_tick(self) -> None:
         """현재 틱 상태를 저장하고 브로드캐스팅."""
-        assert self._engine is not None
-
-        # 봇 상태 수집
-        bots_data = []
-        for bot in self._engine.bots.values():
-            bots_data.append({
-                "id": bot.id,
-                "x": bot.position.x,
-                "y": bot.position.y,
-                "energy": bot.energy,
-                "score": round(bot.score, 1),
-                "alive": bot.alive,
-                "shield_active": bot.shield_active,
-            })
-
-        # 광물 위치
-        minerals_data = [
-            {"x": x, "y": y, "rare": rare}
-            for x, y, rare in self._engine.grid.get_all_mineral_positions()
-        ]
-
-        # 리더보드
-        alive_bots = sorted(
-            [b for b in self._engine.bots.values() if b.alive],
-            key=lambda b: b.score,
-            reverse=True,
-        )
-        leaderboard = [
-            {"rank": i + 1, "id": b.id, "score": round(b.score, 1)}
-            for i, b in enumerate(alive_bots[:self._engine.config.leaderboard_size])
-        ]
-
-        tick_data = TickBroadcast(
-            tick=self._engine.tick,
-            bots=bots_data,
-            minerals=minerals_data,
-            zone_bounds=self._engine.zone.bounds,
-            alive_count=len(alive_bots),
-            leaderboard=leaderboard,
-        )
-
-        msg = tick_data.to_dict()
+        msg = {
+            "type": "tick",
+            "data": self._build_state_payload(),
+        }
 
         # Redis 저장 + Pub/Sub 발행
         await self.state_store.save_game_state(self.game_id, msg["data"])
@@ -260,7 +240,6 @@ class GameSession:
         assert self._engine.game_result is not None
 
         result = self._engine.game_result
-        self.status = GameStatus.FINISHED
 
         result_data = GameResultResponse(
             game_id=self.game_id,
@@ -269,8 +248,26 @@ class GameSession:
             rankings=result.rankings,
         )
 
-        # 결과 저장
+        # DB 쓰기 먼저 완료 후 상태 변경 (ELO 업데이트 타이밍 버그 방지)
         await self.state_store.save_game_result(self.game_id, result_data.to_dict())
+        if self.game_repo:
+            self.game_repo.update_game_finished(
+                self.game_id,
+                result.final_tick,
+                result.reason.value,
+            )
+            for entry in result.rankings:
+                self.game_repo.update_participant_result(
+                    self.game_id,
+                    entry["id"],
+                    final_rank=entry["rank"],
+                    final_score=entry["final_score"],
+                    kills=entry["kills"],
+                    minerals_mined=entry["minerals_mined"],
+                    survival_ticks=entry["survival_ticks"],
+                )
+
+        self.status = GameStatus.FINISHED
 
         # 종료 메시지 브로드캐스팅
         end_msg = make_game_end_message(
@@ -292,6 +289,56 @@ class GameSession:
             "게임 종료: %s — %s (틱 %d)",
             self.game_id, result.reason.value, result.final_tick,
         )
+
+    def _build_state_payload(self) -> dict:
+        """현재 게임 상태를 관전/목록 API에서 재사용 가능한 형태로 직렬화."""
+        assert self._engine is not None
+
+        bots_data = []
+        for bot in self._engine.bots.values():
+            bots_data.append({
+                "id": bot.id,
+                "x": bot.position.x,
+                "y": bot.position.y,
+                "energy": bot.energy,
+                "score": round(bot.score, 1),
+                "alive": bot.alive,
+                "shield_active": bot.shield_active,
+            })
+
+        minerals_data = [
+            {"x": x, "y": y, "rare": rare}
+            for x, y, rare in self._engine.grid.get_all_mineral_positions()
+        ]
+
+        alive_bots = sorted(
+            [b for b in self._engine.bots.values() if b.alive],
+            key=lambda b: b.score,
+            reverse=True,
+        )
+        leaderboard = [
+            {"rank": i + 1, "id": b.id, "score": round(b.score, 1)}
+            for i, b in enumerate(alive_bots[:self._engine.config.leaderboard_size])
+        ]
+
+        tick_data = TickBroadcast(
+            tick=self._engine.tick,
+            bots=bots_data,
+            minerals=minerals_data,
+            zone_bounds=self._engine.zone.bounds,
+            alive_count=len(alive_bots),
+            leaderboard=leaderboard,
+        ).to_dict()["data"]
+
+        tick_data.update({
+            "game_id": self.game_id,
+            "status": self.status.value,
+            "current_tick": self._engine.tick,
+            "total_bots": len(self._engine.bots),
+            "alive_bots": len(alive_bots),
+            "bot_ids": [b.bot_id for b in self._bot_interfaces],
+        })
+        return tick_data
 
 
 # ──────────────────────────────────────────────
@@ -317,6 +364,7 @@ class GameRegistry:
 
     def create_game(
         self,
+        game_repo: Optional["GameRepository"] = None,
         game_config: GameConfig = DEFAULT_CONFIG,
         tick_interval: float = 0.05,
         seed: Optional[int] = None,
@@ -329,6 +377,7 @@ class GameRegistry:
             state_store=self.state_store,
             pubsub=self.pubsub,
             server_config=self.server_config,
+            game_repo=game_repo,
             game_config=game_config,
             tick_interval=tick_interval,
             seed=seed,

@@ -19,6 +19,7 @@ class BotRecord:
     description: str
     version: int
     is_active: bool
+    is_public: bool
     created_at: str
     updated_at: str
     wins: int
@@ -33,8 +34,23 @@ class BotRecord:
 
 
 class BotRepository:
-    def __init__(self, conn: sqlite3.Connection):
+    def __init__(self, conn):
         self.conn = conn
+        self._is_pg = not isinstance(conn, sqlite3.Connection)
+
+    def _execute(self, sql: str, params=()):
+        """SQLite/psycopg2 공통 실행 헬퍼."""
+        if self._is_pg:
+            cur = self.conn.cursor()
+            cur.execute(sql.replace("?", "%s"), params)
+            return cur
+        return self.conn.execute(sql, params)
+
+    def _now(self) -> str:
+        return "NOW()" if self._is_pg else "datetime('now')"
+
+    def _bool(self, val: bool):
+        return val if self._is_pg else int(val)
 
     def create(
         self,
@@ -42,39 +58,45 @@ class BotRepository:
         name: str,
         code: str,
         description: str = "",
+        is_public: bool = False,
     ) -> BotRecord:
         """봇을 생성하고 반환."""
-        cursor = self.conn.execute(
-            """
-            INSERT INTO bots (user_id, name, code, description)
-            VALUES (?, ?, ?, ?)
-            """,
-            (user_id, name, code, description),
-        )
+        if self._is_pg:
+            cur = self._execute(
+                "INSERT INTO bots (user_id, name, code, description, is_public) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                (user_id, name, code, description, self._bool(is_public)),
+            )
+            bot_id = cur.fetchone()["id"]
+        else:
+            cur = self._execute(
+                "INSERT INTO bots (user_id, name, code, description, is_public) VALUES (?, ?, ?, ?, ?)",
+                (user_id, name, code, description, self._bool(is_public)),
+            )
+            bot_id = cur.lastrowid
         self.conn.commit()
-        return self.get_by_id(cursor.lastrowid)
+        return self.get_by_id(bot_id)
 
     def get_by_id(self, bot_id: int) -> Optional[BotRecord]:
-        cursor = self.conn.execute("SELECT * FROM bots WHERE id = ?", (bot_id,))
+        cursor = self._execute("SELECT * FROM bots WHERE id = ?", (bot_id,))
         row = cursor.fetchone()
         return self._row_to_bot(row) if row else None
 
     def get_by_user(self, user_id: int, active_only: bool = True) -> list[BotRecord]:
         """유저의 봇 목록 (최신 순)."""
         if active_only:
-            cursor = self.conn.execute(
-                "SELECT * FROM bots WHERE user_id = ? AND is_active = 1 ORDER BY updated_at DESC",
-                (user_id,),
+            cursor = self._execute(
+                "SELECT * FROM bots WHERE user_id = ? AND is_active = ? ORDER BY updated_at DESC",
+                (user_id, self._bool(True)),
             )
         else:
-            cursor = self.conn.execute(
+            cursor = self._execute(
                 "SELECT * FROM bots WHERE user_id = ? ORDER BY updated_at DESC",
                 (user_id,),
             )
         return [self._row_to_bot(row) for row in cursor.fetchall()]
 
     def get_by_user_and_name(self, user_id: int, name: str) -> Optional[BotRecord]:
-        cursor = self.conn.execute(
+        cursor = self._execute(
             "SELECT * FROM bots WHERE user_id = ? AND name = ?",
             (user_id, name),
         )
@@ -83,24 +105,15 @@ class BotRepository:
 
     def update_code(self, bot_id: int, code: str, description: str | None = None) -> BotRecord:
         """봇 코드를 업데이트하고 버전을 증가."""
+        now = self._now()
         if description is not None:
-            self.conn.execute(
-                """
-                UPDATE bots
-                SET code = ?, description = ?, version = version + 1,
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
+            self._execute(
+                f"UPDATE bots SET code = ?, description = ?, version = version + 1, updated_at = {now} WHERE id = ?",
                 (code, description, bot_id),
             )
         else:
-            self.conn.execute(
-                """
-                UPDATE bots
-                SET code = ?, version = version + 1,
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
+            self._execute(
+                f"UPDATE bots SET code = ?, version = version + 1, updated_at = {now} WHERE id = ?",
                 (code, bot_id),
             )
         self.conn.commit()
@@ -108,49 +121,54 @@ class BotRepository:
 
     def soft_delete(self, bot_id: int) -> None:
         """봇을 비활성화 (소프트 삭제)."""
-        self.conn.execute(
-            "UPDATE bots SET is_active = 0, updated_at = datetime('now') WHERE id = ?",
-            (bot_id,),
+        self._execute(
+            f"UPDATE bots SET is_active = ?, updated_at = {self._now()} WHERE id = ?",
+            (self._bool(False), bot_id),
         )
         self.conn.commit()
 
-    def record_game_result(
-        self, bot_id: int, won: bool
-    ) -> None:
+    def record_game_result(self, bot_id: int, won: bool) -> None:
         """게임 결과를 전적에 반영."""
+        now = self._now()
         if won:
-            self.conn.execute(
-                """
-                UPDATE bots
-                SET wins = wins + 1, games_played = games_played + 1,
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
+            self._execute(
+                f"UPDATE bots SET wins = wins + 1, games_played = games_played + 1, updated_at = {now} WHERE id = ?",
                 (bot_id,),
             )
         else:
-            self.conn.execute(
-                """
-                UPDATE bots
-                SET losses = losses + 1, games_played = games_played + 1,
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
+            self._execute(
+                f"UPDATE bots SET losses = losses + 1, games_played = games_played + 1, updated_at = {now} WHERE id = ?",
                 (bot_id,),
             )
         self.conn.commit()
 
+    def set_public(self, bot_id: int, is_public: bool) -> None:
+        """봇 공개 여부를 변경한다."""
+        self._execute(
+            f"UPDATE bots SET is_public = ?, updated_at = {self._now()} WHERE id = ?",
+            (self._bool(is_public), bot_id),
+        )
+        self.conn.commit()
+
+    def get_public_bots_by_user(self, user_id: int) -> list[BotRecord]:
+        """특정 유저의 공개된 활성 봇 목록을 반환한다."""
+        cursor = self._execute(
+            "SELECT * FROM bots WHERE user_id = ? AND is_active = ? AND is_public = ? ORDER BY updated_at DESC",
+            (user_id, self._bool(True), self._bool(True)),
+        )
+        return [self._row_to_bot(row) for row in cursor.fetchall()]
+
     def get_leaderboard(self, limit: int = 20) -> list[BotRecord]:
         """승률 기준 상위 봇 목록."""
-        cursor = self.conn.execute(
+        cursor = self._execute(
             """
             SELECT * FROM bots
-            WHERE is_active = 1 AND games_played >= 3
-            ORDER BY CAST(wins AS REAL) / MAX(games_played, 1) DESC,
+            WHERE is_active = ? AND games_played >= 3
+            ORDER BY CAST(wins AS REAL) / CASE WHEN games_played = 0 THEN 1 ELSE games_played END DESC,
                      wins DESC
             LIMIT ?
             """,
-            (limit,),
+            (self._bool(True), limit),
         )
         return [self._row_to_bot(row) for row in cursor.fetchall()]
 
@@ -181,6 +199,7 @@ class BotRepository:
         return True, ""
 
     def _row_to_bot(self, row: sqlite3.Row) -> BotRecord:
+        keys = row.keys() if hasattr(row, "keys") else []
         return BotRecord(
             id=row["id"],
             user_id=row["user_id"],
@@ -189,6 +208,7 @@ class BotRepository:
             description=row["description"],
             version=row["version"],
             is_active=bool(row["is_active"]),
+            is_public=bool(row["is_public"]) if "is_public" in keys else False,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             wins=row["wins"],

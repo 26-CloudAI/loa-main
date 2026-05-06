@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { MOCK, MOCK_GAMES } from '../dev/mock'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
 interface GameInfo {
   game_id: string
@@ -29,7 +29,7 @@ const STATUS_COLOR: Record<GameInfo['status'], string> = {
 }
 
 export default function GamesPage() {
-  const { user, logout } = useAuth()
+  const { user, token, logout } = useAuth()
   const navigate = useNavigate()
   const [games, setGames] = useState<GameInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,8 +43,14 @@ export default function GamesPage() {
       return
     }
     // ──────────────────────────────────────────────────────────
+    if (!token) {
+      setLoading(false)
+      return
+    }
     try {
-      const res = await fetch(`${API_BASE}/api/games`)
+      const res = await fetch(`${API_BASE}/api/games`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       const data = await res.json()
       setGames(data)
@@ -60,7 +66,7 @@ export default function GamesPage() {
     fetchGames()
     const id = setInterval(fetchGames, 3000)
     return () => clearInterval(id)
-  }, [])
+  }, [token])
 
   async function handleLogout() {
     await logout()
@@ -70,9 +76,15 @@ export default function GamesPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* 헤더 */}
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center justify-between">
         <span className="font-bold text-lg">League of Agents</span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/rankings')}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            리더보드
+          </button>
           {user && (
             <span className="text-sm text-gray-400">
               {user.display_name ?? user.username}

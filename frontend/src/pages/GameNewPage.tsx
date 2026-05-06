@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_ID } from '../dev/mock'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
 const MAX_CODE_BYTES = 50 * 1024 // 50KB
 
@@ -211,10 +212,12 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 }
 
 export default function GameNewPage() {
+  const { token } = useAuth()
   const navigate = useNavigate()
 
   const [botId, setBotId] = useState('')
   const [code, setCode] = useState(DEFAULT_CODE)
+  const [isPublic, setIsPublic] = useState(true)
   const [fillWithAi, setFillWithAi] = useState(true)
   const [minBots, setMinBots] = useState(4)
   const [tickInterval, setTickInterval] = useState(0.05)
@@ -244,7 +247,7 @@ export default function GameNewPage() {
 
     try {
       const body: Record<string, unknown> = {
-        bots: [{ bot_id: botId.trim() || 'my_bot', code }],
+        bots: [{ bot_id: botId.trim() || 'my_bot', code, is_public: isPublic }],
         tick_interval: tickInterval,
         fill_with_ai: fillWithAi,
         min_bots: minBots,
@@ -253,7 +256,10 @@ export default function GameNewPage() {
 
       const res = await fetch(`${API_BASE}/api/games`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(body),
       })
 
@@ -274,7 +280,7 @@ export default function GameNewPage() {
     <div className="min-h-screen bg-gray-900 text-white">
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       {/* 헤더 */}
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3">
         <button
           onClick={() => navigate('/games/new')}
           className="text-gray-400 hover:text-white text-sm transition-colors"
@@ -342,6 +348,27 @@ export default function GameNewPage() {
           {/* 게임 옵션 */}
           <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
+
+            {/* 봇 코드 공개 여부 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-white">봇 코드 공개</p>
+                <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPublic((v) => !v)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  isPublic ? 'bg-indigo-600' : 'bg-gray-700'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    isPublic ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
 
             {/* AI 채우기 */}
             <div className="flex items-center justify-between">

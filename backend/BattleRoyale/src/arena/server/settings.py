@@ -61,3 +61,6 @@ DB_HOST: str = os.environ.get("DB_HOST", "")
 DB_NAME: str = os.environ.get("DB_NAME", "ai_arena")
 DB_USER: str = os.environ.get("DB_USER", "")
 DB_PASSWORD: str = os.environ.get("DB_PASSWORD", "")
+
+# ── 환경 ────────────────────────────────────────
+ENV: str = os.environ.get("ENV", "production")  # "production" | "development"

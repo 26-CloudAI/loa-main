@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_INFO, startMockSimulation } from '../dev/mock'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
-const WS_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8080').replace(/^http/, 'ws')
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+const WS_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale').replace(/^http/, 'ws')
 
 const CELL = 6          // px per grid cell
 const MAP_PX = CELL * 100  // 600px canvas
@@ -201,6 +202,7 @@ function drawCanvas(
 
 export default function WatchPage() {
   const { game_id } = useParams<{ game_id: string }>()
+  const { token } = useAuth()
   const navigate = useNavigate()
 
   const canvasRef        = useRef<HTMLCanvasElement>(null)
@@ -232,7 +234,9 @@ export default function WatchPage() {
     }
     // ────────────────────────────────────────────────────────
 
-    fetch(`${API_BASE}/api/games/${game_id}`)
+    fetch(`${API_BASE}/api/games/${game_id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((r) => {
         if (r.status === 404) throw new Error('게임을 찾을 수 없습니다.')
         if (!r.ok) throw new Error(`서버 오류 (${r.status})`)
@@ -242,7 +246,9 @@ export default function WatchPage() {
         setTotalBots(info.total_bots ?? 0)
         if (info.status === 'finished') {
           setGameStatus('finished')
-          const res = await fetch(`${API_BASE}/api/games/${game_id}/result`)
+          const res = await fetch(`${API_BASE}/api/games/${game_id}/result`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
           if (res.ok) {
             const result = await res.json()
             setGameEnd(result)
@@ -256,7 +262,7 @@ export default function WatchPage() {
         setLoadError(e.message)
         setGameStatus('error')
       })
-  }, [game_id])
+  }, [game_id, token])
 
   // 2) Connect WebSocket (only once, when game is waiting or running)
   useEffect(() => {
@@ -306,7 +312,10 @@ export default function WatchPage() {
     function connect() {
       if (cancelled) return
       setWsStatus('connecting')
-      const ws = new WebSocket(`${WS_BASE}/ws/games/${game_id}`)
+      const wsUrl = token
+        ? `${WS_BASE}/ws/games/${game_id}?token=${encodeURIComponent(token)}`
+        : `${WS_BASE}/ws/games/${game_id}`
+      const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -387,7 +396,7 @@ export default function WatchPage() {
       if (retryTimer) clearTimeout(retryTimer)
       wsRef.current?.close()
     }
-  }, [game_id, gameStatus])
+  }, [game_id, gameStatus, token])
 
   // 3) Draw canvas on each tick
   useEffect(() => {
@@ -436,7 +445,7 @@ export default function WatchPage() {
   return (
     <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-3 shrink-0">
+      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3 shrink-0">
         <button
           onClick={() => navigate('/games')}
           className="text-gray-400 hover:text-white text-sm transition-colors"
@@ -449,7 +458,7 @@ export default function WatchPage() {
       </header>
 
       {/* Main area */}
-      <main className="flex flex-1 overflow-hidden p-4 gap-4">
+      <main className="flex flex-1 overflow-hidden p-4 gap-4 justify-center">
         {/* Canvas column */}
         <div className="shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-custom" style={{ width: MAP_PX }}>
           {/* Canvas */}

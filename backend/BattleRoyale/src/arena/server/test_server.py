@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.arena.server.config import ServerConfig, DEFAULT_SERVER_CONFIG
+from src.arena.server.game_views import game_info_from_result, game_info_from_state
 from src.arena.server.schemas import (
     GameStatus,
     GameInfo,
@@ -83,7 +84,7 @@ class TestSchemas(unittest.TestCase):
             tick=10,
             bots=[{"id": "a", "x": 5, "y": 5}],
             minerals=[],
-            zone_boundary=0,
+            zone_bounds=[0, 0, 9, 9],
             alive_count=1,
             leaderboard=[],
         )
@@ -113,6 +114,32 @@ class TestSchemas(unittest.TestCase):
     def test_game_status_enum(self):
         self.assertEqual(GameStatus.WAITING.value, "waiting")
         self.assertEqual(GameStatus.FINISHED.value, "finished")
+
+    def test_game_info_from_state(self):
+        info = game_info_from_state("g1", {
+            "status": "running",
+            "current_tick": 12,
+            "total_bots": 4,
+            "alive_bots": 3,
+            "bot_ids": ["a", "b", "c", "d"],
+            "bots": [{"id": "a"}, {"id": "b"}],
+        })
+        self.assertEqual(info.game_id, "g1")
+        self.assertEqual(info.status, GameStatus.RUNNING)
+        self.assertEqual(info.current_tick, 12)
+        self.assertEqual(info.total_bots, 4)
+        self.assertEqual(info.alive_bots, 3)
+
+    def test_game_info_from_result(self):
+        info = game_info_from_result("g1", {
+            "final_tick": 77,
+            "rankings": [{"id": "a"}, {"id": "b"}],
+        })
+        self.assertEqual(info.game_id, "g1")
+        self.assertEqual(info.status, GameStatus.FINISHED)
+        self.assertEqual(info.current_tick, 77)
+        self.assertEqual(info.total_bots, 2)
+        self.assertEqual(info.bot_ids, ["a", "b"])
 
 
 # ──────────────────────────────────────────────
@@ -298,6 +325,24 @@ class TestGameSession(unittest.TestCase):
             result = await store.get_game_result("test_game")
             self.assertIsNotNone(result)
             self.assertIn("rankings", result)
+
+        run_async(_test())
+
+    def test_start_saves_game_metadata_to_state_store(self):
+        async def _test():
+            session, store, _ = self._make_session(tick_interval=0.001)
+            session.register_bots([SimpleDummyBot("a"), SimpleDummyBot("b")])
+
+            await session.start()
+
+            state = await store.get_game_state("test_game")
+            self.assertIsNotNone(state)
+            self.assertEqual(state["game_id"], "test_game")
+            self.assertEqual(state["status"], "running")
+            self.assertEqual(state["total_bots"], 2)
+            self.assertEqual(state["bot_ids"], ["a", "b"])
+
+            await session.wait_until_done()
 
         run_async(_test())
 

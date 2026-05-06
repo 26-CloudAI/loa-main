@@ -5,8 +5,16 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" redis firebase-admin psycopg2-binary
 
-COPY src/ ./src/
-COPY bots/ ./bots/
+# BattleRoyale → src/arena/
+COPY BattleRoyale/src/ ./src/
+# MockStocks → src/stocks/ (같은 src/ 패키지 아래에 병합)
+COPY MockStocks/src/stocks/ ./src/stocks/
+
+# 양쪽 봇을 하나의 bots/ 패키지로 병합 (파일명 충돌 없음)
+COPY BattleRoyale/bots/ ./bots/
+COPY MockStocks/bots/ ./bots/
+
+# 통합 엔트리포인트
 COPY run_server.py ./
 
 EXPOSE 8080

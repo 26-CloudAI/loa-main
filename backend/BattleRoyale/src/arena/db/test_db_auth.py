@@ -199,20 +199,24 @@ class TestBotRepo(DBTestBase):
 
 class TestGameRepo(DBTestBase):
     def test_create_and_get(self):
-        game = self.games.create_game("g-001", total_bots=5, seed=42)
+        owner_id = self._create_test_user()
+        game = self.games.create_game("g-001", owner_id, total_bots=5, seed=42)
         self.assertEqual(game.id, "g-001")
+        self.assertEqual(game.owner_user_id, owner_id)
         self.assertEqual(game.status, "waiting")
         self.assertEqual(game.total_bots, 5)
 
     def test_update_started(self):
-        self.games.create_game("g-002", 4)
+        owner_id = self._create_test_user()
+        self.games.create_game("g-002", owner_id, 4)
         self.games.update_game_started("g-002")
         game = self.games.get_game("g-002")
         self.assertEqual(game.status, "running")
         self.assertIsNotNone(game.started_at)
 
     def test_update_finished(self):
-        self.games.create_game("g-003", 4)
+        owner_id = self._create_test_user()
+        self.games.create_game("g-003", owner_id, 4)
         self.games.update_game_finished("g-003", 250, "last_standing")
         game = self.games.get_game("g-003")
         self.assertEqual(game.status, "finished")
@@ -221,7 +225,7 @@ class TestGameRepo(DBTestBase):
     def test_participants(self):
         uid = self._create_test_user()
         bot = self.bots.create(uid, "bot_a", "def action(s): return 'STAY'")
-        self.games.create_game("g-004", 3)
+        self.games.create_game("g-004", uid, 3)
         self.games.add_participant("g-004", "bot_a", bot_id=bot.id)
         self.games.add_participant("g-004", "AI_초식_00", is_ai_filler=True)
 
@@ -231,7 +235,8 @@ class TestGameRepo(DBTestBase):
         self.assertTrue(parts[1].is_ai_filler)
 
     def test_participant_results(self):
-        self.games.create_game("g-005", 2)
+        owner_id = self._create_test_user()
+        self.games.create_game("g-005", owner_id, 2)
         self.games.add_participant("g-005", "bot_a")
         self.games.update_participant_result(
             "g-005", "bot_a",
@@ -243,10 +248,27 @@ class TestGameRepo(DBTestBase):
         self.assertAlmostEqual(parts[0].final_score, 150.5)
 
     def test_recent_games(self):
+        owner_id = self._create_test_user()
         for i in range(5):
-            self.games.create_game(f"g-{i:03d}", 4)
+            self.games.create_game(f"g-{i:03d}", owner_id, 4)
         recent = self.games.get_recent_games(3)
         self.assertEqual(len(recent), 3)
+
+    def test_get_game_by_owner(self):
+        owner_id = self._create_test_user("owner")
+        other_id = self._create_test_user("other")
+        self.games.create_game("g-own", owner_id, 2)
+        self.assertIsNotNone(self.games.get_game_by_owner("g-own", owner_id))
+        self.assertIsNone(self.games.get_game_by_owner("g-own", other_id))
+
+    def test_list_games_by_owner(self):
+        owner_id = self._create_test_user("owner2")
+        other_id = self._create_test_user("other2")
+        self.games.create_game("g-a", owner_id, 2)
+        self.games.create_game("g-b", owner_id, 2)
+        self.games.create_game("g-c", other_id, 2)
+        games = self.games.list_games_by_owner(owner_id)
+        self.assertEqual({game.id for game in games}, {"g-a", "g-b"})
 
 
 # ──────────────────────────────────────────────

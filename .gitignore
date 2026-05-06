@@ -13,13 +13,21 @@
 *-key.json
 *_key.json
 firebase-adminsdk*.json
+.firebase/
 gcloud-key*.json
-secrets/
+secrets/*
+!secrets/*.example.json
+!secrets/*.example.py
 
 # 환경변수
 .env
 .env.*
 !.env.example
+
+# IDE
+.idea/
+*.iml
+.vscode/
 
 # OS
 .DS_Store
@@ -28,3 +36,5 @@ server/secrets/
 
 # wiki
 wiki/
+
+CLAUDE.md
