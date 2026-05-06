@@ -6,9 +6,12 @@ substitutions:
   # ↓ 인프라 생성 후 Cloud Build 트리거 설정에서 채워넣기
   _REDIS_HOST: '10.197.54.43'
   _CORS_ORIGINS: 'https://ai-arena-b2b4b.web.app,https://ai-arena-b2b4b.firebaseapp.com'
+  # GCS 버킷: 아래 형식으로 채워넣기 (버킷은 별도 생성 필요)
+  # gsutil mb -l asia-northeast3 gs://${PROJECT_ID}-boss-weights
+  _BOSS_WEIGHTS_GCS_URI: ''   # 예: gs://ai-arena-b2b4b-boss-weights/trained_weights.json
 
 steps:
-  # 1. Docker 이미지 빌드
+  # 1a. 서버 Docker 이미지 빌드
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -18,14 +21,32 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:latest'
       - 'backend'
 
-  # 2. Artifact Registry에 이미지 푸시 (커밋 SHA + latest 태그 동시)
+  # 1b. 학습 워커(trainer) Docker 이미지 빌드
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'backend/Dockerfile.trainer'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/trainer:${_IMAGE_TAG}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/trainer:latest'
+      - 'backend'
+
+  # 2. Artifact Registry에 이미지 푸시 (서버 + trainer)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
       - '--all-tags'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server'
 
-  # 3. Cloud Run 배포
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/trainer'
+
+  # 3. Cloud Run 서비스 배포
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
@@ -67,9 +88,63 @@ steps:
       # 환경변수 (CORS_ORIGINS 값에 콤마가 포함되므로 | 를 구분자로 사용)
       - '--set-env-vars'
       - >-
-        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=10.114.0.3|DB_NAME=ai_arena|DB_USER=arena_user|ENV=production
+        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=10.114.0.3|DB_NAME=ai_arena|DB_USER=arena_user|ENV=production|BOSS_WEIGHTS_GCS_URI=${_BOSS_WEIGHTS_GCS_URI}
 
       - '--quiet'
+
+  # 4. Cloud Run Job 배포 (학습 워커)
+  #    Job은 Cloud Scheduler가 트리거. 여기서는 Job 정의만 갱신함.
+  #    최초 1회: gcloud scheduler jobs create 명령 별도 실행 필요 (아래 주석 참고)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'boss-trainer'
+      - '--image'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/trainer:${_IMAGE_TAG}'
+      - '--region'
+      - '${_REGION}'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--task-timeout'
+      - '10800'   # 3시간
+      - '--max-retries'
+      - '1'
+      - '--set-env-vars'
+      - 'BOSS_WEIGHTS_GCS_URI=${_BOSS_WEIGHTS_GCS_URI}'
+      - '--quiet'
+
+# ---------------------------------------------------------------------------
+# 인프라 최초 설정 (1회만 실행, Cloud Build 파이프라인 밖에서 gcloud CLI로)
+# ---------------------------------------------------------------------------
+# 1. GCS 버킷 생성
+#    gsutil mb -l asia-northeast3 gs://${PROJECT_ID}-boss-weights
+#
+# 2. Cloud Run Job 서비스 계정에 GCS 권한 부여
+#    gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+#      --member="serviceAccount:$(gcloud run jobs describe boss-trainer --region=asia-northeast3 --format='value(spec.template.spec.serviceAccountName)')" \
+#      --role="roles/storage.objectAdmin"
+#
+# 3. Cloud Run 서비스 계정에 GCS 읽기 권한 부여
+#    gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+#      --member="serviceAccount:$(gcloud run services describe ai-arena-server --region=asia-northeast3 --format='value(spec.template.spec.serviceAccountName)')" \
+#      --role="roles/storage.objectViewer"
+#
+# 4. 초기 가중치 업로드 (로컬 trained_weights.json → GCS)
+#    gsutil cp backend/BattleRoyale/bots/trained_weights.json \
+#      gs://${PROJECT_ID}-boss-weights/trained_weights.json
+#
+# 5. Cloud Scheduler 등록 (매일 새벽 3시 asia-northeast3)
+#    gcloud scheduler jobs create http boss-trainer-daily \
+#      --schedule="0 3 * * *" \
+#      --uri="https://${_REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/boss-trainer:run" \
+#      --http-method=POST \
+#      --oauth-service-account-email="$(gcloud iam service-accounts list --filter='displayName:Compute Engine' --format='value(email)')" \
+#      --location=asia-northeast3
 
 options:
   logging: CLOUD_LOGGING_ONLY

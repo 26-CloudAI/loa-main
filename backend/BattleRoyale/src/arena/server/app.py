@@ -129,11 +129,14 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
 
 
 def _create_boss_bot(existing_ids: set[str]) -> BotInterface:
-    """보스전용 RLBossBot 1개 생성."""
+    """보스전용 RLBossBot 1개 생성. GCS 캐시 파일이 있으면 그 가중치를 사용."""
     from bots.rl_boss_bot import RLBossBot
+    import gcs_weights
     bot_id = "AI_보스"
     existing_ids.add(bot_id)
-    return RLBossBot(bot_id=bot_id, seed=0)
+    cache = gcs_weights.local_cache_path()
+    weights_path = cache if cache.exists() else None
+    return RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
 
 # ──────────────────────────────────────────────
 #  Pydantic 스키마 (데이터 검증용) -> 클라이언트가 보낸 JSON울 파이썬 객체로 변환
@@ -181,6 +184,12 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # GCS에서 최신 보스봇 가중치 다운로드 (BOSS_WEIGHTS_GCS_URI 설정 시)
+        import gcs_weights
+        if gcs_weights.enabled():
+            gcs_weights.download()
+            logger.info("보스봇 가중치 GCS에서 로드 완료")
+
         # 시작
         store = await create_state_store(server_config.redis, use_redis)
         pubsub = await create_pubsub_broker(server_config.redis, use_redis)
@@ -220,8 +229,24 @@ def create_app(
 
         cleanup_task = asyncio.create_task(_cleanup_loop())
 
+        # 보스봇 가중치 hot-reload 태스크 (10분 주기, GCS 설정 시에만)
+        reload_task = None
+        if gcs_weights.enabled():
+            _last_generation: list[int | None] = [gcs_weights.get_generation()]
+
+            async def _weights_reload_loop():
+                while True:
+                    await asyncio.sleep(600)
+                    gen = gcs_weights.get_generation()
+                    if gen is not None and gen != _last_generation[0]:
+                        gcs_weights.download()
+                        _last_generation[0] = gen
+                        logger.info("보스봇 가중치 갱신됨 (generation %s)", gen)
+
+            reload_task = asyncio.create_task(_weights_reload_loop())
+
         yield
-        
+
         db_conn.close()
 
         # 종료
@@ -230,6 +255,12 @@ def create_app(
             await cleanup_task
         except asyncio.CancelledError:
             pass
+        if reload_task:
+            reload_task.cancel()
+            try:
+                await reload_task
+            except asyncio.CancelledError:
+                pass
         await spectator_mgr.cleanup()
         logger.info("서버 종료")
 
