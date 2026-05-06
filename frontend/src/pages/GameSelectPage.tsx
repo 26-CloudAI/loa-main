@@ -85,7 +85,7 @@ function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
         <span className="text-4xl leading-none -ml-1">{mode.icon}</span>
         <div className="flex flex-col gap-1">
           <span className="font-bold text-lg">{mode.title}</span>
-          <span className="text-gray-400 text-sm leading-relaxed">{mode.description}</span>
+          <span className="text-gray-400 text-sm leading-relaxed break-keep">{mode.description}</span>
         </div>
         {mode.available && (
           <span className="text-indigo-400 text-sm font-medium mt-auto">시작하기 →</span>
