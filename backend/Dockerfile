@@ -5,6 +5,9 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" redis firebase-admin psycopg2-binary google-cloud-storage
 
+# GCS 가중치 유틸리티
+COPY BattleRoyale/gcs_weights.py ./
+
 # BattleRoyale → src/arena/
 COPY BattleRoyale/src/ ./src/
 # MockStocks → src/stocks/ (같은 src/ 패키지 아래에 병합)
