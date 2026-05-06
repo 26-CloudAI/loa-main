@@ -120,7 +120,7 @@ export default function MockStocksNewPage() {
   const [botId, setBotId] = useState('')
   const [code, setCode] = useState(DEFAULT_CODE)
   const [fillWithAi, setFillWithAi] = useState(true)
-  const [minBots, setMinBots] = useState(4)
+  const [minBots, setMinBots] = useState<number | ''>(4)
   const [tickInterval, setTickInterval] = useState(0.1)
   const [seed, setSeed] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -186,7 +186,7 @@ export default function MockStocksNewPage() {
           bots: [{ bot_id: botId.trim() || 'my_bot', code }],
           tick_interval: tickInterval,
           fill_with_ai: fillWithAi,
-          min_bots: minBots,
+          min_bots: minBots || 2,
           seed: seed !== '' ? parseInt(seed, 10) : null,
           prepare_id: prepareId,
         }),
@@ -304,12 +304,17 @@ export default function MockStocksNewPage() {
                 <p className="text-xs text-gray-500">2 ~ 20</p>
               </div>
               <input
-                type="number"
-                min={2}
-                max={20}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={minBots}
-                onChange={(e) => setMinBots(Math.min(20, Math.max(2, parseInt(e.target.value) || 2)))}
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-green-500 w-24 text-center"
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9]/g, '')
+                  if (raw === '') { setMinBots(''); return }
+                  setMinBots(Math.min(20, Number(raw)))
+                }}
+                onBlur={() => setMinBots((v) => (v === '' || v < 2 ? 2 : v))}
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-green-500 w-16 text-center"
               />
             </div>
 
