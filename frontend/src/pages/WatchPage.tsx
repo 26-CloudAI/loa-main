@@ -221,6 +221,7 @@ export default function WatchPage() {
   const [gameEnd,    setGameEnd]    = useState<GameEndData | null>(null)
   const [showModal,  setShowModal]  = useState(false)
   const [loadError,  setLoadError]  = useState('')
+  const [gameName,   setGameName]   = useState<string | null>(null)
 
   // 1) Fetch initial game info
   useEffect(() => {
@@ -244,6 +245,7 @@ export default function WatchPage() {
       })
       .then(async (info) => {
         setTotalBots(info.total_bots ?? 0)
+        setGameName(info.name ?? null)
         if (info.status === 'finished') {
           setGameStatus('finished')
           const res = await fetch(`${API_BASE}/api/games/${game_id}/result`, {
@@ -453,7 +455,11 @@ export default function WatchPage() {
           ◀ 게임 목록
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">LOA - 게임 관전</span>
+        {gameName ? (
+          <span className="font-bold">{gameName}</span>
+        ) : (
+          <span className="font-bold">LOA - 게임 관전</span>
+        )}
         <span className="text-gray-500 text-sm ml-1">게임 ID: {shortId}…</span>
       </header>
 
