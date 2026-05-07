@@ -65,6 +65,8 @@ class GameInfo:
     total_bots: int = 0
     alive_bots: int = 0
     bot_ids: list[str] = field(default_factory=list)
+    name: Optional[str] = None
+    mode: str = "battle-royale"
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +76,8 @@ class GameInfo:
             "total_bots": self.total_bots,
             "alive_bots": self.alive_bots,
             "bot_ids": self.bot_ids,
+            "name": self.name,
+            "mode": self.mode,
         }
 
 
