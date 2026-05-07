@@ -154,6 +154,7 @@ export default function BossBattlePage() {
   const { token } = useAuth()
   const navigate = useNavigate()
 
+  const [gameName, setGameName] = useState('')
   const [botId, setBotId] = useState('')
   const [code, setCode] = useState(DEFAULT_CODE)
   const [tickInterval, setTickInterval] = useState(0.05)
@@ -186,6 +187,7 @@ export default function BossBattlePage() {
         mode: 'boss',
         difficulty,
         seed: seed !== '' ? parseInt(seed, 10) : null,
+        name: gameName.trim() || undefined,
       }
 
       const res = await fetch(`${API_BASE}/api/games`, {
@@ -231,6 +233,18 @@ export default function BossBattlePage() {
           {/* 난이도 선택 */}
           <Section title="난이도">
             <DifficultySelector value={difficulty} onChange={setDifficulty} />
+          </Section>
+
+          {/* 게임 이름 */}
+          <Section title="게임 이름">
+            <input
+              type="text"
+              value={gameName}
+              onChange={(e) => setGameName(e.target.value)}
+              placeholder="새 보스전 1  (비우면 자동 설정)"
+              maxLength={40}
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-600 w-72"
+            />
           </Section>
 
           {/* 봇 이름 */}

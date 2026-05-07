@@ -357,7 +357,9 @@ def create_app(
                 state_data = await registry.state_store.get_game_state(record.id)
 
             if state_data:
-                infos.append(game_info_from_state(record.id, state_data))
+                infos.append(game_info_from_state(
+                    record.id, state_data, name=record.name, mode=record.mode
+                ))
                 continue
 
             participants = _game_repo().get_participants(record.id)
@@ -372,7 +374,9 @@ def create_app(
 
         state_data = await registry.state_store.get_game_state(game_id)
         if state_data:
-            return game_info_from_state(game_id, state_data)
+            return game_info_from_state(
+                game_id, state_data, name=record.name, mode=record.mode
+            )
 
         participants = _game_repo().get_participants(game_id)
         return game_info_from_record(record, participants)
@@ -421,6 +425,7 @@ def create_app(
         min_bots = body.get("min_bots", 4)
         mode = body.get("mode", "battle-royale")
         difficulty = body.get("difficulty", "상")  # 보스전 난이도: 하/중/상
+        name = body.get("name", "").strip() or None
 
         # 봇 코드 크기 검증
         max_size = server_config.api.max_bot_code_size
@@ -487,11 +492,18 @@ def create_app(
         if len(bot_interfaces) < 2:
             raise HTTPException(400, "최소 2개의 봇이 필요합니다.")
 
+        if not name:
+            count = repo.count_games_by_mode(db_user.id, mode)
+            mode_label = {"battle-royale": "배틀로얄", "boss": "보스전"}.get(mode, mode)
+            name = f"새 {mode_label} {count + 1}"
+
         repo.create_game(
             session.game_id,
             owner_user_id=db_user.id,
             total_bots=len(bot_interfaces),
             seed=seed,
+            name=name,
+            mode=mode,
         )
         for bot_name, is_ai_filler in participant_specs:
             db_bot_id = bot_name_to_db_id.get(bot_name) if not is_ai_filler else None

@@ -19,7 +19,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # ── SQLite DDL ─────────────────────────────────
 SCHEMA_SQL_SQLITE = """
@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS games (
     total_bots      INTEGER NOT NULL DEFAULT 0,
     seed            INTEGER,
     config_json     TEXT,
+    name            TEXT,
+    mode            TEXT    NOT NULL DEFAULT 'battle-royale',
     FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (winner_bot_id) REFERENCES bots(id) ON DELETE SET NULL
 );
@@ -232,6 +234,8 @@ CREATE TABLE IF NOT EXISTS games (
     total_bots      INTEGER     NOT NULL DEFAULT 0,
     seed            INTEGER,
     config_json     JSONB,
+    name            TEXT,
+    mode            TEXT        NOT NULL DEFAULT 'battle-royale',
     FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (winner_bot_id) REFERENCES bots(id) ON DELETE SET NULL
 );
@@ -458,6 +462,11 @@ def _migrate_sqlite(conn: sqlite3.Connection) -> None:
         if col not in user_cols:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
 
+    if "name" not in game_cols:
+        conn.execute("ALTER TABLE games ADD COLUMN name TEXT")
+    if "mode" not in game_cols:
+        conn.execute("ALTER TABLE games ADD COLUMN mode TEXT NOT NULL DEFAULT 'battle-royale'")
+
     bot_cols = {
         row[1] for row in conn.execute("PRAGMA table_info(bots)").fetchall()
     }
@@ -494,6 +503,17 @@ def _migrate_postgresql(cur) -> None:
         )
         if cur.fetchone() is None:
             cur.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+
+    for col, definition in [
+        ("name", "TEXT"),
+        ("mode", "TEXT NOT NULL DEFAULT 'battle-royale'"),
+    ]:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_name='games' AND column_name=%s",
+            (col,),
+        )
+        if cur.fetchone() is None:
+            cur.execute(f"ALTER TABLE games ADD COLUMN {col} {definition}")
 
     cur.execute(
         "SELECT 1 FROM information_schema.columns WHERE table_name='bots' AND column_name='is_public'"

@@ -215,6 +215,7 @@ export default function GameNewPage() {
   const { token } = useAuth()
   const navigate = useNavigate()
 
+  const [gameName, setGameName] = useState('')
   const [botId, setBotId] = useState('')
   const [code, setCode] = useState(DEFAULT_CODE)
   const [isPublic, setIsPublic] = useState(true)
@@ -252,6 +253,7 @@ export default function GameNewPage() {
         fill_with_ai: fillWithAi,
         min_bots: minBots || 2,
         seed: seed !== '' ? parseInt(seed, 10) : null,
+        name: gameName.trim() || undefined,
       }
 
       const res = await fetch(`${API_BASE}/api/games`, {
@@ -300,6 +302,21 @@ export default function GameNewPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+
+          {/* 게임 이름 */}
+          <section className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-300">
+              게임 이름 <span className="text-gray-500 font-normal">(비우면 자동 설정됨)</span>
+            </label>
+            <input
+              type="text"
+              value={gameName}
+              onChange={(e) => setGameName(e.target.value)}
+              placeholder="새 배틀로얄 1"
+              maxLength={40}
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
+            />
+          </section>
 
           {/* 봇 이름 */}
           <section className="flex flex-col gap-2">
@@ -443,11 +460,13 @@ export default function GameNewPage() {
                 <p className="text-xs text-gray-500">비우면 랜덤</p>
               </div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={seed}
-                onChange={(e) => setSeed(e.target.value)}
+                onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="랜덤"
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 w-24 text-center placeholder-gray-400"
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 w-20 text-center placeholder-gray-400"
               />
             </div>
           </section>

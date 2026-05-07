@@ -57,7 +57,7 @@ function IncompleteScreen() {
             onClick={() => window.location.replace('/login')}
             className="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg py-2 transition-colors"
           >
-            회원가입하러 가기
+            회원가입 하러 가기
           </button>
         )}
       </div>

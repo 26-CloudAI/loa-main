@@ -12,6 +12,13 @@ interface GameInfo {
   total_bots: number
   alive_bots: number
   bot_ids: string[]
+  name?: string
+  mode?: string
+}
+
+const MODE_BADGE: Record<string, { label: string; className: string }> = {
+  'battle-royale': { label: '배틀로얄', className: 'bg-indigo-600/30 text-indigo-300 border border-indigo-600/50' },
+  'boss':          { label: '보스전',   className: 'bg-red-700/30 text-red-300 border border-red-700/50' },
 }
 
 const STATUS_LABEL: Record<GameInfo['status'], string> = {
@@ -150,14 +157,22 @@ export default function GamesPage() {
 function GameCard({ game }: { game: GameInfo }) {
   const navigate = useNavigate()
   const shortId = game.game_id.slice(0, 8)
+  const modeBadge = game.mode ? MODE_BADGE[game.mode] : null
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
-      {/* 왼쪽: 아이디 + 상태 */}
-      <div className="flex items-center gap-3 min-w-0">
-        <span className="font-mono text-sm text-gray-300">{shortId}…</span>
+      {/* 왼쪽: 게임 이름 + 뱃지들 */}
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-sm font-medium text-white truncate">
+          {game.name ?? `게임 ${shortId}`}
+        </span>
+        {modeBadge && (
+          <span className={`shrink-0 text-xs rounded-full px-2 py-0.5 font-medium ${modeBadge.className}`}>
+            {modeBadge.label}
+          </span>
+        )}
         <span
-          className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLOR[game.status]}`}
+          className={`shrink-0 text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLOR[game.status]}`}
         >
           {STATUS_LABEL[game.status]}
         </span>

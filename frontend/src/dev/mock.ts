@@ -15,6 +15,18 @@ export const MOCK_TOKEN = 'mock-jwt-token'
 export const MOCK_GAME_ID = 'aaaaaaaa-1111-2222-3333-444444444444'
 
 export const MOCK_GAMES = [
+  // 가장 최근 생성 — 대기 중
+  {
+    game_id: 'bbbbbbbb-1111-2222-3333-444444444444',
+    status: 'waiting',
+    current_tick: 0,
+    total_bots: 2,
+    alive_bots: 2,
+    bot_ids: ['my_bot', 'BOSS'],
+    name: '새 보스전 1',
+    mode: 'boss',
+  },
+  // 진행 중
   {
     game_id: MOCK_GAME_ID,
     status: 'running',
@@ -22,22 +34,19 @@ export const MOCK_GAMES = [
     total_bots: 4,
     alive_bots: 3,
     bot_ids: ['my_bot', 'AI_초식_0', 'AI_미친개_1', 'AI_존버_2'],
+    name: '새 배틀로얄 2',
+    mode: 'battle-royale',
   },
-  {
-    game_id: 'bbbbbbbb-1111-2222-3333-444444444444',
-    status: 'waiting',
-    current_tick: 0,
-    total_bots: 4,
-    alive_bots: 4,
-    bot_ids: ['AI_초식_0', 'AI_미친개_1', 'AI_존버_2', 'AI_존버_3'],
-  },
+  // 가장 오래된 — 종료
   {
     game_id: 'cccccccc-1111-2222-3333-444444444444',
     status: 'finished',
     current_tick: 200,
     total_bots: 4,
-    alive_bots: 1,
+    alive_bots: 0,
     bot_ids: ['my_bot', 'AI_초식_0', 'AI_미친개_1', 'AI_존버_2'],
+    name: '새 배틀로얄 1',
+    mode: 'battle-royale',
   },
 ]
 

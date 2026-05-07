@@ -23,6 +23,8 @@ class GameRecord:
     winner_bot_id: Optional[int]
     total_bots: int
     seed: Optional[int]
+    name: Optional[str] = None
+    mode: str = "battle-royale"
 
 
 @dataclass
@@ -62,16 +64,27 @@ class GameRepository:
         total_bots: int,
         seed: Optional[int] = None,
         config_json: Optional[str] = None,
+        name: Optional[str] = None,
+        mode: str = "battle-royale",
     ) -> GameRecord:
         self._execute(
             """
-            INSERT INTO games (id, owner_user_id, total_bots, seed, config_json)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO games (id, owner_user_id, total_bots, seed, config_json, name, mode)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (game_id, owner_user_id, total_bots, seed, config_json),
+            (game_id, owner_user_id, total_bots, seed, config_json, name, mode),
         )
         self.conn.commit()
         return self.get_game(game_id)
+
+    def count_games_by_mode(self, owner_user_id: int, mode: str) -> int:
+        """해당 유저의 특정 모드 게임 수 반환 (기본 이름 번호 생성용)."""
+        cursor = self._execute(
+            "SELECT COUNT(*) FROM games WHERE owner_user_id = ? AND mode = ?",
+            (owner_user_id, mode),
+        )
+        row = cursor.fetchone()
+        return row[0] if row else 0
 
     def get_game(self, game_id: str) -> Optional[GameRecord]:
         cursor = self._execute("SELECT * FROM games WHERE id = ?", (game_id,))
@@ -231,6 +244,7 @@ class GameRepository:
         return [self._row_to_game(row) for row in cursor.fetchall()]
 
     def _row_to_game(self, row: sqlite3.Row) -> GameRecord:
+        col_names = row.keys()
         return GameRecord(
             id=row["id"],
             owner_user_id=row["owner_user_id"],
@@ -243,6 +257,8 @@ class GameRepository:
             winner_bot_id=row["winner_bot_id"],
             total_bots=row["total_bots"],
             seed=row["seed"],
+            name=row["name"] if "name" in col_names else None,
+            mode=row["mode"] if "mode" in col_names else "battle-royale",
         )
 
     def _row_to_participant(self, row: sqlite3.Row) -> ParticipantRecord:

@@ -13,7 +13,12 @@ from ..db.game_repo import GameRecord, ParticipantRecord
 from .schemas import GameInfo, GameStatus
 
 
-def game_info_from_state(game_id: str, state_data: dict) -> GameInfo:
+def game_info_from_state(
+    game_id: str,
+    state_data: dict,
+    name: Optional[str] = None,
+    mode: str = "battle-royale",
+) -> GameInfo:
     """StateStore에 저장된 상태로부터 GameInfo를 복원한다."""
     bots = state_data.get("bots", [])
     bot_ids = state_data.get("bot_ids") or [b["id"] for b in bots if "id" in b]
@@ -36,6 +41,8 @@ def game_info_from_state(game_id: str, state_data: dict) -> GameInfo:
         total_bots=state_data.get("total_bots", len(bot_ids)),
         alive_bots=alive_bots,
         bot_ids=bot_ids,
+        name=name,
+        mode=mode,
     )
 
 
@@ -59,6 +66,8 @@ def game_info_from_result(
         total_bots=len(bot_ids),
         alive_bots=0,
         bot_ids=bot_ids,
+        name=result.get("name"),
+        mode=result.get("mode", "battle-royale"),
     )
 
 
@@ -83,6 +92,8 @@ def game_info_from_record(
         total_bots=record.total_bots,
         alive_bots=alive_bots,
         bot_ids=bot_ids,
+        name=record.name,
+        mode=record.mode,
     )
 
 
