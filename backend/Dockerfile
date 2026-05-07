@@ -3,7 +3,10 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir fastapi "uvicorn[standard]" redis firebase-admin psycopg2-binary
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]" redis firebase-admin psycopg2-binary google-cloud-storage "numpy>=2.0"
+
+# GCS 가중치 유틸리티
+COPY BattleRoyale/gcs_weights.py ./
 
 # BattleRoyale → src/arena/
 COPY BattleRoyale/src/ ./src/

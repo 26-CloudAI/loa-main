@@ -153,6 +153,10 @@ class ContainerManager:
         # other 읽기/실행 권한(o+rx/o+r)이 필요하다
         os.chmod(bot_dir, 0o755)
 
+        # cap_drop=["ALL"] 환경에서 컨테이너 root가 파일을 읽으려면
+        # other 읽기/실행 권한(o+rx/o+r)이 필요하다
+        os.chmod(bot_dir, 0o755)
+
         # 유저 봇 코드
         user_bot_path = bot_dir / "user_bot.py"
         user_bot_path.write_text(self.bot_code, encoding="utf-8")

@@ -68,17 +68,83 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function BossInfoBanner() {
+type Difficulty = '하' | '중' | '상'
+
+const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: string; color: string; border: string; selected: string }> = {
+  하: {
+    label: '하',
+    sub: '쉬움',
+    desc: '광물 채굴·생존 중심 룰베이스 보스. 인접 공격만 하며 추적하지 않습니다.',
+    color: 'text-green-300',
+    border: 'border-green-700',
+    selected: 'border-green-400 bg-green-950/40',
+  },
+  중: {
+    label: '중',
+    sub: '보통',
+    desc: '채굴과 전투를 균형 있게 수행하는 룰베이스 보스. 시야 내 적을 적극 추적합니다.',
+    color: 'text-yellow-300',
+    border: 'border-yellow-700',
+    selected: 'border-yellow-400 bg-yellow-950/40',
+  },
+  상: {
+    label: '상',
+    sub: '어려움',
+    desc: '수천 판 학습한 DQN 강화학습 보스. 매일 유저 코드를 학습해 점점 강해집니다.',
+    color: 'text-red-300',
+    border: 'border-red-700',
+    selected: 'border-red-400 bg-red-950/40',
+  },
+}
+
+function DifficultySelector({
+  value,
+  onChange,
+}: {
+  value: Difficulty
+  onChange: (d: Difficulty) => void
+}) {
+  return (
+    <div className="flex gap-3">
+      {(Object.keys(DIFFICULTY_INFO) as Difficulty[]).map((d) => {
+        const info = DIFFICULTY_INFO[d]
+        const isSelected = value === d
+        return (
+          <button
+            key={d}
+            type="button"
+            onClick={() => onChange(d)}
+            className={[
+              'flex-1 rounded-xl border px-3 py-3 text-left transition-all',
+              isSelected ? info.selected : 'border-gray-700 bg-gray-800 hover:border-gray-500',
+            ].join(' ')}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`font-bold text-base ${isSelected ? info.color : 'text-gray-300'}`}>
+                {info.label}
+              </span>
+              <span className={`text-xs ${isSelected ? info.color : 'text-gray-500'}`}>
+                {info.sub}
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 leading-relaxed">{info.desc}</p>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function BossInfoBanner({ difficulty }: { difficulty: Difficulty }) {
+  const info = DIFFICULTY_INFO[difficulty]
   return (
     <div className="bg-red-950/40 border border-red-800/60 rounded-xl px-5 py-4 flex gap-4 items-start">
       <span className="text-3xl shrink-0">👾</span>
       <div className="flex flex-col gap-1">
-        <p className="font-bold text-red-300">AI 보스 — DQN 강화학습 봇</p>
-        <p className="text-sm text-gray-400 leading-relaxed">
-          수천 판의 게임 경험으로 훈련된 보스입니다. 자기장 회피, 광물 채굴, 전투 판단을
-          신경망으로 결정하며 매 게임마다 학습해 점점 강해집니다.
-          당신의 봇이 이길 수 있을지 도전해보세요.
+        <p className={`font-bold ${info.color}`}>
+          AI 보스 ({info.label} — {info.sub})
         </p>
+        <p className="text-sm text-gray-400 leading-relaxed">{info.desc}</p>
       </div>
     </div>
   )
@@ -92,6 +158,7 @@ export default function BossBattlePage() {
   const [code, setCode] = useState(DEFAULT_CODE)
   const [tickInterval, setTickInterval] = useState(0.05)
   const [seed, setSeed] = useState('')
+  const [difficulty, setDifficulty] = useState<Difficulty>('중')
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -117,6 +184,7 @@ export default function BossBattlePage() {
         bots: [{ bot_id: botId.trim() || 'challenger', code }],
         tick_interval: tickInterval,
         mode: 'boss',
+        difficulty,
         seed: seed !== '' ? parseInt(seed, 10) : null,
       }
 
@@ -158,7 +226,12 @@ export default function BossBattlePage() {
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
 
-          <BossInfoBanner />
+          <BossInfoBanner difficulty={difficulty} />
+
+          {/* 난이도 선택 */}
+          <Section title="난이도">
+            <DifficultySelector value={difficulty} onChange={setDifficulty} />
+          </Section>
 
           {/* 봇 이름 */}
           <Section title="내 봇 이름">

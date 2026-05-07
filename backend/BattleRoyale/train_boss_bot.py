@@ -9,12 +9,18 @@ RLBossBot 강화학습 훈련 스크립트
   2. GameEngine.run_full_game() 으로 한 판 완주 — 봇 내부에서 온라인 TD 업데이트 수행
   3. 에피소드 종료 후 boss bot 인스턴스에서 현재 가중치를 꺼내 다음 에피소드에 전달
   4. 100 에피소드마다 평균 순위 / 평균 점수 출력
-  5. 학습 완료 후 bots/trained_weights.json에 저장
+  5. 학습 완료 후 저장 (GCS 또는 로컬)
 
 사용법:
-    python train_boss_bot.py                   # 500 에피소드 (기본)
-    python train_boss_bot.py --episodes 50     # 50 에피소드 (빠른 테스트)
+    python train_boss_bot.py                           # 500 에피소드, 로컬 저장
+    python train_boss_bot.py --episodes 50             # 빠른 테스트
+    python train_boss_bot.py --gcs-uri gs://bucket/trained_weights.json
     python train_boss_bot.py --episodes 1000 --bots 6 --seed 0
+
+GCS 모드 (Cloud Run Job):
+  --gcs-uri 를 주거나 BOSS_WEIGHTS_GCS_URI 환경변수 설정 시:
+    1. GCS에서 기존 가중치 다운로드 (이어서 학습)
+    2. 훈련 완료 후 GCS에 atomic 업로드
 """
 
 from __future__ import annotations
@@ -27,6 +33,8 @@ from pathlib import Path
 
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, str(Path(__file__).parent))
+
+import gcs_weights
 
 from src.arena.config import DEFAULT_CONFIG
 from src.arena.engine import GameEngine
@@ -90,20 +98,32 @@ def train(
     n_bots: int = 5,
     base_seed: int = 42,
     verbose: bool = False,
+    gcs_uri: str = "",
 ) -> None:
     rng = random.Random(base_seed)
+
+    # GCS에서 기존 가중치 가져오기 (이어서 학습)
+    local_weights = WEIGHTS_PATH
+    if gcs_uri or gcs_weights.enabled():
+        downloaded = gcs_weights.download(gcs_uri)
+        if downloaded:
+            local_weights = downloaded
+            print(f"  GCS에서 가중치 로드: {gcs_uri or gcs_weights._GCS_URI}")
+        else:
+            print("  GCS 가중치 없음 — 처음부터 학습")
 
     print("=" * 65)
     print(f"  RLBossBot 훈련 시작")
     print(f"  에피소드: {n_episodes} | 총 봇 수: {n_bots} | 기본 시드: {base_seed}")
-    print(f"  탐색 엡실론: {TRAIN_EPSILON} | 저장 경로: {WEIGHTS_PATH}")
+    print(f"  탐색 엡실론: {TRAIN_EPSILON} | 저장 경로: {local_weights}")
     print("=" * 65)
 
-    # 첫 에피소드용 boss bot — 기존 trained_weights.json 있으면 자동 로드
+    # 첫 에피소드용 boss bot — 기존 가중치 있으면 자동 로드
     boss_bot = RLBossBot(
         bot_id=BOSS_BOT_ID,
         seed=rng.randint(0, 10_000),
         epsilon_override=TRAIN_EPSILON,
+        weights_path=local_weights,
     )
 
     # 누적 통계
@@ -120,6 +140,9 @@ def train(
         ep_seed = rng.randint(0, 1_000_000)
         n_opponents = n_bots - 1
 
+        # 틱 상태만 초기화 — 버퍼·가중치는 에피소드 간 유지
+        boss_bot.reset_for_episode()
+
         opponent_bots = _create_opponent_bots(n_opponents, ep_seed, rng)
         all_bots = [boss_bot] + opponent_bots
 
@@ -135,24 +158,15 @@ def train(
             print(
                 f"  [ep {ep:4d}] 순위: {rank}/{n_bots} | "
                 f"점수: {score:7.1f} | 생존틱: {survival:3d} | "
+                f"버퍼: {len(boss_bot._buffer):5d} | "
                 f"종료: {result.reason.value}"
             )
 
-        # 에피소드 종료 후 가중치를 꺼내서 다음 boss bot에게 전달
-        learned_weights = boss_bot.get_weights()
-
-        # 다음 에피소드용 boss bot 생성 (학습된 가중치 인계)
-        boss_bot = RLBossBot(
-            bot_id=BOSS_BOT_ID,
-            seed=rng.randint(0, 10_000),
-            weights_path=None,          # 파일에서 로드하지 않음 (직접 전달)
-            epsilon_override=TRAIN_EPSILON,
-        )
-        # 파일 로드를 건너뛰고 직접 가중치 주입
-        boss_bot.set_weights(learned_weights)
+        # 종료 보상 push + 추가 학습(×4) + 가중치 저장(버퍼 제외)
+        boss_bot.on_episode_done(rank, n_bots)
 
         # ------------------------------------------------------------------
-        # 100 에피소드마다 진행 상황 출력 + 중간 체크포인트 저장
+        # 100 에피소드마다 진행 상황 출력
         # ------------------------------------------------------------------
         if ep % 100 == 0 or ep == n_episodes:
             window = min(100, ep)
@@ -166,6 +180,7 @@ def train(
                 f"최근{window}ep 평균 순위: {avg_rank:.2f}/{n_bots} | "
                 f"평균 점수: {avg_score:8.1f} | "
                 f"평균 생존틱: {avg_survival:.1f} | "
+                f"버퍼: {len(boss_bot._buffer):5d} | "
                 f"경과: {elapsed:.1f}s"
             )
 
@@ -176,7 +191,7 @@ def train(
                 print(f"  -> 베스트 가중치 갱신 (평균 순위 {avg_rank:.2f})")
 
     # ------------------------------------------------------------------
-    # 훈련 완료 — 최종 가중치 저장
+    # 훈련 완료 — 베스트 가중치 + 누적 버퍼 최종 저장
     # ------------------------------------------------------------------
     print()
     print("=" * 65)
@@ -185,7 +200,8 @@ def train(
     # 저장할 가중치 결정: 베스트가 있으면 베스트, 없으면 마지막
     save_weights = best_weights if best_weights is not None else boss_bot.get_weights()
     boss_bot.set_weights(save_weights)
-    boss_bot.save_weights(WEIGHTS_PATH)
+    # 최종 저장은 버퍼 포함 — 다음 훈련 시 ep1부터 즉시 학습 가능
+    boss_bot.save_weights(local_weights, save_buffer=True)
 
     total_avg_rank = sum(rank_history) / len(rank_history)
     total_avg_score = sum(score_history) / len(score_history)
@@ -194,8 +210,16 @@ def train(
     print(f"  전체 평균 순위 : {total_avg_rank:.2f} / {n_bots}")
     print(f"  전체 평균 점수 : {total_avg_score:.1f}")
     print(f"  총 소요 시간   : {elapsed_total:.1f}s")
-    print(f"  가중치 저장 위치: {WEIGHTS_PATH}")
+    print(f"  가중치 저장 위치: {local_weights}")
     print("=" * 65)
+
+    # GCS에 업로드
+    if gcs_uri or gcs_weights.enabled():
+        ok = gcs_weights.upload(local_weights, gcs_uri)
+        if ok:
+            print(f"  GCS 업로드 완료: {gcs_uri or gcs_weights._GCS_URI}")
+        else:
+            print("  GCS 업로드 실패 — 로컬 파일은 보존됨", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +254,13 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="매 에피소드 결과 출력",
     )
+    parser.add_argument(
+        "--gcs-uri",
+        type=str,
+        default="",
+        help="GCS 가중치 경로 (예: gs://bucket/trained_weights.json). "
+             "BOSS_WEIGHTS_GCS_URI 환경변수로도 설정 가능",
+    )
     return parser.parse_args()
 
 
@@ -245,4 +276,5 @@ if __name__ == "__main__":
         n_bots=args.bots,
         base_seed=args.seed,
         verbose=args.verbose,
+        gcs_uri=args.gcs_uri,
     )

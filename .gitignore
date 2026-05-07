@@ -34,4 +34,7 @@ secrets/*
 Thumbs.db
 server/secrets/
 
+# wiki
+wiki/
+
 CLAUDE.md
