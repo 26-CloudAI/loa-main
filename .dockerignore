@@ -1,0 +1,6 @@
+**/trained_weights.json
+**/__pycache__
+**/*.pyc
+**/*.pyo
+.git
+.gitignore

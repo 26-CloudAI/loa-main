@@ -24,6 +24,9 @@ venv/
 # Docker
 docker-compose.override.yml
 
+# 샌드박스 임시 파일
+temp_bots/
+
 # OS
 .DS_Store
 Thumbs.db

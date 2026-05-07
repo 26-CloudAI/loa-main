@@ -5,6 +5,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
 }
 
+
 button:not(:disabled) {
   cursor: pointer;
 }
