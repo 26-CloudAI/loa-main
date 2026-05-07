@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # 학습에 필요한 패키지만 설치 (서버 의존성 제외)
-RUN pip install --no-cache-dir numpy google-cloud-storage
+RUN pip install --no-cache-dir "numpy>=2.0" google-cloud-storage
 
 COPY BattleRoyale/src/ ./src/
 COPY BattleRoyale/bots/ ./bots/

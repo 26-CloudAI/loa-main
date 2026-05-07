@@ -128,13 +128,32 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
     return fillers
 
 
-def _create_boss_bot(existing_ids: set[str]) -> BotInterface:
-    """보스전용 RLBossBot 1개 생성. GCS 캐시 파일이 있으면 그 가중치를 사용."""
-    from bots.rl_boss_bot import RLBossBot
-    import gcs_weights
+def _create_boss_bot(existing_ids: set[str], difficulty: str = "상") -> BotInterface:
+    """
+    보스전용 봇 생성. 난이도에 따라 봇 종류가 다름.
+      하 → RuleBossEasyBot  (룰베이스, 채굴·생존 중심)
+      중 → RuleBossMediumBot (룰베이스, 채굴+전투 균형)
+      상 → RLBossBot         (강화학습, GCS 가중치 사용)
+    """
     bot_id = "AI_보스"
     existing_ids.add(bot_id)
+
+    if difficulty == "하":
+        from bots.rule_boss_bot import RuleBossEasyBot
+        return RuleBossEasyBot(bot_id=bot_id, seed=42)
+
+    if difficulty == "중":
+        from bots.rule_boss_bot import RuleBossMediumBot
+        return RuleBossMediumBot(bot_id=bot_id, seed=42)
+
+    # 상 (기본값): RLBossBot + GCS 가중치
+    from bots.rl_boss_bot import RLBossBot
+    import gcs_weights
     cache = gcs_weights.local_cache_path()
+    # 캐시가 없고 GCS가 활성화된 경우 서버 시작 시 다운로드 실패를 재시도
+    if not cache.exists() and gcs_weights.enabled():
+        logger.info("보스봇 가중치 캐시 없음 — GCS 재다운로드 시도")
+        gcs_weights.download()
     weights_path = cache if cache.exists() else None
     return RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
 
@@ -401,6 +420,7 @@ def create_app(
         fill_with_ai = body.get("fill_with_ai", True)
         min_bots = body.get("min_bots", 4)
         mode = body.get("mode", "battle-royale")
+        difficulty = body.get("difficulty", "상")  # 보스전 난이도: 하/중/상
 
         # 봇 코드 크기 검증
         max_size = server_config.api.max_bot_code_size
@@ -451,10 +471,10 @@ def create_app(
             participant_specs.append((b["bot_id"], False))
 
         if mode == "boss":
-            # 보스전: 유저 봇 1명 + RLBossBot 1명
+            # 보스전: 유저 봇 1명 + 보스봇 1명 (난이도별)
             if len(bot_interfaces) != 1:
                 raise HTTPException(400, "보스전은 봇 1개만 등록할 수 있습니다.")
-            boss_bot = _create_boss_bot(existing_ids)
+            boss_bot = _create_boss_bot(existing_ids, difficulty=difficulty)
             bot_interfaces.append(boss_bot)
             participant_specs.append((boss_bot.bot_id, True))
         elif fill_with_ai and len(bot_interfaces) < min_bots:
