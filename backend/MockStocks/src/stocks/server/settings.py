@@ -1,4 +1,18 @@
+"""
+MockStocks — 환경변수 기반 설정
+
+BattleRoyale와 동일한 DB 환경변수를 독립적으로 읽어 같은 ai_arena DB를 공유한다.
+"""
+
 import os
 
+# ── 서버 ───────────────────────────────────────
 SERVER_PORT: int = int(os.getenv("STOCKS_PORT", "8090"))
 JWT_SECRET: str  = os.getenv("JWT_SECRET", "")
+
+# ── DB ─────────────────────────────────────────
+DB_TYPE: str     = os.environ.get("DB_TYPE", "sqlite")        # "sqlite" | "postgresql"
+DB_HOST: str     = os.environ.get("DB_HOST", "")
+DB_NAME: str     = os.environ.get("DB_NAME", "ai_arena")
+DB_USER: str     = os.environ.get("DB_USER", "")
+DB_PASSWORD: str = os.environ.get("DB_PASSWORD", "")

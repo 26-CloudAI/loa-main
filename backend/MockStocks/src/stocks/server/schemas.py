@@ -25,7 +25,10 @@ class GameInfo:
             "status": self.status.value,
             "current_tick": self.current_tick,
             "total_bots": self.total_bots,
+            "alive_bots": len(self.bot_ids),
             "bot_ids": self.bot_ids,
+            "mode": "mock-stocks",
+            "name": None,
         }
 
 

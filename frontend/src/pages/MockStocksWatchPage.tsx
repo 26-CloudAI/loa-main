@@ -699,6 +699,12 @@ export default function MockStocksWatchPage() {
             </div>
             <div className="mt-6 flex flex-col gap-2">
               <button
+                onClick={() => navigate(`/games/${game_id}/mock-stocks/result`)}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 text-sm font-medium transition-colors"
+              >
+                결과 보기
+              </button>
+              <button
                 onClick={() => navigate('/games/new')}
                 className="w-full bg-green-600 hover:bg-green-500 text-white rounded-xl py-3 text-sm font-medium transition-colors"
               >
