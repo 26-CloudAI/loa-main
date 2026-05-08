@@ -66,6 +66,14 @@ def _get_uid(request: Request) -> Optional[str]:
         return None
 
 
+def _require_uid(request: Request) -> str:
+    """UID를 반환하거나, 인증 실패 시 401을 발생시킨다."""
+    uid = _get_uid(request)
+    if uid is None:
+        raise HTTPException(401, "인증이 필요합니다.")
+    return uid
+
+
 # ── InProcessBot ──────────────────────────────────────────────────────────────
 
 class InProcessBot(BotInterface):
@@ -184,17 +192,17 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
 
     @app.get("/api/games")
     async def list_games(request: Request):
-        uid = _get_uid(request)
+        uid = _require_uid(request)
         return [g.to_dict() for g in registry.list_games(owner_uid=uid)]
 
     @app.get("/api/games/history")
     async def list_history(request: Request, limit: int = 50):
         """완료된 MockStocks 게임 기록을 DB에서 조회. lifespan 전이거나 repo 미설정 시 빈 목록 반환."""
+        uid = _require_uid(request)
         repo = registry._repo
         if repo is None:
             return []
 
-        uid = _get_uid(request)
         games = repo.get_finished_games(limit=limit, owner_uid=uid)
         result = []
         for g in games:
@@ -260,7 +268,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         if body.prepare_id and body.prepare_id in _prepared_news:
             prepared_news = _prepared_news.pop(body.prepare_id)
 
-        uid = _get_uid(request)
+        uid = _require_uid(request)
         session = registry.create_game(
             config=cfg,
             tick_interval=body.tick_interval,
