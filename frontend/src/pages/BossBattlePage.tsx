@@ -315,11 +315,12 @@ export default function BossBattlePage() {
                 <p className="text-xs text-gray-500">비우면 랜덤</p>
               </div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={seed}
-                onChange={(e) => setSeed(e.target.value)}
+                onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="랜덤"
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-24 text-center placeholder-gray-400"
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-20 text-center placeholder-gray-400"
               />
             </div>
           </section>
