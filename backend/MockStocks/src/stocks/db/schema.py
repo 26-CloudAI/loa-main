@@ -22,6 +22,7 @@ SCHEMA_SQL_SQLITE = """
 CREATE TABLE IF NOT EXISTS stock_games (
     id              TEXT    PRIMARY KEY,
     owner_uid       TEXT,
+    name            TEXT,
     status          TEXT    NOT NULL DEFAULT 'waiting',
     total_bots      INTEGER NOT NULL DEFAULT 0,
     seed            INTEGER,
@@ -59,6 +60,7 @@ SCHEMA_SQL_POSTGRESQL = """
 CREATE TABLE IF NOT EXISTS stock_games (
     id              TEXT        PRIMARY KEY,
     owner_uid       TEXT,
+    name            TEXT,
     status          TEXT        NOT NULL DEFAULT 'waiting',
     total_bots      INTEGER     NOT NULL DEFAULT 0,
     seed            INTEGER,
@@ -154,6 +156,10 @@ def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
         conn.execute("ALTER TABLE stock_games ADD COLUMN owner_uid TEXT")
     except Exception:
         pass
+    try:
+        conn.execute("ALTER TABLE stock_games ADD COLUMN name TEXT")
+    except Exception:
+        pass
     conn.commit()
     return conn
 
@@ -189,6 +195,9 @@ def _init_postgresql():
                 cur.execute(stmt)
         cur.execute(
             "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS owner_uid TEXT"
+        )
+        cur.execute(
+            "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS name TEXT"
         )
 
     conn.commit()

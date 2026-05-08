@@ -29,6 +29,7 @@ class StockGameRecord:
     final_tick: Optional[int]
     end_reason: Optional[str]
     owner_uid: Optional[str] = None
+    name: Optional[str] = None
 
 
 @dataclass
@@ -71,13 +72,14 @@ class StockGameRepository:
         total_ticks: Optional[int] = None,
         tick_interval: Optional[float] = None,
         owner_uid: Optional[str] = None,
+        name: Optional[str] = None,
     ) -> None:
         self._execute(
             """
-            INSERT INTO stock_games (id, owner_uid, total_bots, seed, total_ticks, tick_interval)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO stock_games (id, owner_uid, name, total_bots, seed, total_ticks, tick_interval)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (game_id, owner_uid, total_bots, seed, total_ticks, tick_interval),
+            (game_id, owner_uid, name, total_bots, seed, total_ticks, tick_interval),
         )
         self.conn.commit()
 
@@ -116,6 +118,15 @@ class StockGameRepository:
             (limit,),
         )
         return [self._row_to_game(row) for row in cursor.fetchall()]
+
+    def count_games_by_owner(self, owner_uid: str) -> int:
+        """해당 유저의 MockStocks 게임 수 반환 (기본 이름 번호 생성용)."""
+        cursor = self._execute(
+            "SELECT COUNT(*) AS cnt FROM stock_games WHERE owner_uid = ?",
+            (owner_uid,),
+        )
+        row = cursor.fetchone()
+        return row["cnt"] if row else 0
 
     def get_finished_games(self, limit: int = 20, owner_uid: Optional[str] = None) -> list[StockGameRecord]:
         if owner_uid is not None:
@@ -232,6 +243,7 @@ class StockGameRepository:
             final_tick=row["final_tick"],
             end_reason=row["end_reason"],
             owner_uid=row["owner_uid"] if "owner_uid" in row.keys() else None,
+            name=row["name"] if "name" in row.keys() else None,
         )
 
     def _row_to_participant(self, row) -> StockParticipantRecord:

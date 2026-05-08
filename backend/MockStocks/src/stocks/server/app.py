@@ -47,6 +47,7 @@ class CreateGameRequest(BaseModel):
     min_bots: int = 4
     tick_interval: float = 0.1
     seed: Optional[int] = None
+    name: Optional[str] = None
     prepare_id: Optional[str] = None  # 사전 생성된 뉴스 ID
 
 logger = logging.getLogger(__name__)
@@ -251,7 +252,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                 "total_bots": g.total_bots,
                 "alive_bots": 0,
                 "bot_ids": [p.bot_id for p in participants],
-                "name": None,
+                "name": g.name,
                 "finished_at": g.finished_at,
                 "end_reason": g.end_reason,
                 "rankings": rankings,
@@ -292,12 +293,17 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             prepared_news = _prepared_news.pop(body.prepare_id)
 
         uid = _require_uid(request)
+        name = body.name.strip() if body.name else None
+        next_index = registry._repo.count_games_by_owner(uid) + 1 if registry._repo else 1
         session = registry.create_game(
             config=cfg,
             tick_interval=body.tick_interval,
             seed=body.seed,
             owner_uid=uid,
         )
+        if not name:
+            name = f"모의주식 {next_index} · {session.game_id}"
+        session.name = name
         session.register_bots(user_bots + filler_bots)
 
         try:

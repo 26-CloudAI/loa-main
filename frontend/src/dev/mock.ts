@@ -23,7 +23,7 @@ export const MOCK_GAMES = [
     total_bots: 2,
     alive_bots: 2,
     bot_ids: ['my_bot', 'BOSS'],
-    name: '새 보스전 1',
+    name: '보스전 1 · bbbbbbbb',
     mode: 'boss',
   },
   // 진행 중
@@ -34,7 +34,7 @@ export const MOCK_GAMES = [
     total_bots: 4,
     alive_bots: 3,
     bot_ids: ['my_bot', 'AI_초식_0', 'AI_미친개_1', 'AI_존버_2'],
-    name: '새 배틀로얄 2',
+    name: '배틀로얄 2 · aaaaaaaa',
     mode: 'battle-royale',
   },
   // 가장 오래된 — 종료
@@ -45,7 +45,7 @@ export const MOCK_GAMES = [
     total_bots: 4,
     alive_bots: 0,
     bot_ids: ['my_bot', 'AI_초식_0', 'AI_미친개_1', 'AI_존버_2'],
-    name: '새 배틀로얄 1',
+    name: '배틀로얄 1 · cccccccc',
     mode: 'battle-royale',
   },
 ]
@@ -123,7 +123,7 @@ export function startMockSimulation(callbacks: {
 }): () => void {
   let tick = 0
   const bots = initBots()
-  let minerals = initMinerals()
+  const minerals = initMinerals()
   const kills: Record<string, number> = {}
   const mined: Record<string, number> = {}
   bots.forEach((b) => { kills[b.id] = 0; mined[b.id] = 0 })

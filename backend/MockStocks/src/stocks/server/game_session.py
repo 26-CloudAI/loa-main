@@ -28,6 +28,7 @@ class GameSession:
         seed: Optional[int] = None,
         repo: Optional[StockGameRepository] = None,
         owner_uid: Optional[str] = None,
+        name: Optional[str] = None,
     ):
         self.game_id = game_id
         self._sm = spectator_manager
@@ -36,6 +37,7 @@ class GameSession:
         self.seed = seed or random.randint(0, 2**31)
         self._repo = repo
         self.owner_uid = owner_uid
+        self.name = name
 
         self.status = GameStatus.WAITING
         self._bots: list[BotInterface] = []
@@ -64,6 +66,7 @@ class GameSession:
                 total_ticks=self._cfg.game.total_ticks,
                 tick_interval=self.tick_interval,
                 owner_uid=self.owner_uid,
+                name=self.name,
             )
             for bot in self._bots:
                 self._repo.add_participant(
@@ -123,6 +126,7 @@ class GameSession:
             current_tick=tick,
             total_bots=len(self._bots),
             bot_ids=[b.bot_id for b in self._bots],
+            name=self.name,
         )
 
     def get_last_snapshot(self) -> Optional[dict]:
@@ -202,6 +206,7 @@ class GameRegistry:
         tick_interval: float = 0.1,
         seed: Optional[int] = None,
         owner_uid: Optional[str] = None,
+        name: Optional[str] = None,
     ) -> GameSession:
         game_id = str(uuid.uuid4())[:8]
         session = GameSession(
@@ -212,6 +217,7 @@ class GameRegistry:
             seed=seed,
             repo=self._repo,
             owner_uid=owner_uid,
+            name=name,
         )
         self._sessions[game_id] = session
         logger.info("게임 생성: %s", game_id)

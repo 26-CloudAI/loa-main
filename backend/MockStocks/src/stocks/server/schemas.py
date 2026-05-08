@@ -1,6 +1,7 @@
 from __future__ import annotations
 from enum import Enum
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Optional
 
 
 class GameStatus(str, Enum):
@@ -18,6 +19,7 @@ class GameInfo:
     current_tick: int
     total_bots: int
     bot_ids: list[str]
+    name: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -28,7 +30,7 @@ class GameInfo:
             "alive_bots": len(self.bot_ids),
             "bot_ids": self.bot_ids,
             "mode": "mock-stocks",
-            "name": None,
+            "name": self.name,
         }
 
 

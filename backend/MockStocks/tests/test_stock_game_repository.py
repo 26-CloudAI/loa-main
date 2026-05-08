@@ -16,6 +16,7 @@ def test_repository_persists_game_and_participant_results(tmp_path, monkeypatch)
         seed=123,
         total_ticks=200,
         tick_interval=0.1,
+        name="모의주식 1 · game-1",
     )
     participant_id = repo.add_participant(
         game_id="game-1",
@@ -44,6 +45,7 @@ def test_repository_persists_game_and_participant_results(tmp_path, monkeypatch)
     assert game.seed == 123
     assert game.final_tick == 200
     assert game.end_reason == "finished"
+    assert game.name == "모의주식 1 · game-1"
 
     assert len(participants) == 1
     participant = participants[0]
@@ -89,3 +91,18 @@ def test_repository_lists_only_finished_games_for_history(tmp_path, monkeypatch)
     games = repo.get_finished_games()
 
     assert [game.id for game in games] == ["finished-game"]
+
+
+def test_repository_counts_games_by_owner(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DB_TYPE", "sqlite")
+    conn = init_db(tmp_path / "stocks.db")
+    repo = StockGameRepository(conn)
+
+    repo.create_game("owner-game-1", total_bots=2, owner_uid="owner-a")
+    repo.create_game("owner-game-2", total_bots=2, owner_uid="owner-a")
+    repo.create_game("other-game", total_bots=2, owner_uid="owner-b")
+    repo.create_game("legacy-game", total_bots=2)
+
+    assert repo.count_games_by_owner("owner-a") == 2
+    assert repo.count_games_by_owner("owner-b") == 1
+    assert repo.count_games_by_owner("missing-owner") == 0
