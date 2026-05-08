@@ -147,9 +147,10 @@ def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
     conn.executescript(SCHEMA_SQL_SQLITE)
     try:
         conn.execute("ALTER TABLE stock_games ADD COLUMN owner_uid TEXT")
-        conn.commit()
     except Exception:
         pass
+    conn.execute("DELETE FROM stock_games WHERE owner_uid IS NULL")
+    conn.commit()
     return conn
 
 
@@ -180,6 +181,7 @@ def _init_postgresql():
         cur.execute(
             "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS owner_uid TEXT"
         )
+        cur.execute("DELETE FROM stock_games WHERE owner_uid IS NULL")
 
     conn.commit()
     conn.cursor_factory = psycopg2.extras.RealDictCursor
