@@ -46,7 +46,7 @@ interface TickData {
 
 // ── SVG 차트 ─────────────────────────────────────────────────────────────────
 
-function StockChart({ history, color }: { history: number[]; symbol: string; color: string }) {
+function StockChart({ history, color }: { history: number[]; color: string }) {
   if (history.length < 2) {
     return (
       <div className="flex items-center justify-center h-full text-gray-600 text-sm">
@@ -127,7 +127,7 @@ export default function MockStocksWatchPage() {
   const navigate = useNavigate()
 
   const [tick, setTick] = useState(0)
-  const [totalTicks] = useState(200)
+  const totalTicks = 200
   const [stocks, setStocks] = useState<StockInfo[]>([])
   const [leaderboard, setLeaderboard] = useState<LeaderEntry[]>([])
   const [news, setNews] = useState<NewsItem[]>([])
@@ -275,7 +275,6 @@ export default function MockStocksWatchPage() {
             <div className="flex-1 min-h-0">
               <StockChart
                 history={priceHistory[selectedStock] ?? []}
-                symbol={selectedStock}
                 color={stockColorMap[selectedStock] ?? '#6366F1'}
               />
             </div>
@@ -349,7 +348,7 @@ export default function MockStocksWatchPage() {
                         <span style={{ color: rankColor }} className="font-bold w-4">
                           {i < 3 ? ['🥇','🥈','🥉'][i] : `${entry.rank}`}
                         </span>
-                        <span className="truncate max-w-[110px]">{entry.id}</span>
+                        <span className="truncate max-w-28">{entry.id}</span>
                       </span>
                       <span className="font-mono text-gray-300">
                         {(entry.total_value / 1e8).toFixed(3)}억
