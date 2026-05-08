@@ -540,7 +540,7 @@ def create_app(
         if not name:
             count = repo.count_games_by_mode(db_user.id, mode)
             mode_label = {"battle-royale": "배틀로얄", "boss": "보스전"}.get(mode, mode)
-            name = f"새 {mode_label} {count + 1}"
+            name = f"{mode_label} {count + 1} · {session.game_id}"
 
         repo.create_game(
             session.game_id,

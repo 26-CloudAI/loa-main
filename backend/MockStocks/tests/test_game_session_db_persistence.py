@@ -45,6 +45,7 @@ def _seed_running_game(repo: StockGameRepository, game_id: str, bot_id: str = "b
         seed=123,
         total_ticks=DEFAULT_CONFIG.game.total_ticks,
         tick_interval=DEFAULT_CONFIG.game.tick_interval,
+        name=f"모의주식 1 · {game_id}",
     )
     repo.add_participant(game_id, bot_id=bot_id, bot_name=bot_id)
     repo.update_game_started(game_id)
@@ -118,3 +119,16 @@ def test_stop_does_not_overwrite_already_finished_game(tmp_path, monkeypatch):
     game = repo.get_game("game-3")
     assert game.final_tick == 200
     assert game.end_reason == "finished"
+
+
+def test_game_session_info_includes_name():
+    session = GameSession(
+        "abc12345",
+        RecordingSpectatorManager(),
+        name="모의주식 1 · abc12345",
+    )
+    session._bots = [DummyBot("bot-a"), DummyBot("bot-b")]
+
+    info = session.get_info().to_dict()
+
+    assert info["name"] == "모의주식 1 · abc12345"

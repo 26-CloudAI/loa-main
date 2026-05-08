@@ -241,7 +241,7 @@ export default function BossBattlePage() {
               type="text"
               value={gameName}
               onChange={(e) => setGameName(e.target.value)}
-              placeholder="새 보스전 1  (비우면 자동 설정)"
+              placeholder="보스전 1 · 6fda7802  (비우면 자동 설정)"
               maxLength={40}
               className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-600 w-72"
             />
