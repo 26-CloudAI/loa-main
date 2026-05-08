@@ -18,6 +18,7 @@ import asyncio
 import logging
 import sys
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +30,8 @@ from pydantic import BaseModel
 
 from ..bot_interface import BotInterface
 from ..config import Config, DEFAULT_CONFIG
+from ..db.schema import init_db
+from ..db.game_repo import StockGameRepository
 from ..market import Market
 from .game_session import GameRegistry
 from .ws_manager import SpectatorManager
@@ -109,7 +112,18 @@ class RandomBot(BotInterface):
 # ── FastAPI 앱 ────────────────────────────────────────────────────────────────
 
 def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
-    app = FastAPI(title="MockStocks API", version="0.1.0")
+    spectator_manager = SpectatorManager()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        conn = init_db()
+        repo = StockGameRepository(conn)
+        repo.cleanup_stale_games()
+        registry._repo = repo
+        yield
+        conn.close()
+
+    app = FastAPI(title="MockStocks API", version="0.1.0", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -119,7 +133,6 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         allow_headers=["*"],
     )
 
-    spectator_manager = SpectatorManager()
     registry = GameRegistry(spectator_manager)
 
     # prepare_id → 사전 생성된 뉴스 큐 (None = 아직 생성 중)
@@ -159,6 +172,45 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
     async def list_games():
         return [g.to_dict() for g in registry.list_games()]
 
+    @app.get("/api/games/history")
+    async def list_history(limit: int = 50):
+        """완료된 MockStocks 게임 기록을 DB에서 조회. lifespan 전이거나 repo 미설정 시 빈 목록 반환."""
+        repo = registry._repo
+        if repo is None:
+            return []
+
+        games = repo.get_finished_games(limit=limit)
+        result = []
+        for g in games:
+            participants = repo.get_participants(g.id)
+            rankings = [
+                {
+                    "rank": p.final_rank,
+                    "bot_id": p.bot_id,
+                    "bot_name": p.bot_name,
+                    "is_ai_filler": p.is_ai_filler,
+                    "final_total_value": p.final_total_value,
+                    "profit_rate": p.profit_rate,
+                    "final_credit_score": p.final_credit_score,
+                }
+                for p in participants
+                if p.final_rank is not None
+            ]
+            result.append({
+                "game_id": g.id,
+                "status": g.status,
+                "mode": "mock-stocks",
+                "current_tick": g.final_tick or 0,
+                "total_bots": g.total_bots,
+                "alive_bots": 0,
+                "bot_ids": [p.bot_id for p in participants],
+                "name": None,
+                "finished_at": g.finished_at,
+                "end_reason": g.end_reason,
+                "rankings": rankings,
+            })
+        return result
+
     @app.post("/api/games", status_code=201)
     async def create_game(body: CreateGameRequest):
         cfg = DEFAULT_CONFIG
@@ -185,7 +237,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                     i += 1
                     bot_id = f"{filler_labels[cls_idx]}_{i:02d}"
                 existing_ids.add(bot_id)
-                filler_bots.append(filler_classes[cls_idx](bot_id=bot_id))
+                filler_bots.append(filler_classes[cls_idx](bot_id=bot_id, is_ai_filler=True))
 
         # 사전 생성된 뉴스 꺼내기
         prepared_news = None
@@ -217,12 +269,38 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
     @app.get("/api/games/{game_id}/result")
     async def get_result(game_id: str):
         session = registry.get_game(game_id)
-        if not session:
-            raise HTTPException(404, "게임을 찾을 수 없습니다.")
-        snap = session.get_last_snapshot()
-        if not snap:
-            raise HTTPException(404, "결과가 아직 없습니다.")
-        return snap
+        if session:
+            snap = session.get_last_snapshot()
+            if snap:
+                return snap
+
+        # 인메모리에 없으면 DB 폴백 (서버 재시작 후 종료 게임 조회)
+        repo = registry._repo
+        if repo is None:
+            raise HTTPException(404, "결과가 없습니다.")
+        game = repo.get_game(game_id)
+        if not game or game.status != "finished":
+            raise HTTPException(404, "완료된 게임을 찾을 수 없습니다.")
+        participants = repo.get_participants(game_id)
+        return {
+            "game_id": game_id,
+            "status": "finished",
+            "final_tick": game.final_tick,
+            "end_reason": game.end_reason,
+            "finished_at": game.finished_at,
+            "rankings": [
+                {
+                    "rank": p.final_rank,
+                    "bot_id": p.bot_id,
+                    "bot_name": p.bot_name,
+                    "is_ai_filler": p.is_ai_filler,
+                    "final_total_value": p.final_total_value,
+                    "profit_rate": p.profit_rate,
+                }
+                for p in participants
+                if p.final_rank is not None
+            ],
+        }
 
     @app.delete("/api/games/{game_id}", status_code=204)
     async def delete_game(game_id: str):
