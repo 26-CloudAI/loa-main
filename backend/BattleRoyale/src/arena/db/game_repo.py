@@ -80,11 +80,11 @@ class GameRepository:
     def count_games_by_mode(self, owner_user_id: int, mode: str) -> int:
         """해당 유저의 특정 모드 게임 수 반환 (기본 이름 번호 생성용)."""
         cursor = self._execute(
-            "SELECT COUNT(*) FROM games WHERE owner_user_id = ? AND mode = ?",
+            "SELECT COUNT(*) AS cnt FROM games WHERE owner_user_id = ? AND mode = ?",
             (owner_user_id, mode),
         )
         row = cursor.fetchone()
-        return row[0] if row else 0
+        return row["cnt"] if row else 0
 
     def get_game(self, game_id: str) -> Optional[GameRecord]:
         cursor = self._execute("SELECT * FROM games WHERE id = ?", (game_id,))
