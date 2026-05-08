@@ -41,7 +41,10 @@ export default function MockStocksResultPage() {
         if (!res.ok) throw new Error(`${res.status}`)
         return res.json() as Promise<GameResult>
       })
-      .then(setResult)
+      .then((data) => setResult({
+        ...data,
+        rankings: Array.isArray(data.rankings) ? data.rankings : [],
+      }))
       .catch((e) => setError(e instanceof Error ? e.message : '결과를 불러오지 못했습니다.'))
       .finally(() => setLoading(false))
   }, [game_id])

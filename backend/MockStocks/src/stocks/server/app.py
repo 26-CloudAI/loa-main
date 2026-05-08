@@ -270,9 +270,28 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
     async def get_result(game_id: str):
         session = registry.get_game(game_id)
         if session:
-            snap = session.get_last_snapshot()
-            if snap:
-                return snap
+            engine = session._engine
+            result = engine.game_result if engine else None
+            if result:
+                initial_cash = session._cfg.game.starting_cash
+                return {
+                    "game_id": game_id,
+                    "status": "finished",
+                    "final_tick": result.final_tick,
+                    "end_reason": "finished",
+                    "finished_at": None,
+                    "rankings": [
+                        {
+                            "rank": entry["rank"],
+                            "bot_id": entry["id"],
+                            "bot_name": entry["id"],
+                            "is_ai_filler": False,
+                            "final_total_value": entry["total_value"],
+                            "profit_rate": (entry["total_value"] - initial_cash) / initial_cash * 100,
+                        }
+                        for entry in result.rankings
+                    ],
+                }
 
         # 인메모리에 없으면 DB 폴백 (서버 재시작 후 종료 게임 조회)
         repo = registry._repo
