@@ -138,12 +138,35 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        conn = init_db()
-        repo = StockGameRepository(conn)
-        repo.cleanup_stale_games()
-        registry._repo = repo
+        conn = None
+
+        def _init_repository():
+            db_conn = None
+            try:
+                db_conn = init_db()
+                repo = StockGameRepository(db_conn)
+                stale = repo.cleanup_stale_games()
+                return db_conn, repo, stale
+            except Exception:
+                if db_conn is not None:
+                    db_conn.close()
+                raise
+
+        try:
+            loop = asyncio.get_running_loop()
+            conn, repo, stale = await asyncio.wait_for(
+                loop.run_in_executor(None, _init_repository),
+                timeout=35.0,
+            )
+            registry._repo = repo
+            if stale:
+                logger.info("MockStocks 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
+        except Exception as e:
+            registry._repo = None
+            logger.exception("MockStocks DB 초기화 실패, DB 없이 기동: %s", e)
         yield
-        conn.close()
+        if conn is not None:
+            conn.close()
 
     app = FastAPI(title="MockStocks API", version="0.1.0", lifespan=lifespan)
 

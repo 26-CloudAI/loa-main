@@ -17,11 +17,7 @@ from src.arena.db.user_repo import UserRepository
 from src.arena.db.bot_repo import BotRepository
 from src.arena.db.game_repo import GameRepository
 from src.arena.auth.auth_service import (
-    AuthService,
     TokenConfig,
-    generate_salt,
-    hash_password,
-    verify_password,
     create_token,
     decode_token,
 )
@@ -40,9 +36,11 @@ class DBTestBase(unittest.TestCase):
         self.conn.close()
 
     def _create_test_user(self, username="testuser") -> int:
-        salt = generate_salt()
-        pw_hash = hash_password("pass123", salt)
-        user = self.users.create(username, f"Test {username}", pw_hash, salt)
+        user = self.users.create(
+            firebase_uid=f"uid_{username}",
+            username=username,
+            display_name=f"Test {username}",
+        )
         return user.id
 
 
@@ -188,21 +186,25 @@ class TestBotRepo(DBTestBase):
 # ──────────────────────────────────────────────
 
 class TestGameRepo(DBTestBase):
+    def setUp(self):
+        super().setUp()
+        self.owner_id = self._create_test_user("owner")
+
     def test_create_and_get(self):
-        game = self.games.create_game("g-001", total_bots=5, seed=42)
+        game = self.games.create_game("g-001", self.owner_id, total_bots=5, seed=42)
         self.assertEqual(game.id, "g-001")
         self.assertEqual(game.status, "waiting")
         self.assertEqual(game.total_bots, 5)
 
     def test_update_started(self):
-        self.games.create_game("g-002", 4)
+        self.games.create_game("g-002", self.owner_id, 4)
         self.games.update_game_started("g-002")
         game = self.games.get_game("g-002")
         self.assertEqual(game.status, "running")
         self.assertIsNotNone(game.started_at)
 
     def test_update_finished(self):
-        self.games.create_game("g-003", 4)
+        self.games.create_game("g-003", self.owner_id, 4)
         self.games.update_game_finished("g-003", 250, "last_standing")
         game = self.games.get_game("g-003")
         self.assertEqual(game.status, "finished")
@@ -211,7 +213,7 @@ class TestGameRepo(DBTestBase):
     def test_participants(self):
         uid = self._create_test_user()
         bot = self.bots.create(uid, "bot_a", "def action(s): return 'STAY'")
-        self.games.create_game("g-004", 3)
+        self.games.create_game("g-004", self.owner_id, 3)
         self.games.add_participant("g-004", "bot_a", bot_id=bot.id)
         self.games.add_participant("g-004", "AI_초식_00", is_ai_filler=True)
 
@@ -221,7 +223,7 @@ class TestGameRepo(DBTestBase):
         self.assertTrue(parts[1].is_ai_filler)
 
     def test_participant_results(self):
-        self.games.create_game("g-005", 2)
+        self.games.create_game("g-005", self.owner_id, 2)
         self.games.add_participant("g-005", "bot_a")
         self.games.update_participant_result(
             "g-005", "bot_a",
@@ -234,36 +236,13 @@ class TestGameRepo(DBTestBase):
 
     def test_recent_games(self):
         for i in range(5):
-            self.games.create_game(f"g-{i:03d}", 4)
+            self.games.create_game(f"g-{i:03d}", self.owner_id, 4)
         recent = self.games.get_recent_games(3)
         self.assertEqual(len(recent), 3)
 
 
 # ──────────────────────────────────────────────
-#  4. 비밀번호 해싱
-# ──────────────────────────────────────────────
-
-class TestPasswordHashing(unittest.TestCase):
-    def test_hash_and_verify(self):
-        salt = generate_salt()
-        pw_hash = hash_password("mypassword", salt)
-        self.assertTrue(verify_password("mypassword", salt, pw_hash))
-        self.assertFalse(verify_password("wrongpassword", salt, pw_hash))
-
-    def test_different_salts(self):
-        salt1 = generate_salt()
-        salt2 = generate_salt()
-        h1 = hash_password("same_pass", salt1)
-        h2 = hash_password("same_pass", salt2)
-        self.assertNotEqual(h1, h2)
-
-    def test_salt_length(self):
-        salt = generate_salt()
-        self.assertEqual(len(bytes.fromhex(salt)), 32)
-
-
-# ──────────────────────────────────────────────
-#  5. JWT 토큰
+#  4. JWT 토큰
 # ──────────────────────────────────────────────
 
 class TestJWT(unittest.TestCase):
@@ -304,71 +283,6 @@ class TestJWT(unittest.TestCase):
         self.assertIsNone(decode_token("not.a.valid.token.at.all", self.config))
         self.assertIsNone(decode_token("garbage", self.config))
         self.assertIsNone(decode_token("", self.config))
-
-
-# ──────────────────────────────────────────────
-#  6. AuthService
-# ──────────────────────────────────────────────
-
-class TestAuthService(DBTestBase):
-    def setUp(self):
-        super().setUp()
-        self.token_config = TokenConfig(secret_key="test-secret")
-        self.auth = AuthService(self.users, self.token_config)
-
-    def test_register_success(self):
-        ok, msg, data = self.auth.register("alice", "pass123", "Alice")
-        self.assertTrue(ok)
-        self.assertIn("id", data)
-        self.assertEqual(data["username"], "alice")
-
-    def test_register_duplicate(self):
-        self.auth.register("bob", "pass123")
-        ok, msg, _ = self.auth.register("bob", "pass456")
-        self.assertFalse(ok)
-        self.assertIn("이미", msg)
-
-    def test_register_short_username(self):
-        ok, msg, _ = self.auth.register("ab", "pass123")
-        self.assertFalse(ok)
-
-    def test_register_short_password(self):
-        ok, msg, _ = self.auth.register("validuser", "12345")
-        self.assertFalse(ok)
-
-    def test_login_success(self):
-        self.auth.register("charlie", "secure123")
-        ok, msg, data = self.auth.login("charlie", "secure123")
-        self.assertTrue(ok)
-        self.assertIn("access_token", data)
-        self.assertEqual(data["user"]["username"], "charlie")
-
-    def test_login_wrong_password(self):
-        self.auth.register("dave", "correct")
-        ok, msg, _ = self.auth.login("dave", "wrong")
-        self.assertFalse(ok)
-
-    def test_login_nonexistent(self):
-        ok, msg, _ = self.auth.login("ghost", "pass")
-        self.assertFalse(ok)
-
-    def test_login_deactivated(self):
-        self.auth.register("eve", "pass123")
-        user = self.users.get_by_username("eve")
-        self.users.deactivate(user.id)
-        ok, msg, _ = self.auth.login("eve", "pass123")
-        self.assertFalse(ok)
-
-    def test_authenticate_token(self):
-        self.auth.register("frank", "pass123")
-        _, _, data = self.auth.login("frank", "pass123")
-        payload = self.auth.authenticate_token(data["access_token"])
-        self.assertIsNotNone(payload)
-        self.assertEqual(payload["username"], "frank")
-
-    def test_authenticate_bad_token(self):
-        result = self.auth.authenticate_token("garbage.token.here")
-        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

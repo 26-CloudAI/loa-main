@@ -194,7 +194,15 @@ def create_app(
         )
 
     # 공유 상태
-    state = {"registry": None, "spectator_mgr": None}
+    state = {
+        "registry": None,
+        "spectator_mgr": None,
+        "db_conn": None,
+        "user_repo": None,
+        "bot_repo": None,
+        "game_repo": None,
+        "firebase_user_svc": None,
+    }
 
     # 레이트리밋: IP별 요청 타임스탬프 (슬라이딩 윈도우)
     _rate_limit_store: dict[str, deque] = defaultdict(deque)
@@ -219,20 +227,44 @@ def create_app(
         state["registry"] = registry
         state["spectator_mgr"] = spectator_mgr
 
-        db_conn = init_db()
-        user_repo = UserRepository(db_conn)
-        bot_repo = BotRepository(db_conn)
-        game_repo = GameRepository(db_conn)
-        firebase_user_svc = FirebaseUserService(user_repo)
-        state["db_conn"] = db_conn
-        state["user_repo"] = user_repo
-        state["bot_repo"] = bot_repo
-        state["game_repo"] = game_repo
-        state["firebase_user_svc"] = firebase_user_svc
+        def _init_repositories():
+            db_conn = None
+            try:
+                db_conn = init_db()
+                user_repo = UserRepository(db_conn)
+                bot_repo = BotRepository(db_conn)
+                game_repo = GameRepository(db_conn)
+                firebase_user_svc = FirebaseUserService(user_repo)
+                stale = game_repo.cleanup_stale_games()
+                return db_conn, user_repo, bot_repo, game_repo, firebase_user_svc, stale
+            except Exception:
+                if db_conn is not None:
+                    db_conn.close()
+                raise
 
-        stale = game_repo.cleanup_stale_games()
-        if stale:
-            logger.info("서버 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
+        try:
+            loop = asyncio.get_running_loop()
+            (
+                db_conn,
+                user_repo,
+                bot_repo,
+                game_repo,
+                firebase_user_svc,
+                stale,
+            ) = await asyncio.wait_for(
+                loop.run_in_executor(None, _init_repositories),
+                timeout=35.0,
+            )
+            state["db_conn"] = db_conn
+            state["user_repo"] = user_repo
+            state["bot_repo"] = bot_repo
+            state["game_repo"] = game_repo
+            state["firebase_user_svc"] = firebase_user_svc
+
+            if stale:
+                logger.info("서버 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
+        except Exception as e:
+            logger.exception("BattleRoyale DB 초기화 실패, DB 없이 기동: %s", e)
 
         logger.info(
             "서버 시작 (Redis: %s)", "활성" if use_redis else "인메모리"
@@ -266,7 +298,8 @@ def create_app(
 
         yield
 
-        db_conn.close()
+        if state["db_conn"] is not None:
+            state["db_conn"].close()
 
         # 종료
         cleanup_task.cancel()
@@ -325,16 +358,28 @@ def create_app(
         return state["spectator_mgr"]
 
     def _user_repo() -> UserRepository:
-        return state["user_repo"]
+        repo = state["user_repo"]
+        if repo is None:
+            raise HTTPException(503, "DB를 사용할 수 없습니다.")
+        return repo
 
     def _bot_repo() -> BotRepository:
-        return state["bot_repo"]
+        repo = state["bot_repo"]
+        if repo is None:
+            raise HTTPException(503, "DB를 사용할 수 없습니다.")
+        return repo
 
     def _game_repo() -> GameRepository:
-        return state["game_repo"]
+        repo = state["game_repo"]
+        if repo is None:
+            raise HTTPException(503, "DB를 사용할 수 없습니다.")
+        return repo
 
     def _firebase_user_svc() -> FirebaseUserService:
-        return state["firebase_user_svc"]
+        svc = state["firebase_user_svc"]
+        if svc is None:
+            raise HTTPException(503, "DB를 사용할 수 없습니다.")
+        return svc
 
     def _current_db_user(decoded_token: dict):
         return _firebase_user_svc().get_or_create_user(decoded_token)

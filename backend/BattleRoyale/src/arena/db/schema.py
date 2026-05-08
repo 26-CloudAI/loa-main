@@ -344,6 +344,11 @@ def get_connection(db_path: str | Path = "ai_arena.db"):
             dbname=settings.DB_NAME,
             user=settings.DB_USER,
             password=settings.DB_PASSWORD,
+            connect_timeout=settings.DB_CONNECT_TIMEOUT,
+            options=(
+                f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT_MS} "
+                f"-c lock_timeout={settings.DB_LOCK_TIMEOUT_MS}"
+            ),
         )
         conn.autocommit = False
         conn.cursor_factory = psycopg2.extras.RealDictCursor
@@ -410,6 +415,11 @@ def _init_postgresql():
         dbname=settings.DB_NAME,
         user=settings.DB_USER,
         password=settings.DB_PASSWORD,
+        connect_timeout=settings.DB_CONNECT_TIMEOUT,
+        options=(
+            f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT_MS} "
+            f"-c lock_timeout={settings.DB_LOCK_TIMEOUT_MS}"
+        ),
     )
 
     with conn.cursor() as cur:
