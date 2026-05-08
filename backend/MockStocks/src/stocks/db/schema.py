@@ -115,6 +115,11 @@ def get_connection(db_path: str | Path = "ai_arena.db"):
             dbname=settings.DB_NAME,
             user=settings.DB_USER,
             password=settings.DB_PASSWORD,
+            connect_timeout=settings.DB_CONNECT_TIMEOUT,
+            options=(
+                f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT_MS} "
+                f"-c lock_timeout={settings.DB_LOCK_TIMEOUT_MS}"
+            ),
         )
         conn.autocommit = False
         conn.cursor_factory = psycopg2.extras.RealDictCursor
@@ -149,7 +154,6 @@ def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
         conn.execute("ALTER TABLE stock_games ADD COLUMN owner_uid TEXT")
     except Exception:
         pass
-    conn.execute("DELETE FROM stock_games WHERE owner_uid IS NULL")
     conn.commit()
     return conn
 
@@ -171,6 +175,11 @@ def _init_postgresql():
         dbname=settings.DB_NAME,
         user=settings.DB_USER,
         password=settings.DB_PASSWORD,
+        connect_timeout=settings.DB_CONNECT_TIMEOUT,
+        options=(
+            f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT_MS} "
+            f"-c lock_timeout={settings.DB_LOCK_TIMEOUT_MS}"
+        ),
     )
 
     with conn.cursor() as cur:
@@ -181,7 +190,6 @@ def _init_postgresql():
         cur.execute(
             "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS owner_uid TEXT"
         )
-        cur.execute("DELETE FROM stock_games WHERE owner_uid IS NULL")
 
     conn.commit()
     conn.cursor_factory = psycopg2.extras.RealDictCursor

@@ -14,6 +14,9 @@ AI Arena — 환경변수 기반 설정
   DB_NAME         DB 이름 (기본: ai_arena)
   DB_USER         DB 사용자
   DB_PASSWORD     DB 비밀번호
+  DB_CONNECT_TIMEOUT       DB 연결 timeout 초 (기본: 10)
+  DB_STATEMENT_TIMEOUT_MS  PostgreSQL statement timeout ms (기본: 30000)
+  DB_LOCK_TIMEOUT_MS       PostgreSQL lock timeout ms (기본: 5000)
 """
 
 from __future__ import annotations
@@ -61,6 +64,9 @@ DB_HOST: str = os.environ.get("DB_HOST", "")
 DB_NAME: str = os.environ.get("DB_NAME", "ai_arena")
 DB_USER: str = os.environ.get("DB_USER", "")
 DB_PASSWORD: str = os.environ.get("DB_PASSWORD", "")
+DB_CONNECT_TIMEOUT: int = int(os.environ.get("DB_CONNECT_TIMEOUT", "10"))
+DB_STATEMENT_TIMEOUT_MS: int = int(os.environ.get("DB_STATEMENT_TIMEOUT_MS", "30000"))
+DB_LOCK_TIMEOUT_MS: int = int(os.environ.get("DB_LOCK_TIMEOUT_MS", "5000"))
 
 # ── 환경 ────────────────────────────────────────
 ENV: str = os.environ.get("ENV", "production")  # "production" | "development"
