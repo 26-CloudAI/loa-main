@@ -71,18 +71,21 @@ export default function UserBotDetailPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/rankings')}
-            className="text-sm text-gray-400 hover:text-white transition-colors"
+            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
           >
             리더보드
           </button>
           {user && (
             <span className="text-sm text-gray-400">
               {user.display_name ?? user.username}
+              <span className="ml-2 text-xs bg-indigo-600 rounded px-1 py-0.5">
+                {user.role}
+              </span>
             </span>
           )}
           <button
             onClick={handleLogout}
-            className="text-sm text-gray-400 hover:text-white transition-colors"
+            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
           >
             로그아웃
           </button>

@@ -53,17 +53,21 @@ export default function GameSelectPage() {
         <span className="font-bold">게임 모드 선택</span>
       </header>
 
-      <main className="flex flex-1 flex-col items-center justify-center gap-10 px-6 py-12">
-        <div className="text-center flex flex-col gap-2">
-          <h1 className="text-2xl font-bold">어떤 게임을 만들까요?</h1>
-          <p className="text-gray-400 text-sm">원하는 모드를 선택하세요.</p>
-        </div>
+      <main className="flex flex-1 flex-col items-center px-6">
+        <div className="flex-1" />
+        <div className="flex flex-col items-center gap-10">
+          <div className="text-center flex flex-col gap-2">
+            <h1 className="text-2xl font-bold">어떤 게임을 만들까요?</h1>
+            <p className="text-gray-400 text-sm">원하는 모드를 선택하세요.</p>
+          </div>
 
-        <div className="flex gap-6 flex-wrap justify-center">
-          {MODES.map((mode) => (
-            <ModeCard key={mode.id} mode={mode} onClick={() => mode.route && navigate(mode.route)} />
-          ))}
+          <div className="flex gap-6 flex-wrap justify-center">
+            {MODES.map((mode) => (
+              <ModeCard key={mode.id} mode={mode} onClick={() => mode.route && navigate(mode.route)} />
+            ))}
+          </div>
         </div>
+        <div className="flex-2" />
       </main>
     </div>
   )
