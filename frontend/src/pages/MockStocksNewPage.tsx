@@ -198,7 +198,7 @@ export default function MockStocksNewPage() {
       }
 
       const game = await res.json()
-      navigate(`/games/${game.game_id}/mock-stocks/watch`)
+      navigate(`/games/${game.game_id}/mock-stocks/watch?bot=${encodeURIComponent(botId.trim() || 'my_bot')}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '게임 생성에 실패했습니다.')
       setSubmitting(false)
