@@ -81,8 +81,12 @@ export default function GamesPage() {
         fetchJson(`${API_BASE}/api/games`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetchJson(`${STOCKS_API_BASE}/api/games`),
-        fetchJson(`${STOCKS_API_BASE}/api/games/history`),
+        fetchJson(`${STOCKS_API_BASE}/api/games`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetchJson(`${STOCKS_API_BASE}/api/games/history`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ])
 
       const merged: GameInfo[] = []

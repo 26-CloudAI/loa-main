@@ -28,6 +28,7 @@ class StockGameRecord:
     finished_at: Optional[str]
     final_tick: Optional[int]
     end_reason: Optional[str]
+    owner_uid: Optional[str] = None
 
 
 @dataclass
@@ -69,13 +70,14 @@ class StockGameRepository:
         seed: Optional[int] = None,
         total_ticks: Optional[int] = None,
         tick_interval: Optional[float] = None,
+        owner_uid: Optional[str] = None,
     ) -> None:
         self._execute(
             """
-            INSERT INTO stock_games (id, total_bots, seed, total_ticks, tick_interval)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO stock_games (id, owner_uid, total_bots, seed, total_ticks, tick_interval)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (game_id, total_bots, seed, total_ticks, tick_interval),
+            (game_id, owner_uid, total_bots, seed, total_ticks, tick_interval),
         )
         self.conn.commit()
 
@@ -115,16 +117,27 @@ class StockGameRepository:
         )
         return [self._row_to_game(row) for row in cursor.fetchall()]
 
-    def get_finished_games(self, limit: int = 20) -> list[StockGameRecord]:
-        cursor = self._execute(
-            """
-            SELECT * FROM stock_games
-            WHERE status = 'finished'
-            ORDER BY created_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
+    def get_finished_games(self, limit: int = 20, owner_uid: Optional[str] = None) -> list[StockGameRecord]:
+        if owner_uid is not None:
+            cursor = self._execute(
+                """
+                SELECT * FROM stock_games
+                WHERE status = 'finished' AND owner_uid = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (owner_uid, limit),
+            )
+        else:
+            cursor = self._execute(
+                """
+                SELECT * FROM stock_games
+                WHERE status = 'finished'
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
         return [self._row_to_game(row) for row in cursor.fetchall()]
 
     def cleanup_stale_games(self) -> int:
@@ -218,6 +231,7 @@ class StockGameRepository:
             finished_at=row["finished_at"],
             final_tick=row["final_tick"],
             end_reason=row["end_reason"],
+            owner_uid=row["owner_uid"] if "owner_uid" in row.keys() else None,
         )
 
     def _row_to_participant(self, row) -> StockParticipantRecord:

@@ -27,6 +27,7 @@ class GameSession:
         tick_interval: float = 0.1,
         seed: Optional[int] = None,
         repo: Optional[StockGameRepository] = None,
+        owner_uid: Optional[str] = None,
     ):
         self.game_id = game_id
         self._sm = spectator_manager
@@ -34,6 +35,7 @@ class GameSession:
         self.tick_interval = tick_interval
         self.seed = seed or random.randint(0, 2**31)
         self._repo = repo
+        self.owner_uid = owner_uid
 
         self.status = GameStatus.WAITING
         self._bots: list[BotInterface] = []
@@ -61,6 +63,7 @@ class GameSession:
                 seed=self.seed,
                 total_ticks=self._cfg.game.total_ticks,
                 tick_interval=self.tick_interval,
+                owner_uid=self.owner_uid,
             )
             for bot in self._bots:
                 self._repo.add_participant(
@@ -198,6 +201,7 @@ class GameRegistry:
         config: Config = DEFAULT_CONFIG,
         tick_interval: float = 0.1,
         seed: Optional[int] = None,
+        owner_uid: Optional[str] = None,
     ) -> GameSession:
         game_id = str(uuid.uuid4())[:8]
         session = GameSession(
@@ -207,6 +211,7 @@ class GameRegistry:
             tick_interval=tick_interval,
             seed=seed,
             repo=self._repo,
+            owner_uid=owner_uid,
         )
         self._sessions[game_id] = session
         logger.info("게임 생성: %s", game_id)
@@ -215,8 +220,11 @@ class GameRegistry:
     def get_game(self, game_id: str) -> Optional[GameSession]:
         return self._sessions.get(game_id)
 
-    def list_games(self) -> list[GameInfo]:
-        return [s.get_info() for s in self._sessions.values()]
+    def list_games(self, owner_uid: Optional[str] = None) -> list[GameInfo]:
+        sessions = self._sessions.values()
+        if owner_uid is not None:
+            sessions = [s for s in sessions if s.owner_uid == owner_uid]
+        return [s.get_info() for s in sessions]
 
     def remove_game(self, game_id: str) -> None:
         self._sessions.pop(game_id, None)

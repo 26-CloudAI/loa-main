@@ -24,7 +24,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -50,6 +50,28 @@ class CreateGameRequest(BaseModel):
     prepare_id: Optional[str] = None  # 사전 생성된 뉴스 ID
 
 logger = logging.getLogger(__name__)
+
+
+def _get_uid(request: Request) -> Optional[str]:
+    """Authorization 헤더에서 Firebase UID를 추출한다. 실패 시 None 반환."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[len("Bearer "):]
+    try:
+        import firebase_admin.auth as fb_auth
+        decoded = fb_auth.verify_id_token(token)
+        return decoded.get("uid")
+    except Exception:
+        return None
+
+
+def _require_uid(request: Request) -> str:
+    """UID를 반환하거나, 인증 실패 시 401을 발생시킨다."""
+    uid = _get_uid(request)
+    if uid is None:
+        raise HTTPException(401, "인증이 필요합니다.")
+    return uid
 
 
 # ── InProcessBot ──────────────────────────────────────────────────────────────
@@ -169,17 +191,19 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/api/games")
-    async def list_games():
-        return [g.to_dict() for g in registry.list_games()]
+    async def list_games(request: Request):
+        uid = _require_uid(request)
+        return [g.to_dict() for g in registry.list_games(owner_uid=uid)]
 
     @app.get("/api/games/history")
-    async def list_history(limit: int = 50):
+    async def list_history(request: Request, limit: int = 50):
         """완료된 MockStocks 게임 기록을 DB에서 조회. lifespan 전이거나 repo 미설정 시 빈 목록 반환."""
+        uid = _require_uid(request)
         repo = registry._repo
         if repo is None:
             return []
 
-        games = repo.get_finished_games(limit=limit)
+        games = repo.get_finished_games(limit=limit, owner_uid=uid)
         result = []
         for g in games:
             participants = repo.get_participants(g.id)
@@ -212,7 +236,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         return result
 
     @app.post("/api/games", status_code=201)
-    async def create_game(body: CreateGameRequest):
+    async def create_game(body: CreateGameRequest, request: Request):
         cfg = DEFAULT_CONFIG
 
         user_bots: list[BotInterface] = []
@@ -244,10 +268,12 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         if body.prepare_id and body.prepare_id in _prepared_news:
             prepared_news = _prepared_news.pop(body.prepare_id)
 
+        uid = _require_uid(request)
         session = registry.create_game(
             config=cfg,
             tick_interval=body.tick_interval,
             seed=body.seed,
+            owner_uid=uid,
         )
         session.register_bots(user_bots + filler_bots)
 
