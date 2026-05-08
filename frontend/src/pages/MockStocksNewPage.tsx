@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 const MAX_CODE_BYTES = 50 * 1024
@@ -116,6 +117,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
 export default function MockStocksNewPage() {
   const navigate = useNavigate()
+  const { token } = useAuth()
 
   const [botId, setBotId] = useState('')
   const [code, setCode] = useState(DEFAULT_CODE)
@@ -181,7 +183,10 @@ export default function MockStocksNewPage() {
     try {
       const res = await fetch(`${STOCKS_API}/api/games`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           bots: [{ bot_id: botId.trim() || 'my_bot', code }],
           tick_interval: tickInterval,

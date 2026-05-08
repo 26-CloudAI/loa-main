@@ -21,6 +21,7 @@ SCHEMA_SQL_SQLITE = """
 -- 모의주식 게임 세션
 CREATE TABLE IF NOT EXISTS stock_games (
     id              TEXT    PRIMARY KEY,
+    owner_uid       TEXT,
     status          TEXT    NOT NULL DEFAULT 'waiting',
     total_bots      INTEGER NOT NULL DEFAULT 0,
     seed            INTEGER,
@@ -57,6 +58,7 @@ SCHEMA_SQL_POSTGRESQL = """
 -- 모의주식 게임 세션
 CREATE TABLE IF NOT EXISTS stock_games (
     id              TEXT        PRIMARY KEY,
+    owner_uid       TEXT,
     status          TEXT        NOT NULL DEFAULT 'waiting',
     total_bots      INTEGER     NOT NULL DEFAULT 0,
     seed            INTEGER,
@@ -143,7 +145,11 @@ def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA_SQL_SQLITE)
-    conn.commit()
+    try:
+        conn.execute("ALTER TABLE stock_games ADD COLUMN owner_uid TEXT")
+        conn.commit()
+    except Exception:
+        pass
     return conn
 
 
@@ -171,6 +177,9 @@ def _init_postgresql():
             stmt = statement.strip()
             if stmt:
                 cur.execute(stmt)
+        cur.execute(
+            "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS owner_uid TEXT"
+        )
 
     conn.commit()
     conn.cursor_factory = psycopg2.extras.RealDictCursor
