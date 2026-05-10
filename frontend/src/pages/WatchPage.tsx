@@ -431,7 +431,7 @@ export default function WatchPage() {
     } catch { /* ignore */ }
     return 'my_bot'
   })
-  const [myBotIcon, setMyBotIcon] = useState<string>(() => {
+  const [myBotIcon] = useState<string>(() => {
     try {
       const raw = localStorage.getItem('loa_bot_icon')
       if (raw) return (JSON.parse(raw) as { botId: string; icon: string }).icon
@@ -804,9 +804,6 @@ export default function WatchPage() {
                         style={{ color: bot.id === myBotId ? '#ffd700' : (colorMapRef.current.get(bot.id) ?? '#aaa') }}
                       >
                         {bot.id}
-                      </span>
-                      <span className="font-mono text-gray-300 shrink-0 text-xs">
-                        {bot.score.toFixed(1)}
                       </span>
                     </div>
                   ))}
