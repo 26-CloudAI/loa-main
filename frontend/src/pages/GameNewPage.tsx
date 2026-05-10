@@ -312,7 +312,7 @@ export default function GameNewPage() {
               type="text"
               value={gameName}
               onChange={(e) => setGameName(e.target.value)}
-              placeholder="배틀로얄 1 · 6fda7802"
+              placeholder="새 배틀로얄 1"
               maxLength={40}
               className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
             />

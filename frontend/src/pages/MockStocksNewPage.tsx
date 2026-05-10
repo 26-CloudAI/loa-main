@@ -258,7 +258,7 @@ export default function MockStocksNewPage() {
               type="text"
               value={gameName}
               onChange={(e) => setGameName(e.target.value)}
-              placeholder="모의주식 1 · 70a033a2"
+              placeholder="새 모의주식 1"
               maxLength={50}
               className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-600 w-80 max-w-full"
             />
