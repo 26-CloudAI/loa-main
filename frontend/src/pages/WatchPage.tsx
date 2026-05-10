@@ -6,8 +6,10 @@ import { MOCK, MOCK_GAME_INFO, startMockSimulation } from '../dev/mock'
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 const WS_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale').replace(/^http/, 'ws')
 
-const CELL = 6          // px per grid cell
-const MAP_PX = CELL * 100  // 600px canvas
+const MAP_PX     = 600   // canvas px (fixed)
+const MAX_ENERGY = 100   // energy range 0~100
+const MM_SIZE    = 150   // minimap px
+const MM_MARGIN  = 8
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -37,7 +39,7 @@ interface TickData {
   tick: number
   bots: BotState[]
   minerals: Mineral[]
-  zone_bounds: [number, number, number, number]  // [minX, minY, maxX, maxY]
+  zone_bounds: [number, number, number, number]
   alive_count: number
   leaderboard: LeaderEntry[]
 }
@@ -67,6 +69,13 @@ interface EventLog {
   detail?: string
 }
 
+interface ViewParams {
+  viewCX: number
+  viewCY: number
+  viewCells: number
+  cellSize: number
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────
 
 function hashColor(id: string): string {
@@ -75,9 +84,24 @@ function hashColor(id: string): string {
   return `hsl(${Math.abs(h) % 360}, 65%, 58%)`
 }
 
+/** 봇 이름 패턴 기반 이모지 아이콘 */
+function getBotIcon(botId: string, isMyBot: boolean, myBotIcon: string): string {
+  if (isMyBot) return myBotIcon
+  const id = botId.toLowerCase()
+  if (id.includes('초식') || id.includes('herbivore'))                            return '🌿'
+  if (id.includes('미친개') || id.includes('maddog') || id.includes('mad_dog'))  return '🐺'
+  if (id.includes('존버')   || id.includes('camper'))                            return '🏕️'
+  return '🤖'
+}
+
+function getBotMiniColor(botId: string, isMyBot: boolean, colorMap: Map<string, string>): string {
+  if (isMyBot) return '#ffd700'
+  return colorMap.get(botId) ?? '#ffffff'
+}
+
 const REASON_LABEL: Record<string, string> = {
-  last_standing: '최후의 1봇 생존!',
-  max_ticks: '최대 틱(200) 도달',
+  last_standing:         '최후의 1봇 생존!',
+  max_ticks:             '최대 틱(200) 도달',
   all_minerals_depleted: '모든 광물 소진',
 }
 
@@ -97,8 +121,8 @@ function FormatEvent({ ev, colorMap }: { ev: EventLog; colorMap: Map<string, str
   const Bot = ({ id }: { id: string }) => (
     <span style={{ color: colorMap.get(id) ?? '#d1d5db' }} className="font-semibold">{id}</span>
   )
-  const a = ev.actor_id
-  const t = ev.target_id ?? '?'
+  const a      = ev.actor_id
+  const t      = ev.target_id ?? '?'
   const detail = ev.detail ? <span className="text-gray-500"> ({ev.detail})</span> : null
   switch (ev.type) {
     case 'kill':          return <span>💀 <Bot id={t} /> 이(가) <Bot id={a} />에게 사망</span>
@@ -114,103 +138,278 @@ function FormatEvent({ ev, colorMap }: { ev: EventLog; colorMap: Map<string, str
   }
 }
 
-// ── Canvas draw ────────────────────────────────────────────────────────
+// ── Coordinate helper ─────────────────────────────────────────────────
+
+function mapToCanvas(mx: number, my: number, vp: ViewParams): [number, number] {
+  const half = vp.viewCells / 2
+  return [
+    (mx - (vp.viewCX - half)) * vp.cellSize,
+    (my - (vp.viewCY - half)) * vp.cellSize,
+  ]
+}
+
+function onScreen(cx: number, cy: number, margin = 0): boolean {
+  return cx >= -margin && cx <= MAP_PX + margin &&
+         cy >= -margin && cy <= MAP_PX + margin
+}
+
+// ── Canvas draw functions ──────────────────────────────────────────────
 
 function drawCanvas(
   ctx: CanvasRenderingContext2D,
   data: TickData,
   colorMap: Map<string, string>,
+  vp: ViewParams,
+  myBotId: string,
+  myBotIcon: string,
 ) {
-  // Background
   ctx.fillStyle = '#0a0a0f'
   ctx.fillRect(0, 0, MAP_PX, MAP_PX)
 
-  // Zone danger overlay — backend: zone_bounds = [minX, minY, maxX, maxY] (safe zone)
-  const [minX, minY, maxX, maxY] = data.zone_bounds
-  const safeW = (maxX - minX + 1) * CELL
-  const safeH = (maxY - minY + 1) * CELL
-  if (minX > 0 || minY > 0 || maxX < 99 || maxY < 99) {
-    ctx.fillStyle = 'rgba(220, 38, 38, 0.18)'
-    ctx.fillRect(0,                MAP_PX - (100 - maxY - 1) * CELL, MAP_PX,             (100 - maxY - 1) * CELL) // bottom
-    ctx.fillRect(0,                0,                                  MAP_PX,             minY * CELL)             // top
-    ctx.fillRect(0,                minY * CELL,                        minX * CELL,        safeH)                   // left
-    ctx.fillRect((maxX + 1) * CELL, minY * CELL,                      MAP_PX - (maxX + 1) * CELL, safeH)          // right
+  drawGrid(ctx, vp)
+  drawZone(ctx, data.zone_bounds, vp)
+  drawMinerals(ctx, data.minerals, vp)
 
-    // Zone boundary line
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)'
-    ctx.lineWidth = 1
-    ctx.strokeRect(minX * CELL + 0.5, minY * CELL + 0.5, safeW - 1, safeH - 1)
+  // Non-myBot bots first, myBot rendered last (on top)
+  for (const bot of data.bots) {
+    if (bot.id === myBotId) continue
+    drawBot(ctx, bot, false, myBotId, myBotIcon, colorMap, vp)
   }
+  const myBot = data.bots.find(b => b.id === myBotId)
+  if (myBot) drawBot(ctx, myBot, true, myBotId, myBotIcon, colorMap, vp)
+
+  drawMinimap(ctx, data, colorMap, vp, myBotId)
+}
+
+function drawGrid(ctx: CanvasRenderingContext2D, vp: ViewParams) {
+  if (vp.cellSize < 10) return
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+  ctx.lineWidth = 0.5
+  const half = vp.viewCells / 2
+  for (let x = Math.floor(vp.viewCX - half); x <= Math.ceil(vp.viewCX + half); x++) {
+    const [cx] = mapToCanvas(x, 0, vp)
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, MAP_PX); ctx.stroke()
+  }
+  for (let y = Math.floor(vp.viewCY - half); y <= Math.ceil(vp.viewCY + half); y++) {
+    const [, cy] = mapToCanvas(0, y, vp)
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(MAP_PX, cy); ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function drawZone(ctx: CanvasRenderingContext2D, bounds: [number,number,number,number], vp: ViewParams) {
+  const [minX, minY, maxX, maxY] = bounds
+  const [x0,    y0   ] = mapToCanvas(0,      0,      vp)
+  const [x100,  y100 ] = mapToCanvas(100,    100,    vp)
+  const [sminX, sminY] = mapToCanvas(minX,   minY,   vp)
+  const [smaxX, smaxY] = mapToCanvas(maxX+1, maxY+1, vp)
+
+  ctx.fillStyle = 'rgba(220,38,38,0.18)'
+  ctx.fillRect(x0,    y0,    x100-x0,    sminY-y0)
+  ctx.fillRect(x0,    smaxY, x100-x0,    y100-smaxY)
+  ctx.fillRect(x0,    sminY, sminX-x0,   smaxY-sminY)
+  ctx.fillRect(smaxX, sminY, x100-smaxX, smaxY-sminY)
+
+  ctx.strokeStyle = 'rgba(239,68,68,0.75)'
+  ctx.lineWidth = 1.5
+  ctx.strokeRect(sminX, sminY, smaxX-sminX, smaxY-sminY)
+}
+
+function drawMinerals(ctx: CanvasRenderingContext2D, minerals: Mineral[], vp: ViewParams) {
+  const emojiSize = Math.max(6, vp.cellSize * 0.62)
+  ctx.textAlign    = 'center'
+  ctx.textBaseline = 'middle'
+  for (const m of minerals) {
+    const [cx, cy] = mapToCanvas(m.x + 0.5, m.y + 0.5, vp)
+    if (!onScreen(cx, cy, vp.cellSize)) continue
+    ctx.font = `${emojiSize}px sans-serif`
+    ctx.fillText(m.rare ? '💜' : '💛', cx, cy)
+  }
+}
+
+function drawBot(
+  ctx: CanvasRenderingContext2D,
+  bot: BotState,
+  isMyBot: boolean,
+  _myBotId: string,
+  myBotIcon: string,
+  colorMap: Map<string, string>,
+  vp: ViewParams,
+) {
+  const [cx, cy] = mapToCanvas(bot.x + 0.5, bot.y + 0.5, vp)
+  if (!onScreen(cx, cy, vp.cellSize * 2.5)) return
+
+  const emojiSize = Math.max(9, vp.cellSize * 0.78)
+  const icon      = getBotIcon(bot.id, isMyBot, myBotIcon)
+
+  if (!bot.alive) {
+    ctx.save()
+    ctx.globalAlpha = 0.3
+    ctx.font = `${emojiSize}px sans-serif`
+    ctx.textAlign    = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('💀', cx, cy)
+    ctx.globalAlpha = 1
+    ctx.restore()
+    return
+  }
+
+  ctx.save()
+
+  // Gold glow ring for my bot
+  if (isMyBot) {
+    ctx.strokeStyle = 'rgba(255,215,0,0.75)'
+    ctx.lineWidth   = Math.max(2, vp.cellSize * 0.13)
+    ctx.beginPath()
+    ctx.arc(cx, cy, emojiSize * 0.65, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+
+  // Cyan shield ring
+  if (bot.shield_active) {
+    ctx.strokeStyle = 'rgba(0,200,220,0.8)'
+    ctx.lineWidth   = Math.max(1.5, vp.cellSize * 0.09)
+    ctx.beginPath()
+    ctx.arc(cx, cy, emojiSize * 0.9, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+
+  // Emoji icon
+  ctx.font         = `${emojiSize}px sans-serif`
+  ctx.textAlign    = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(icon, cx, cy)
+
+  // HP bar (above icon)
+  const hpRatio = Math.min(1, Math.max(0, bot.energy / MAX_ENERGY))
+  const barW = Math.max(22, vp.cellSize * 1.35)
+  const barH = Math.max(3,  vp.cellSize * 0.13)
+  const barX = cx - barW / 2
+  const barY = cy - emojiSize * 0.62 - barH - 3
+
+  ctx.fillStyle = 'rgba(0,0,0,0.75)'
+  ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2)
+  ctx.fillStyle = '#111'
+  ctx.fillRect(barX, barY, barW, barH)
+  ctx.fillStyle = hpRatio > 0.5 ? '#4ade80' : hpRatio > 0.25 ? '#facc15' : '#f87171'
+  ctx.fillRect(barX, barY, barW * hpRatio, barH)
+
+  // Bot name label (only when large enough)
+  if (vp.cellSize >= 13) {
+    const fontSize    = Math.max(8, vp.cellSize * 0.21)
+    const displayName = isMyBot ? `★ ${bot.id}` : bot.id
+    ctx.font         = `${fontSize}px sans-serif`
+    ctx.textAlign    = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.fillStyle = 'rgba(0,0,0,0.85)'
+    ctx.fillText(displayName, cx + 1, barY - 1)
+    ctx.fillStyle = isMyBot ? '#ffd700' : (colorMap.get(bot.id) ?? 'rgba(210,210,210,0.9)')
+    ctx.fillText(displayName, cx, barY - 2)
+  }
+
+  // Shield badge (top-right corner)
+  if (bot.shield_active && vp.cellSize >= 16) {
+    ctx.font         = `${Math.max(8, vp.cellSize * 0.38)}px sans-serif`
+    ctx.textAlign    = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('🛡️', cx + emojiSize * 0.52, cy - emojiSize * 0.52)
+  }
+
+  ctx.restore()
+}
+
+function drawMinimap(
+  ctx: CanvasRenderingContext2D,
+  data: TickData,
+  colorMap: Map<string, string>,
+  vp: ViewParams,
+  myBotId: string,
+) {
+  const mm   = MM_SIZE
+  const mmX  = MAP_PX - mm - MM_MARGIN
+  const mmY  = MM_MARGIN
+  const cell = mm / 100
+
+  ctx.save()
+
+  // Background
+  ctx.fillStyle = 'rgba(8,8,8,0.88)'
+  ctx.fillRect(mmX, mmY, mm, mm)
+  ctx.strokeStyle = 'rgba(90,90,90,0.7)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(mmX, mmY, mm, mm)
+
+  // Zone
+  const [zx0, zy0, zx1, zy1] = data.zone_bounds
+  ctx.fillStyle = 'rgba(220,38,38,0.30)'
+  ctx.fillRect(mmX,               mmY,                mm,                zy0*cell)
+  ctx.fillRect(mmX,               mmY+(zy1+1)*cell,   mm,                (100-zy1-1)*cell)
+  ctx.fillRect(mmX,               mmY+zy0*cell,       zx0*cell,          (zy1-zy0+1)*cell)
+  ctx.fillRect(mmX+(zx1+1)*cell,  mmY+zy0*cell,       (100-zx1-1)*cell,  (zy1-zy0+1)*cell)
+  ctx.strokeStyle = 'rgba(239,68,68,0.5)'
+  ctx.lineWidth = 0.5
+  ctx.strokeRect(mmX+zx0*cell, mmY+zy0*cell, (zx1-zx0+1)*cell, (zy1-zy0+1)*cell)
 
   // Minerals
   for (const m of data.minerals) {
-    const cx = m.x * CELL + CELL / 2
-    const cy = m.y * CELL + CELL / 2
-    ctx.fillStyle = m.rare ? '#a855f7' : '#ffffff'
-    ctx.beginPath()
-    ctx.arc(cx, cy, m.rare ? CELL * 0.42 : CELL * 0.28, 0, Math.PI * 2)
-    ctx.fill()
+    ctx.fillStyle = m.rare ? '#a855f7' : '#facc15'
+    ctx.fillRect(mmX + m.x * cell, mmY + m.y * cell, Math.max(1, cell * 0.85), Math.max(1, cell * 0.85))
   }
 
   // Bots
   for (const bot of data.bots) {
-    const cx = bot.x * CELL + CELL / 2
-    const cy = bot.y * CELL + CELL / 2
-    const r = CELL * 0.4
-
-    if (!bot.alive) {
-      ctx.globalAlpha = 0.3
-      ctx.fillStyle = '#555'
-      ctx.beginPath()
-      ctx.arc(cx, cy, r, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.globalAlpha = 1
-      continue
-    }
-
-    const color = colorMap.get(bot.id) ?? '#888888'
-
-    // Shield ring
-    if (bot.shield_active) {
-      ctx.strokeStyle = 'rgba(99, 179, 237, 0.85)'
-      ctx.lineWidth = 1.5
-      ctx.beginPath()
-      ctx.arc(cx, cy, r + 2, 0, Math.PI * 2)
+    if (!bot.alive) continue
+    const isMyBot = bot.id === myBotId
+    const dotR = isMyBot ? cell * 2.8 : cell * 1.8
+    ctx.fillStyle = getBotMiniColor(bot.id, isMyBot, colorMap)
+    ctx.beginPath()
+    ctx.arc(mmX + bot.x * cell + cell/2, mmY + bot.y * cell + cell/2, dotR, 0, Math.PI*2)
+    ctx.fill()
+    if (isMyBot) {
+      ctx.strokeStyle = '#ffd700'
+      ctx.lineWidth = 1
       ctx.stroke()
     }
-
-    // Bot circle
-    ctx.fillStyle = color
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.fill()
-
-    // Energy bar (below bot)
-    const ratio = Math.min(1, Math.max(0, bot.energy / 100))
-    const bw = CELL * 0.9
-    const bh = 1.5
-    const bx = cx - bw / 2
-    const by = cy + r + 1.5
-    ctx.fillStyle = '#1a1a2e'
-    ctx.fillRect(bx, by, bw, bh)
-    ctx.fillStyle = ratio > 0.5 ? '#4ade80' : ratio > 0.2 ? '#facc15' : '#f87171'
-    ctx.fillRect(bx, by, bw * ratio, bh)
   }
+
+  // Viewport indicator
+  const half = vp.viewCells / 2
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(
+    mmX + (vp.viewCX - half) * cell,
+    mmY + (vp.viewCY - half) * cell,
+    vp.viewCells * cell,
+    vp.viewCells * cell,
+  )
+
+  // Label
+  ctx.fillStyle = 'rgba(140,140,140,0.55)'
+  ctx.font = '8px sans-serif'
+  ctx.textAlign    = 'right'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText('미니맵', mmX + mm - 2, mmY + mm - 2)
+
+  ctx.restore()
 }
 
 // ── Main Component ─────────────────────────────────────────────────────
 
 export default function WatchPage() {
   const { game_id } = useParams<{ game_id: string }>()
-  const { token } = useAuth()
-  const navigate = useNavigate()
+  const { token }   = useAuth()
+  const navigate    = useNavigate()
 
-  const canvasRef        = useRef<HTMLCanvasElement>(null)
-  const wsRef            = useRef<WebSocket | null>(null)
-  const hasConnectedRef  = useRef(false)
-  const colorMapRef      = useRef<Map<string, string>>(new Map())
-  const currentTickRef   = useRef(0)
-  const eventUidRef      = useRef(0)
+  const canvasRef       = useRef<HTMLCanvasElement>(null)
+  const wsRef           = useRef<WebSocket | null>(null)
+  const hasConnectedRef = useRef(false)
+  const colorMapRef     = useRef<Map<string, string>>(new Map())
+  const currentTickRef  = useRef(0)
+  const eventUidRef     = useRef(0)
+  // Camera position stored as refs — updated every tick without triggering re-render
+  const viewCXRef       = useRef(50)
+  const viewCYRef       = useRef(50)
 
   type GameStatus = 'waiting' | 'running' | 'finished' | 'error' | null
   const [gameStatus, setGameStatus] = useState<GameStatus>(null)
@@ -223,18 +422,38 @@ export default function WatchPage() {
   const [loadError,  setLoadError]  = useState('')
   const [gameName,   setGameName]   = useState<string | null>(null)
 
+  // ── Visualization settings ──────────────────────────────────────────
+  // Initialize from localStorage (set by GameNewPage at game creation time)
+  const [myBotId, setMyBotId] = useState<string>(() => {
+    try {
+      const raw = localStorage.getItem('loa_bot_icon')
+      if (raw) return (JSON.parse(raw) as { botId: string; icon: string }).botId
+    } catch { /* ignore */ }
+    return 'my_bot'
+  })
+  const [myBotIcon, setMyBotIcon] = useState<string>(() => {
+    try {
+      const raw = localStorage.getItem('loa_bot_icon')
+      if (raw) return (JSON.parse(raw) as { botId: string; icon: string }).icon
+    } catch { /* ignore */ }
+    return '⭐'
+  })
+  const [zoomLevel, setZoomLevel] = useState(3)
+
+  const viewCells = Math.ceil(100 / zoomLevel)
+  const cellSize  = MAP_PX / viewCells
+
+  const botIds = tickData ? tickData.bots.map(b => b.id) : []
+
   // 1) Fetch initial game info
   useEffect(() => {
-    if (!game_id) return;
-
-    // ── mock mode ────────────────────────────────────────────
+    if (!game_id) return
     if (MOCK) {
       setTotalBots(MOCK_GAME_INFO.total_bots)
-      setGameStatus('running');
+      setMyBotId(MOCK_GAME_INFO.bot_ids[0] ?? 'my_bot')
+      setGameStatus('running')
       return
     }
-    // ────────────────────────────────────────────────────────
-
     fetch(`${API_BASE}/api/games/${game_id}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -266,14 +485,13 @@ export default function WatchPage() {
       })
   }, [game_id, token])
 
-  // 2) Connect WebSocket (only once, when game is waiting or running)
+  // 2) Connect WebSocket
   useEffect(() => {
     if (!game_id) return
     if (gameStatus === null || gameStatus === 'error' || gameStatus === 'finished') return
     if (hasConnectedRef.current) return
     hasConnectedRef.current = true
 
-    // ── mock mode: tick 시뮬레이터 실행 ─────────────────────
     if (MOCK) {
       setWsStatus('connected')
       MOCK_GAME_INFO.bot_ids.forEach((id) => {
@@ -305,9 +523,8 @@ export default function WatchPage() {
       })
       return stop
     }
-    // ────────────────────────────────────────────────────────
 
-    let cancelled = false
+    let cancelled  = false
     let retryCount = 0
     let retryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -329,15 +546,13 @@ export default function WatchPage() {
       ws.onmessage = (e) => {
         if (cancelled) return
         const msg = JSON.parse(e.data as string)
-
         switch (msg.type) {
           case 'game_start': {
             setGameStatus('running')
-            const botIds: string[] = msg.data?.bot_ids ?? []
-            if (botIds.length > 0) setTotalBots(botIds.length)
-            botIds.forEach((id) => {
-              if (!colorMapRef.current.has(id))
-                colorMapRef.current.set(id, hashColor(id))
+            const ids: string[] = msg.data?.bot_ids ?? []
+            if (ids.length > 0) setTotalBots(ids.length)
+            ids.forEach((id) => {
+              if (!colorMapRef.current.has(id)) colorMapRef.current.set(id, hashColor(id))
             })
             break
           }
@@ -345,8 +560,7 @@ export default function WatchPage() {
             const td: TickData = msg.data
             currentTickRef.current = td.tick
             td.bots.forEach((b) => {
-              if (!colorMapRef.current.has(b.id))
-                colorMapRef.current.set(b.id, hashColor(b.id))
+              if (!colorMapRef.current.has(b.id)) colorMapRef.current.set(b.id, hashColor(b.id))
             })
             setTickData(td)
             break
@@ -392,7 +606,6 @@ export default function WatchPage() {
     }
 
     connect()
-
     return () => {
       cancelled = true
       if (retryTimer) clearTimeout(retryTimer)
@@ -400,33 +613,45 @@ export default function WatchPage() {
     }
   }, [game_id, gameStatus, token])
 
-  // 3) Draw canvas on each tick
+  // 3) Draw canvas whenever tick data or viz settings change
   useEffect(() => {
     if (!tickData || !canvasRef.current) return
     const ctx = canvasRef.current.getContext('2d')
     if (!ctx) return
-    drawCanvas(ctx, tickData, colorMapRef.current)
-  }, [tickData])
 
-  // ── Render helpers ─────────────────────────────────────────────────
+    // Update camera to follow myBot (only if alive)
+    const myBot = tickData.bots.find(b => b.id === myBotId)
+    const half  = viewCells / 2
+    if (myBot?.alive) {
+      viewCXRef.current = myBot.x + 0.5
+      viewCYRef.current = myBot.y + 0.5
+    }
+    viewCXRef.current = Math.max(half, Math.min(100 - half, viewCXRef.current))
+    viewCYRef.current = Math.max(half, Math.min(100 - half, viewCYRef.current))
 
-  const shortId = game_id?.slice(0, 8) ?? ''
+    drawCanvas(ctx, tickData, colorMapRef.current, {
+      viewCX:    viewCXRef.current,
+      viewCY:    viewCYRef.current,
+      viewCells,
+      cellSize,
+    }, myBotId, myBotIcon)
+  }, [tickData, myBotId, myBotIcon, viewCells, cellSize])
+
+  // ── Status labels ──────────────────────────────────────────────────
 
   const wsLabel =
-    gameStatus === 'finished' ? { text: 'FINISHED', cls: 'text-blue-400' }
-    : wsStatus === 'connected'    ? { text: '연결됨',    cls: 'text-green-400' }
-    : wsStatus === 'connecting'   ? { text: '연결 중…', cls: 'text-yellow-400' }
+    gameStatus === 'finished'     ? { text: 'FINISHED',   cls: 'text-blue-400'   }
+    : wsStatus === 'connected'    ? { text: '연결됨',     cls: 'text-green-400'  }
+    : wsStatus === 'connecting'   ? { text: '연결 중…',   cls: 'text-yellow-400' }
     : wsStatus === 'disconnected' ? { text: '재연결 중…', cls: 'text-orange-400' }
-    :                               { text: '연결 실패',  cls: 'text-red-400' }
+    :                               { text: '연결 실패',  cls: 'text-red-400'    }
 
   const gameStatusLabel =
-    gameStatus === 'running'  ? { text: 'RUNNING',  cls: 'bg-green-500/20 text-green-300' }
+    gameStatus === 'running'  ? { text: 'RUNNING',  cls: 'bg-green-500/20 text-green-300'  }
     : gameStatus === 'waiting'  ? { text: 'WAITING',  cls: 'bg-yellow-500/20 text-yellow-300' }
-    : gameStatus === 'finished' ? { text: 'FINISHED', cls: 'bg-blue-500/20 text-blue-300' }
-    : gameStatus === 'error'    ? { text: 'ERROR',    cls: 'bg-red-500/20 text-red-400' }
-    :                             { text: '로딩 중',   cls: 'bg-gray-500/20 text-gray-400' }
-
-  // ── Error / loading states ─────────────────────────────────────────
+    : gameStatus === 'finished' ? { text: 'FINISHED', cls: 'bg-blue-500/20 text-blue-300'   }
+    : gameStatus === 'error'    ? { text: 'ERROR',    cls: 'bg-red-500/20 text-red-400'     }
+    :                             { text: '로딩 중',  cls: 'bg-gray-500/20 text-gray-400'   }
 
   if (gameStatus === 'error') {
     return (
@@ -455,19 +680,15 @@ export default function WatchPage() {
           ◀ 게임 목록
         </button>
         <span className="text-gray-600">|</span>
-        {gameName ? (
-          <span className="font-bold">{gameName}</span>
-        ) : (
-          <span className="font-bold">LOA - 게임 관전</span>
-        )}
-        <span className="text-gray-500 text-sm ml-1">게임 ID: {shortId}…</span>
+        <span className="font-bold">{gameName ?? 'LOA - 게임 관전'}</span>
+        <span className="text-gray-500 text-sm ml-1">게임 ID: {game_id?.slice(0, 8) ?? ''}…</span>
       </header>
 
       {/* Main area */}
       <main className="flex flex-1 overflow-hidden p-4 gap-4 justify-center">
+
         {/* Canvas column */}
         <div className="shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-custom" style={{ width: MAP_PX }}>
-          {/* Canvas */}
           <div className="relative shrink-0">
             <canvas
               ref={canvasRef}
@@ -488,35 +709,78 @@ export default function WatchPage() {
             )}
           </div>
 
-          {/* Game result panel (below canvas) */}
           {gameEnd && (
-            <GameResultPanel
-              data={gameEnd}
-              colorMap={colorMapRef.current}
-            />
+            <GameResultPanel data={gameEnd} colorMap={colorMapRef.current} />
           )}
         </div>
 
         {/* Sidebar */}
-        <aside
-          className="flex flex-col gap-3 overflow-hidden h-full"
-          style={{ width: 264, minWidth: 264 }}
-        >
+        <aside className="flex flex-col gap-3 overflow-hidden h-full" style={{ width: 280, minWidth: 280 }}>
+
           {/* Tick / alive */}
-          <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-1">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-1 shrink-0">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">틱</span>
               <span className="font-mono font-medium">
-                {tickData?.tick ?? 0}
-                <span className="text-gray-600"> / 200</span>
+                {tickData?.tick ?? 0}<span className="text-gray-600"> / 200</span>
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">생존</span>
               <span className="font-mono font-medium">
-                {tickData?.alive_count ?? 0}
-                <span className="text-gray-600"> / {totalBots}</span>
+                {tickData?.alive_count ?? 0}<span className="text-gray-600"> / {totalBots}</span>
               </span>
+            </div>
+          </div>
+
+          {/* ── My Bot 설정 ── */}
+          <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-3 shrink-0">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">내 봇 설정</h3>
+
+            {/* Bot selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-500">추적할 봇 (카메라 고정)</label>
+              <select
+                value={myBotId}
+                onChange={e => {
+                  setMyBotId(e.target.value)
+                  viewCXRef.current = 50
+                  viewCYRef.current = 50
+                }}
+                className="bg-gray-700 border border-gray-600 text-white text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 w-full"
+              >
+                {botIds.length > 0
+                  ? botIds.map(id => <option key={id} value={id}>{id}</option>)
+                  : <option value={myBotId}>{myBotId}</option>
+                }
+              </select>
+            </div>
+
+            {/* My bot icon — read-only display (set at game creation) */}
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="text-xl leading-none">{myBotIcon}</span>
+              <span>내 봇 아이콘 (게임 생성 시 설정됨)</span>
+            </div>
+
+            {/* Zoom slider */}
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between items-center">
+                <label className="text-xs text-gray-500">줌 레벨</label>
+                <span className="text-xs font-mono text-indigo-400 font-semibold">{zoomLevel}×</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                step={1}
+                value={zoomLevel}
+                onChange={e => setZoomLevel(Number(e.target.value))}
+                className="w-full accent-indigo-500"
+              />
+              <div className="flex justify-between text-[10px] text-gray-600">
+                <span>전체 맵</span>
+                <span>근접 추적</span>
+              </div>
             </div>
           </div>
 
@@ -526,15 +790,18 @@ export default function WatchPage() {
             {(tickData?.bots.length ?? 0) === 0 ? (
               <p className="text-gray-600 text-xs">-</p>
             ) : (
-              <div className="overflow-y-auto scrollbar-custom flex flex-col gap-1" style={{ maxHeight: 180 }}>
-                {[...( tickData?.bots ?? [])]
+              <div className="overflow-y-auto scrollbar-custom flex flex-col gap-1" style={{ maxHeight: 140 }}>
+                {[...(tickData?.bots ?? [])]
                   .sort((a, b) => b.score - a.score)
                   .map((bot, i) => (
                     <div key={bot.id} className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-500 w-5 text-right shrink-0">#{i + 1}</span>
+                      <span className="text-gray-500 w-5 text-right shrink-0 text-xs">#{i + 1}</span>
+                      <span className="text-base leading-none shrink-0">
+                        {getBotIcon(bot.id, bot.id === myBotId, myBotIcon)}
+                      </span>
                       <span
-                        className={`flex-1 truncate font-medium ${!bot.alive ? 'opacity-35 line-through' : ''}`}
-                        style={{ color: colorMapRef.current.get(bot.id) ?? '#aaa' }}
+                        className={`flex-1 truncate font-medium text-xs ${!bot.alive ? 'opacity-35 line-through' : ''}`}
+                        style={{ color: bot.id === myBotId ? '#ffd700' : (colorMapRef.current.get(bot.id) ?? '#aaa') }}
                       >
                         {bot.id}
                       </span>
@@ -549,9 +816,7 @@ export default function WatchPage() {
 
           {/* Event log */}
           <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-2 flex-1 min-h-0">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">
-              이벤트 로그
-            </h3>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">이벤트 로그</h3>
             <div className="overflow-y-auto flex flex-col gap-1 flex-1 scrollbar-custom">
               {events.length === 0 ? (
                 <p className="text-gray-600 text-xs">이벤트 없음</p>
@@ -570,13 +835,11 @@ export default function WatchPage() {
         </aside>
       </main>
 
-      {/* Footer status bar */}
+      {/* Footer */}
       <footer className="border-t border-gray-800 px-6 py-2 flex items-center gap-4 text-xs shrink-0">
         <span>
           연결 상태:{' '}
-          <span className={`font-medium ${gameStatusLabel.cls}`}>
-            {gameStatusLabel.text}
-          </span>
+          <span className={`font-medium ${gameStatusLabel.cls}`}>{gameStatusLabel.text}</span>
         </span>
         <span>
           WebSocket:{' '}
@@ -584,7 +847,6 @@ export default function WatchPage() {
         </span>
       </footer>
 
-      {/* Game end modal */}
       {gameEnd && showModal && (
         <GameEndModal
           data={gameEnd}
@@ -597,42 +859,39 @@ export default function WatchPage() {
   )
 }
 
-// ── Game Result Panel (below canvas) ──────────────────────────────────
+// ── Game Result Panel ──────────────────────────────────────────────────
 
-function GameResultPanel({
-  data,
-  colorMap,
-}: {
-  data: GameEndData
-  colorMap: Map<string, string>
-}) {
+function GameResultPanel({ data, colorMap }: { data: GameEndData; colorMap: Map<string, string> }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const winner = data.rankings[0]
 
   return (
     <div className="flex flex-col gap-4 pb-4">
-      {/* Winner banner */}
       <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-6 py-5 text-center flex flex-col gap-1">
-        <p className="text-xs text-gray-500 uppercase tracking-widest">게임 종료 · {REASON_LABEL[data.reason] ?? data.reason}</p>
+        <p className="text-xs text-gray-500 uppercase tracking-widest">
+          게임 종료 · {REASON_LABEL[data.reason] ?? data.reason}
+        </p>
         <p className="text-3xl font-bold mt-1" style={{ color: colorMap.get(winner?.id) ?? '#facc15' }}>
           🏆 {winner?.id ?? '?'}
         </p>
         <p className="text-sm text-gray-400 mt-0.5">
-          최종 점수 <span className="text-white font-mono font-semibold">{(winner?.final_score ?? winner?.score ?? 0).toFixed(1)}</span>점
+          최종 점수{' '}
+          <span className="text-white font-mono font-semibold">
+            {(winner?.final_score ?? winner?.score ?? 0).toFixed(1)}
+          </span>점
         </p>
       </div>
 
-      {/* Bot profile cards */}
       <div className="flex flex-col gap-2">
         {data.rankings.map((r) => {
-          const color = colorMap.get(r.id) ?? '#888'
-          const finalScore   = r.final_score ?? r.score ?? 0
-          const killPts      = r.kills * 30
-          const survivalPts  = r.survival_ticks * 0.1
-          const bonusPts     = r.survival_bonus ?? 0
-          const miningPts    = Math.max(0, finalScore - killPts - survivalPts - bonusPts)
-          const isOpen = openId === r.id
-          const isWinner = r.rank === 1
+          const color      = colorMap.get(r.id) ?? '#888'
+          const finalScore = r.final_score ?? r.score ?? 0
+          const killPts    = r.kills * 30
+          const survPts    = r.survival_ticks * 0.1
+          const bonusPts   = r.survival_bonus ?? 0
+          const miningPts  = Math.max(0, finalScore - killPts - survPts - bonusPts)
+          const isOpen     = openId === r.id
+          const isWinner   = r.rank === 1
 
           return (
             <div
@@ -641,31 +900,23 @@ function GameResultPanel({
               style={{ borderColor: isOpen ? color + '66' : '#1f2937' }}
               onClick={() => setOpenId(isOpen ? null : r.id)}
             >
-              {/* Card header */}
-              <div
-                className="flex items-center gap-3 px-4 py-3"
-                style={{ background: isOpen ? color + '12' : undefined }}
-              >
+              <div className="flex items-center gap-3 px-4 py-3" style={{ background: isOpen ? color + '12' : undefined }}>
                 <span className="text-gray-500 text-sm w-6 shrink-0">#{r.rank}</span>
                 {isWinner && <span className="text-base leading-none">🏆</span>}
-                <span className="flex-1 font-semibold text-sm truncate" style={{ color }}>
-                  {r.id}
-                </span>
+                <span className="flex-1 font-semibold text-sm truncate" style={{ color }}>{r.id}</span>
                 <span className="font-mono text-sm text-white shrink-0">{finalScore.toFixed(1)}점</span>
                 <span className="text-gray-600 text-xs ml-1">{isOpen ? '▲' : '▼'}</span>
               </div>
-
-              {/* Expanded detail */}
               {isOpen && (
                 <div className="px-4 pb-4 pt-1 flex flex-col gap-2 border-t border-gray-800">
                   <div className="grid grid-cols-2 gap-2 mt-1">
-                    <DetailItem icon="⛏️" label="채굴" value={`${r.minerals_mined}회`} pts={miningPts} color="#facc15" />
-                    <DetailItem icon="⚔️" label="킬" value={`${r.kills}회`} pts={killPts} color="#f87171" />
-                    <DetailItem icon="⏱️" label="생존 틱" value={`${r.survival_ticks}틱`} pts={survivalPts} color="#4ade80" />
+                    <DetailItem icon="⛏️" label="채굴"      value={`${r.minerals_mined}회`} pts={miningPts} color="#facc15" />
+                    <DetailItem icon="⚔️" label="킬"        value={`${r.kills}회`}          pts={killPts}  color="#f87171" />
+                    <DetailItem icon="⏱️" label="생존 틱"   value={`${r.survival_ticks}틱`} pts={survPts}  color="#4ade80" />
                     {bonusPts > 0 && (
-                      <DetailItem icon="🏅" label="생존 보너스" value={`생존 순위`} pts={bonusPts} color="#a78bfa" />
+                      <DetailItem icon="🏅" label="생존 보너스" value="생존 순위" pts={bonusPts} color="#a78bfa" />
                     )}
-                    <div className={`rounded-lg bg-gray-800/60 px-3 py-2 flex flex-col gap-0.5 ${bonusPts > 0 ? '' : ''}`}>
+                    <div className="rounded-lg bg-gray-800/60 px-3 py-2 flex flex-col gap-0.5">
                       <span className="text-gray-400 text-xs">합계</span>
                       <span className="font-mono font-bold text-white text-sm">{finalScore.toFixed(1)}점</span>
                     </div>
@@ -695,28 +946,17 @@ function DetailItem({ icon, label, value, pts, color }: {
 // ── Game End Modal ─────────────────────────────────────────────────────
 
 function GameEndModal({
-  data,
-  colorMap,
-  onClose,
-  onGoList,
+  data, colorMap, onClose, onGoList,
 }: {
-  data: GameEndData
-  colorMap: Map<string, string>
-  onClose: () => void
-  onGoList: () => void
+  data: GameEndData; colorMap: Map<string, string>; onClose: () => void; onGoList: () => void
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col gap-5">
-        {/* Title */}
         <div className="text-center">
           <p className="text-xs text-gray-500 mb-1">게임 종료</p>
-          <h2 className="text-xl font-bold">
-            {REASON_LABEL[data.reason] ?? data.reason}
-          </h2>
+          <h2 className="text-xl font-bold">{REASON_LABEL[data.reason] ?? data.reason}</h2>
         </div>
-
-        {/* Rankings table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -733,10 +973,7 @@ function GameEndModal({
               {data.rankings.map((r) => (
                 <tr key={r.id} className="border-b border-gray-800/50">
                   <td className="py-1.5 text-gray-500">#{r.rank}</td>
-                  <td
-                    className="py-1.5 font-medium truncate max-w-[120px]"
-                    style={{ color: colorMap.get(r.id) ?? '#ccc' }}
-                  >
+                  <td className="py-1.5 font-medium truncate max-w-[120px]" style={{ color: colorMap.get(r.id) ?? '#ccc' }}>
                     {r.id}
                   </td>
                   <td className="py-1.5 text-right font-mono">{(r.final_score ?? r.score ?? 0).toFixed(1)}</td>
@@ -748,8 +985,6 @@ function GameEndModal({
             </tbody>
           </table>
         </div>
-
-        {/* Buttons */}
         <div className="flex gap-3">
           <button
             onClick={onClose}

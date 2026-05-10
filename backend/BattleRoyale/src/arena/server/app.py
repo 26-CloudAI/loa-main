@@ -403,7 +403,8 @@ def create_app(
 
             if state_data:
                 infos.append(game_info_from_state(
-                    record.id, state_data, name=record.name, mode=record.mode
+                    record.id, state_data, name=record.name, mode=record.mode,
+                    created_at=record.created_at,
                 ))
                 continue
 
@@ -420,7 +421,8 @@ def create_app(
         state_data = await registry.state_store.get_game_state(game_id)
         if state_data:
             return game_info_from_state(
-                game_id, state_data, name=record.name, mode=record.mode
+                game_id, state_data, name=record.name, mode=record.mode,
+                created_at=record.created_at,
             )
 
         participants = _game_repo().get_participants(game_id)

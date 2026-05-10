@@ -211,12 +211,35 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
   )
 }
 
+// ── Bot icon options ───────────────────────────────────────────────────
+
+const BOT_ICONS: { emoji: string; label: string }[] = [
+  { emoji: '⭐', label: '별'     },
+  { emoji: '🔥', label: '불꽃'   },
+  { emoji: '⚡', label: '번개'   },
+  { emoji: '💎', label: '다이아' },
+  { emoji: '👑', label: '왕관'   },
+  { emoji: '🚀', label: '로켓'   },
+  { emoji: '🎯', label: '타겟'   },
+  { emoji: '⚔️', label: '검'     },
+  { emoji: '🦁', label: '사자'   },
+  { emoji: '🦅', label: '독수리' },
+]
+
+/** 게임 생성 시 선택한 아이콘을 WatchPage에서 꺼내 쓸 수 있도록 저장 */
+function saveBotIconPref(botId: string, icon: string) {
+  try {
+    localStorage.setItem('loa_bot_icon', JSON.stringify({ botId, icon }))
+  } catch { /* localStorage 비활성화 환경 대응 */ }
+}
+
 export default function GameNewPage() {
   const { token } = useAuth()
   const navigate = useNavigate()
 
   const [gameName, setGameName] = useState('')
   const [botId, setBotId] = useState('')
+  const [botIcon, setBotIcon] = useState('⭐')
   const [code, setCode] = useState(DEFAULT_CODE)
   const [isPublic, setIsPublic] = useState(true)
   const [fillWithAi, setFillWithAi] = useState(true)
@@ -241,6 +264,7 @@ export default function GameNewPage() {
     // ── mock mode ──────────────────────────────────────────────
     if (MOCK) {
       await new Promise((r) => setTimeout(r, 600))
+      saveBotIconPref(botId.trim() || 'my_bot', botIcon)
       navigate(`/games/${MOCK_GAME_ID}/watch`)
       return
     }
@@ -271,6 +295,7 @@ export default function GameNewPage() {
       }
 
       const game = await res.json()
+      saveBotIconPref(botId.trim() || 'my_bot', botIcon)
       navigate(`/games/${game.game_id}/watch`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '게임 생성에 실패했습니다.')
@@ -318,19 +343,52 @@ export default function GameNewPage() {
             />
           </section>
 
-          {/* 봇 이름 */}
-          <section className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-gray-300">
-              봇 이름 <span className="text-gray-500 font-normal">(게임 내 표시 ID)</span>
-            </label>
-            <input
-              type="text"
-              value={botId}
-              onChange={(e) => setBotId(e.target.value)}
-              placeholder="my_bot"
-              maxLength={32}
-              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
-            />
+          {/* 봇 이름 + 아이콘 */}
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-gray-300">
+                봇 이름 <span className="text-gray-500 font-normal">(게임 내 표시 ID)</span>
+              </label>
+              <input
+                type="text"
+                value={botId}
+                onChange={(e) => setBotId(e.target.value)}
+                placeholder="my_bot"
+                maxLength={32}
+                className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
+              />
+            </div>
+
+            {/* 내 봇 아이콘 선택 */}
+            <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-4xl leading-none">{botIcon}</span>
+                <div>
+                  <p className="text-sm font-medium text-white">내 봇 아이콘</p>
+                  <p className="text-xs text-gray-500 mt-0.5">관전 화면에서 내 봇을 식별할 아이콘을 선택하세요</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-10 gap-1.5">
+                {BOT_ICONS.map(({ emoji, label }) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    title={label}
+                    onClick={() => setBotIcon(emoji)}
+                    className={[
+                      'flex flex-col items-center justify-center rounded-lg py-2 text-xl leading-none',
+                      'border-2 transition-colors',
+                      botIcon === emoji
+                        ? 'border-yellow-400 bg-yellow-400/10'
+                        : 'border-gray-600 bg-gray-700/60 hover:border-gray-400',
+                    ].join(' ')}
+                  >
+                    {emoji}
+                    <span className="text-[9px] text-gray-500 mt-1 leading-none">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </section>
 
           {/* 코드 에디터 */}
