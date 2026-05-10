@@ -25,6 +25,7 @@ interface GameInfo {
   bot_ids: string[]
   name?: string | null
   mode?: string
+  created_at?: string | null
   finished_at?: string | null
   rankings?: RankingEntry[]
 }
@@ -103,6 +104,13 @@ export default function GamesPage() {
           if (!activeIds.has(g.game_id)) merged.push(g)
         }
       }
+
+      // created_at 기준 내림차순 정렬 (최신 게임이 위로)
+      merged.sort((a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+        return tb - ta
+      })
 
       setGames(merged)
 

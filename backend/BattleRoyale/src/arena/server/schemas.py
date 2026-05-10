@@ -67,6 +67,7 @@ class GameInfo:
     bot_ids: list[str] = field(default_factory=list)
     name: Optional[str] = None
     mode: str = "battle-royale"
+    created_at: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +79,7 @@ class GameInfo:
             "bot_ids": self.bot_ids,
             "name": self.name,
             "mode": self.mode,
+            "created_at": self.created_at,
         }
 
 
