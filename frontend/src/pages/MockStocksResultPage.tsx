@@ -98,7 +98,7 @@ export default function MockStocksResultPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-700 text-gray-400 text-left">
-                  <th className="px-4 py-3 w-12">순위</th>
+                  <th className="px-4 py-3 w-16 text-center">순위</th>
                   <th className="px-4 py-3">봇</th>
                   <th className="px-4 py-3 text-right">최종 자산</th>
                   <th className="px-4 py-3 text-right">수익률</th>
@@ -113,7 +113,7 @@ export default function MockStocksResultPage() {
                       key={entry.bot_id}
                       className={`border-b border-gray-700/50 last:border-0 ${isFiller ? 'opacity-50' : ''}`}
                     >
-                      <td className="px-4 py-3 font-bold text-gray-300">
+                      <td className="px-4 py-3 font-bold text-gray-300 text-center">
                         {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `${entry.rank}`}
                       </td>
                       <td className="px-4 py-3">

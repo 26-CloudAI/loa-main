@@ -74,7 +74,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   하: {
     label: '하',
     sub: '쉬움',
-    desc: '광물 채굴·생존 중심 룰베이스 보스. 인접 공격만 하며 추적하지 않습니다.',
+    desc: '광물 채굴·생존 중심 룰베이스 보스.\n인접 공격만 하며 추적하지 않습니다.',
     color: 'text-green-300',
     border: 'border-green-700',
     selected: 'border-green-400 bg-green-950/40',
@@ -82,7 +82,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   중: {
     label: '중',
     sub: '보통',
-    desc: '채굴과 전투를 균형 있게 수행하는 룰베이스 보스. 시야 내 적을 적극 추적합니다.',
+    desc: '채굴·전투 균형형 룰베이스 보스.\n시야 내 적을 적극 추적합니다.',
     color: 'text-yellow-300',
     border: 'border-yellow-700',
     selected: 'border-yellow-400 bg-yellow-950/40',
@@ -90,7 +90,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   상: {
     label: '상',
     sub: '어려움',
-    desc: '수천 판 학습한 DQN 강화학습 보스. 매일 유저 코드를 학습해 점점 강해집니다.',
+    desc: '수천 판 학습한 DQN 강화학습 보스.\n매일 유저 코드를 학습해 점점 강해집니다.',
     color: 'text-red-300',
     border: 'border-red-700',
     selected: 'border-red-400 bg-red-950/40',
@@ -127,7 +127,7 @@ function DifficultySelector({
                 {info.sub}
               </span>
             </div>
-            <p className="text-xs text-gray-400 leading-relaxed">{info.desc}</p>
+            <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-line">{info.desc}</p>
           </button>
         )
       })}
@@ -236,16 +236,19 @@ export default function BossBattlePage() {
           </Section>
 
           {/* 게임 이름 */}
-          <Section title="게임 이름">
+          <div className="flex flex-col gap-2">
+            <h3 className="font-semibold text-white text-sm">
+              게임 이름 <span className="text-gray-500 font-normal">(비우면 자동 설정됨)</span>
+            </h3>
             <input
               type="text"
               value={gameName}
               onChange={(e) => setGameName(e.target.value)}
-              placeholder="보스전 1 · 6fda7802  (비우면 자동 설정)"
+              placeholder="새 보스전 1"
               maxLength={40}
               className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-600 w-72"
             />
-          </Section>
+          </div>
 
           {/* 봇 이름 */}
           <Section title="내 봇 이름">
@@ -271,7 +274,7 @@ export default function BossBattlePage() {
               onChange={(e) => setCode(e.target.value)}
               spellCheck={false}
               rows={20}
-              className={`bg-gray-900 text-green-300 font-mono text-sm rounded-lg px-4 py-3 outline-none resize-y border ${
+              className={`bg-gray-900 text-green-300 font-mono text-sm rounded-lg px-4 py-3 outline-none resize-y border scrollbar-custom ${
                 codeOverLimit
                   ? 'border-red-500 focus:ring-2 focus:ring-red-500'
                   : 'border-gray-700 focus:ring-2 focus:ring-red-500'
@@ -315,11 +318,12 @@ export default function BossBattlePage() {
                 <p className="text-xs text-gray-500">비우면 랜덤</p>
               </div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={seed}
-                onChange={(e) => setSeed(e.target.value)}
+                onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="랜덤"
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-24 text-center placeholder-gray-400"
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-20 text-center placeholder-gray-400"
               />
             </div>
           </section>

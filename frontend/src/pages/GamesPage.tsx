@@ -138,7 +138,7 @@ export default function GamesPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/rankings')}
-            className="text-sm text-gray-400 hover:text-white transition-colors"
+            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
           >
             리더보드
           </button>
@@ -152,7 +152,7 @@ export default function GamesPage() {
           )}
           <button
             onClick={handleLogout}
-            className="text-sm text-gray-400 hover:text-white transition-colors"
+            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
           >
             로그아웃
           </button>
@@ -228,21 +228,27 @@ function GameCard({ game }: { game: GameInfo }) {
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
-      {/* 왼쪽: 게임 이름 + 뱃지들 */}
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-sm font-medium text-white truncate">
+      {/* 게임 이름 */}
+      <div className="w-36 shrink-0 min-w-0">
+        <span className="text-sm font-medium text-white truncate block">
           {game.name ?? `게임 ${shortId}`}
         </span>
-        {modeBadge && (
-          <span className={`shrink-0 text-xs rounded-full px-2 py-0.5 font-medium ${modeBadge.className}`}>
-            {modeBadge.label}
+      </div>
+
+      {/* 뱃지 */}
+      <div className="flex items-center shrink-0">
+        <div className="w-20 flex items-center justify-center">
+          {modeBadge && (
+            <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${modeBadge.className}`}>
+              {modeBadge.label}
+            </span>
+          )}
+        </div>
+        <div className="w-16 flex items-center justify-center">
+          <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLOR[game.status]}`}>
+            {STATUS_LABEL[game.status]}
           </span>
-        )}
-        <span
-          className={`shrink-0 text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLOR[game.status]}`}
-        >
-          {STATUS_LABEL[game.status]}
-        </span>
+        </div>
       </div>
 
       {/* 가운데: 진행 정보 */}
@@ -271,7 +277,7 @@ function GameCard({ game }: { game: GameInfo }) {
         className={`shrink-0 text-sm rounded-lg px-3 py-1.5 transition-colors ${
           actionDisabled
             ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-            : 'bg-gray-800 hover:bg-gray-700 text-gray-200'
+            : 'bg-gray-600 hover:bg-gray-500 text-white'
         }`}
       >
         {actionLabel}

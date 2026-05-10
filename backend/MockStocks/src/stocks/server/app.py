@@ -302,7 +302,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             owner_uid=uid,
         )
         if not name:
-            name = f"모의주식 {next_index} · {session.game_id}"
+            name = f"새 모의주식 {next_index}"
         session.name = name
         session.register_bots(user_bots + filler_bots)
 
