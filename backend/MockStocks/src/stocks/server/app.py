@@ -18,17 +18,20 @@ import asyncio
 import logging
 import sys
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ..bot_interface import BotInterface
 from ..config import Config, DEFAULT_CONFIG
+from ..db.schema import init_db
+from ..db.game_repo import StockGameRepository
 from ..market import Market
 from .game_session import GameRegistry
 from .ws_manager import SpectatorManager
@@ -44,9 +47,32 @@ class CreateGameRequest(BaseModel):
     min_bots: int = 4
     tick_interval: float = 0.1
     seed: Optional[int] = None
+    name: Optional[str] = None
     prepare_id: Optional[str] = None  # 사전 생성된 뉴스 ID
 
 logger = logging.getLogger(__name__)
+
+
+def _get_uid(request: Request) -> Optional[str]:
+    """Authorization 헤더에서 Firebase UID를 추출한다. 실패 시 None 반환."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[len("Bearer "):]
+    try:
+        import firebase_admin.auth as fb_auth
+        decoded = fb_auth.verify_id_token(token)
+        return decoded.get("uid")
+    except Exception:
+        return None
+
+
+def _require_uid(request: Request) -> str:
+    """UID를 반환하거나, 인증 실패 시 401을 발생시킨다."""
+    uid = _get_uid(request)
+    if uid is None:
+        raise HTTPException(401, "인증이 필요합니다.")
+    return uid
 
 
 # ── InProcessBot ──────────────────────────────────────────────────────────────
@@ -109,7 +135,41 @@ class RandomBot(BotInterface):
 # ── FastAPI 앱 ────────────────────────────────────────────────────────────────
 
 def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
-    app = FastAPI(title="MockStocks API", version="0.1.0")
+    spectator_manager = SpectatorManager()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        conn = None
+
+        def _init_repository():
+            db_conn = None
+            try:
+                db_conn = init_db()
+                repo = StockGameRepository(db_conn)
+                stale = repo.cleanup_stale_games()
+                return db_conn, repo, stale
+            except Exception:
+                if db_conn is not None:
+                    db_conn.close()
+                raise
+
+        try:
+            loop = asyncio.get_running_loop()
+            conn, repo, stale = await asyncio.wait_for(
+                loop.run_in_executor(None, _init_repository),
+                timeout=35.0,
+            )
+            registry._repo = repo
+            if stale:
+                logger.info("MockStocks 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
+        except Exception as e:
+            registry._repo = None
+            logger.exception("MockStocks DB 초기화 실패, DB 없이 기동: %s", e)
+        yield
+        if conn is not None:
+            conn.close()
+
+    app = FastAPI(title="MockStocks API", version="0.1.0", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -119,7 +179,6 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         allow_headers=["*"],
     )
 
-    spectator_manager = SpectatorManager()
     registry = GameRegistry(spectator_manager)
 
     # prepare_id → 사전 생성된 뉴스 큐 (None = 아직 생성 중)
@@ -156,11 +215,52 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/api/games")
-    async def list_games():
-        return [g.to_dict() for g in registry.list_games()]
+    async def list_games(request: Request):
+        uid = _require_uid(request)
+        return [g.to_dict() for g in registry.list_games(owner_uid=uid)]
+
+    @app.get("/api/games/history")
+    async def list_history(request: Request, limit: int = 50):
+        """완료된 MockStocks 게임 기록을 DB에서 조회. lifespan 전이거나 repo 미설정 시 빈 목록 반환."""
+        uid = _require_uid(request)
+        repo = registry._repo
+        if repo is None:
+            return []
+
+        games = repo.get_finished_games(limit=limit, owner_uid=uid)
+        result = []
+        for g in games:
+            participants = repo.get_participants(g.id)
+            rankings = [
+                {
+                    "rank": p.final_rank,
+                    "bot_id": p.bot_id,
+                    "bot_name": p.bot_name,
+                    "is_ai_filler": p.is_ai_filler,
+                    "final_total_value": p.final_total_value,
+                    "profit_rate": p.profit_rate,
+                    "final_credit_score": p.final_credit_score,
+                }
+                for p in participants
+                if p.final_rank is not None
+            ]
+            result.append({
+                "game_id": g.id,
+                "status": g.status,
+                "mode": "mock-stocks",
+                "current_tick": g.final_tick or 0,
+                "total_bots": g.total_bots,
+                "alive_bots": 0,
+                "bot_ids": [p.bot_id for p in participants],
+                "name": g.name,
+                "finished_at": g.finished_at,
+                "end_reason": g.end_reason,
+                "rankings": rankings,
+            })
+        return result
 
     @app.post("/api/games", status_code=201)
-    async def create_game(body: CreateGameRequest):
+    async def create_game(body: CreateGameRequest, request: Request):
         cfg = DEFAULT_CONFIG
 
         user_bots: list[BotInterface] = []
@@ -185,18 +285,25 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                     i += 1
                     bot_id = f"{filler_labels[cls_idx]}_{i:02d}"
                 existing_ids.add(bot_id)
-                filler_bots.append(filler_classes[cls_idx](bot_id=bot_id))
+                filler_bots.append(filler_classes[cls_idx](bot_id=bot_id, is_ai_filler=True))
 
         # 사전 생성된 뉴스 꺼내기
         prepared_news = None
         if body.prepare_id and body.prepare_id in _prepared_news:
             prepared_news = _prepared_news.pop(body.prepare_id)
 
+        uid = _require_uid(request)
+        name = body.name.strip() if body.name else None
+        next_index = registry._repo.count_games_by_owner(uid) + 1 if registry._repo else 1
         session = registry.create_game(
             config=cfg,
             tick_interval=body.tick_interval,
             seed=body.seed,
+            owner_uid=uid,
         )
+        if not name:
+            name = f"모의주식 {next_index} · {session.game_id}"
+        session.name = name
         session.register_bots(user_bots + filler_bots)
 
         try:
@@ -217,12 +324,57 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
     @app.get("/api/games/{game_id}/result")
     async def get_result(game_id: str):
         session = registry.get_game(game_id)
-        if not session:
-            raise HTTPException(404, "게임을 찾을 수 없습니다.")
-        snap = session.get_last_snapshot()
-        if not snap:
-            raise HTTPException(404, "결과가 아직 없습니다.")
-        return snap
+        if session:
+            engine = session._engine
+            result = engine.game_result if engine else None
+            if result:
+                initial_cash = session._cfg.game.starting_cash
+                return {
+                    "game_id": game_id,
+                    "status": "finished",
+                    "final_tick": result.final_tick,
+                    "end_reason": "finished",
+                    "finished_at": None,
+                    "rankings": [
+                        {
+                            "rank": entry["rank"],
+                            "bot_id": entry["id"],
+                            "bot_name": entry["id"],
+                            "is_ai_filler": False,
+                            "final_total_value": entry["total_value"],
+                            "profit_rate": (entry["total_value"] - initial_cash) / initial_cash * 100,
+                        }
+                        for entry in result.rankings
+                    ],
+                }
+
+        # 인메모리에 없으면 DB 폴백 (서버 재시작 후 종료 게임 조회)
+        repo = registry._repo
+        if repo is None:
+            raise HTTPException(404, "결과가 없습니다.")
+        game = repo.get_game(game_id)
+        if not game or game.status != "finished":
+            raise HTTPException(404, "완료된 게임을 찾을 수 없습니다.")
+        participants = repo.get_participants(game_id)
+        return {
+            "game_id": game_id,
+            "status": "finished",
+            "final_tick": game.final_tick,
+            "end_reason": game.end_reason,
+            "finished_at": game.finished_at,
+            "rankings": [
+                {
+                    "rank": p.final_rank,
+                    "bot_id": p.bot_id,
+                    "bot_name": p.bot_name,
+                    "is_ai_filler": p.is_ai_filler,
+                    "final_total_value": p.final_total_value,
+                    "profit_rate": p.profit_rate,
+                }
+                for p in participants
+                if p.final_rank is not None
+            ],
+        }
 
     @app.delete("/api/games/{game_id}", status_code=204)
     async def delete_game(game_id: str):

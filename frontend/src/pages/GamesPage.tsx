@@ -4,25 +4,40 @@ import { useNavigate } from 'react-router-dom'
 import { MOCK, MOCK_GAMES } from '../dev/mock'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+const STOCKS_API_BASE = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
+
+interface RankingEntry {
+  rank: number
+  bot_id: string
+  bot_name?: string
+  is_ai_filler?: boolean
+  final_total_value: number
+  profit_rate: number
+  final_credit_score?: number
+}
 
 interface GameInfo {
   game_id: string
-  status: 'waiting' | 'running' | 'finished' | 'error'
+  status: 'waiting' | 'loading' | 'running' | 'finished' | 'error'
   current_tick: number
   total_bots: number
   alive_bots: number
   bot_ids: string[]
-  name?: string
+  name?: string | null
   mode?: string
+  finished_at?: string | null
+  rankings?: RankingEntry[]
 }
 
 const MODE_BADGE: Record<string, { label: string; className: string }> = {
   'battle-royale': { label: '배틀로얄', className: 'bg-indigo-600/30 text-indigo-300 border border-indigo-600/50' },
   'boss':          { label: '보스전',   className: 'bg-red-700/30 text-red-300 border border-red-700/50' },
+  'mock-stocks':   { label: '모의주식', className: 'bg-emerald-600/30 text-emerald-300 border border-emerald-600/50' },
 }
 
 const STATUS_LABEL: Record<GameInfo['status'], string> = {
   waiting: '대기 중',
+  loading: '준비 중',
   running: '진행 중',
   finished: '종료',
   error: '오류',
@@ -30,9 +45,16 @@ const STATUS_LABEL: Record<GameInfo['status'], string> = {
 
 const STATUS_COLOR: Record<GameInfo['status'], string> = {
   waiting: 'bg-yellow-500/20 text-yellow-300',
+  loading: 'bg-yellow-500/20 text-yellow-300',
   running: 'bg-green-500/20 text-green-300',
   finished: 'bg-gray-500/20 text-gray-400',
   error: 'bg-red-500/20 text-red-400',
+}
+
+async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
+  const res = await fetch(url, init)
+  if (!res.ok) throw new Error(`${url} (${res.status})`)
+  return res.json()
 }
 
 export default function GamesPage() {
@@ -55,12 +77,40 @@ export default function GamesPage() {
       return
     }
     try {
-      const res = await fetch(`${API_BASE}/api/games`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
-      const data = await res.json()
-      setGames(data)
+      const [brResult, stocksActive, stocksHistory] = await Promise.allSettled([
+        fetchJson(`${API_BASE}/api/games`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetchJson(`${STOCKS_API_BASE}/api/games`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetchJson(`${STOCKS_API_BASE}/api/games/history`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ])
+
+      const merged: GameInfo[] = []
+      if (brResult.status === 'fulfilled' && Array.isArray(brResult.value)) {
+        merged.push(...(brResult.value as GameInfo[]))
+      }
+      if (stocksActive.status === 'fulfilled' && Array.isArray(stocksActive.value)) {
+        merged.push(...(stocksActive.value as GameInfo[]))
+      }
+      if (stocksHistory.status === 'fulfilled' && Array.isArray(stocksHistory.value)) {
+        // history는 finished 상태이므로 활성 목록과 game_id 중복 시 활성 우선
+        const activeIds = new Set(merged.map((g) => g.game_id))
+        for (const g of stocksHistory.value as GameInfo[]) {
+          if (!activeIds.has(g.game_id)) merged.push(g)
+        }
+      }
+
+      setGames(merged)
+
+      // BattleRoyale 호출만 실패해도 핵심 흐름이 끊기므로 에러로 처리
+      if (brResult.status === 'rejected') {
+        const reason = brResult.reason
+        throw new Error(reason instanceof Error ? reason.message : String(reason))
+      }
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : '게임 목록을 불러오지 못했습니다.')
@@ -158,6 +208,23 @@ function GameCard({ game }: { game: GameInfo }) {
   const navigate = useNavigate()
   const shortId = game.game_id.slice(0, 8)
   const modeBadge = game.mode ? MODE_BADGE[game.mode] : null
+  const isStocks = game.mode === 'mock-stocks'
+  const isFinished = game.status === 'finished'
+
+  function handleAction() {
+    if (isStocks) {
+      navigate(isFinished
+        ? `/games/${game.game_id}/mock-stocks/result`
+        : `/games/${game.game_id}/mock-stocks/watch`)
+      return
+    }
+    navigate(`/games/${game.game_id}/watch`)
+  }
+
+  const actionLabel = isStocks
+    ? (isFinished ? '결과 보기' : '관전하기')
+    : '관전하기'
+  const actionDisabled = false
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
@@ -193,18 +260,27 @@ function GameCard({ game }: { game: GameInfo }) {
         </span>
         <span>
           봇{' '}
-          <span className="text-white font-medium">{game.alive_bots}</span>
-          {' / '}
-          {game.total_bots}
+          <span className="text-white font-medium">{isStocks ? game.total_bots : game.alive_bots}</span>
+          {!isStocks && (
+            <>
+              {' / '}
+              {game.total_bots}
+            </>
+          )}
         </span>
       </div>
 
-      {/* 오른쪽: 관전 버튼 */}
+      {/* 오른쪽: 관전 / 결과 보기 버튼 */}
       <button
-        onClick={() => navigate(`/games/${game.game_id}/watch`)}
-        className="shrink-0 text-sm bg-gray-600 hover:bg-gray-500 text-white rounded-lg px-3 py-1.5 transition-colors"
+        onClick={handleAction}
+        disabled={actionDisabled}
+        className={`shrink-0 text-sm rounded-lg px-3 py-1.5 transition-colors ${
+          actionDisabled
+            ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+            : 'bg-gray-600 hover:bg-gray-500 text-white'
+        }`}
       >
-        관전하기
+        {actionLabel}
       </button>
     </div>
   )

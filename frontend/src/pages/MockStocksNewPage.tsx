@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 const MAX_CODE_BYTES = 50 * 1024
@@ -116,7 +117,9 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
 export default function MockStocksNewPage() {
   const navigate = useNavigate()
+  const { token } = useAuth()
 
+  const [gameName, setGameName] = useState('')
   const [botId, setBotId] = useState('')
   const [code, setCode] = useState(DEFAULT_CODE)
   const [fillWithAi, setFillWithAi] = useState(true)
@@ -181,7 +184,10 @@ export default function MockStocksNewPage() {
     try {
       const res = await fetch(`${STOCKS_API}/api/games`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           bots: [{ bot_id: botId.trim() || 'my_bot', code }],
           tick_interval: tickInterval,
@@ -189,6 +195,7 @@ export default function MockStocksNewPage() {
           min_bots: minBots || 2,
           seed: seed !== '' ? parseInt(seed, 10) : null,
           prepare_id: prepareId,
+          name: gameName.trim() || undefined,
         }),
       })
 
@@ -198,7 +205,7 @@ export default function MockStocksNewPage() {
       }
 
       const game = await res.json()
-      navigate(`/games/${game.game_id}/mock-stocks/watch`)
+      navigate(`/games/${game.game_id}/mock-stocks/watch?bot=${encodeURIComponent(botId.trim() || 'my_bot')}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '게임 생성에 실패했습니다.')
       setSubmitting(false)
@@ -242,6 +249,20 @@ export default function MockStocksNewPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          {/* 게임 이름 */}
+          <section className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-300">
+              게임 이름 <span className="text-gray-500 font-normal">(비우면 자동 설정됨)</span>
+            </label>
+            <input
+              type="text"
+              value={gameName}
+              onChange={(e) => setGameName(e.target.value)}
+              placeholder="모의주식 1 · 70a033a2"
+              maxLength={50}
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-600 w-80 max-w-full"
+            />
+          </section>
 
           {/* 봇 이름 */}
           <section className="flex flex-col gap-2">
