@@ -253,7 +253,6 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                 "alive_bots": 0,
                 "bot_ids": [p.bot_id for p in participants],
                 "name": g.name,
-                "created_at": g.created_at,
                 "finished_at": g.finished_at,
                 "end_reason": g.end_reason,
                 "rankings": rankings,

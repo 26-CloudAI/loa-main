@@ -20,7 +20,6 @@ class GameInfo:
     total_bots: int
     bot_ids: list[str]
     name: Optional[str] = None
-    created_at: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -32,7 +31,6 @@ class GameInfo:
             "bot_ids": self.bot_ids,
             "mode": "mock-stocks",
             "name": self.name,
-            "created_at": self.created_at,
         }
 
 

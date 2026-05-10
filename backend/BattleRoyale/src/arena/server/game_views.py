@@ -18,7 +18,6 @@ def game_info_from_state(
     state_data: dict,
     name: Optional[str] = None,
     mode: str = "battle-royale",
-    created_at: Optional[str] = None,
 ) -> GameInfo:
     """StateStore에 저장된 상태로부터 GameInfo를 복원한다."""
     bots = state_data.get("bots", [])
@@ -44,7 +43,6 @@ def game_info_from_state(
         bot_ids=bot_ids,
         name=name,
         mode=mode,
-        created_at=created_at,
     )
 
 
@@ -96,7 +94,6 @@ def game_info_from_record(
         bot_ids=bot_ids,
         name=record.name,
         mode=record.mode,
-        created_at=record.created_at,
     )
 
 

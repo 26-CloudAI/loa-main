@@ -351,7 +351,7 @@ export default function GameNewPage() {
               onChange={(e) => setCode(e.target.value)}
               spellCheck={false}
               rows={20}
-              className={`bg-gray-900 text-green-300 font-mono text-sm rounded-lg px-4 py-3 outline-none resize-y border ${
+              className={`bg-gray-900 text-green-300 font-mono text-sm rounded-lg px-4 py-3 outline-none resize-y border scrollbar-custom ${
                 codeOverLimit
                   ? 'border-red-500 focus:ring-2 focus:ring-red-500'
                   : 'border-gray-700 focus:ring-2 focus:ring-indigo-500'

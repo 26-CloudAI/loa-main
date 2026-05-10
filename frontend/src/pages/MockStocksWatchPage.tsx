@@ -510,7 +510,7 @@ export default function MockStocksWatchPage() {
                   📊 종목 현황
                   <span className="text-gray-500 text-xs font-normal ml-2">클릭하면 상세 보기</span>
                 </h3>
-                <div className="grid gap-1.5 overflow-y-auto flex-1 min-h-0" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
+                <div className="grid gap-1.5 overflow-y-auto flex-1 min-h-0 scrollbar-custom" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
                   {stocks.map(s => {
                     const color = stockColorMap[s.symbol]
                     const isUp  = s.change_pct >= 0
@@ -592,7 +592,7 @@ export default function MockStocksWatchPage() {
 
           {/* 봇 상세 (선택 시) */}
           {selectedBotInfo && (
-            <div className="p-3 border-b border-gray-800 overflow-y-auto shrink-0" style={{ maxHeight: 220 }}>
+            <div className="p-3 border-b border-gray-800 overflow-y-auto shrink-0 scrollbar-custom" style={{ maxHeight: 220 }}>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-semibold" style={{ color: botColorMap[selectedBot] ?? '#6366F1' }}>
                   {selectedBot}
@@ -644,7 +644,7 @@ export default function MockStocksWatchPage() {
           )}
 
           {/* 뉴스 피드 */}
-          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 min-h-0">
+          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 min-h-0 scrollbar-custom">
             <h3 className="text-sm font-semibold text-gray-300 shrink-0">📰 뉴스</h3>
             {news.length === 0 && (
               <p className="text-gray-600 text-xs">뉴스 대기 중...</p>

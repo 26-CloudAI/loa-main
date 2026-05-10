@@ -58,7 +58,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
           <h2 className="font-bold text-lg">📋 모의주식 룰 & 코드 가이드</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none">✕</button>
         </div>
-        <div className="overflow-y-auto px-6 py-5 flex flex-col gap-5 text-sm">
+        <div className="overflow-y-auto px-6 py-5 flex flex-col gap-5 text-sm scrollbar-custom">
           <div>
             <h3 className="font-semibold mb-2">🎮 게임 개요</h3>
             <p className="text-gray-300 leading-relaxed">
@@ -293,7 +293,7 @@ export default function MockStocksNewPage() {
               onChange={(e) => setCode(e.target.value)}
               spellCheck={false}
               rows={20}
-              className={`bg-gray-900 text-green-300 font-mono text-sm rounded-lg px-4 py-3 outline-none resize-y border ${
+              className={`bg-gray-900 text-green-300 font-mono text-sm rounded-lg px-4 py-3 outline-none resize-y border scrollbar-custom ${
                 codeOverLimit
                   ? 'border-red-500 focus:ring-2 focus:ring-red-500'
                   : 'border-gray-700 focus:ring-2 focus:ring-green-500'
