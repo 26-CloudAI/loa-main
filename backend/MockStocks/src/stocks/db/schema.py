@@ -128,7 +128,7 @@ def get_connection(db_path: str | Path = "ai_arena.db"):
         return conn
 
     # 기본: SQLite
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
@@ -148,7 +148,7 @@ def init_db(db_path: str | Path = "ai_arena.db"):
 
 def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
     """SQLite DB 초기화."""
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA_SQL_SQLITE)
