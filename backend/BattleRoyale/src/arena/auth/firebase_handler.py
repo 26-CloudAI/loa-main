@@ -23,9 +23,13 @@ firebase_admin.initialize_app(cred)
 security = HTTPBearer()
 
 def verify_firebase_token_value(token: str) -> dict:
-    """Firebase ID 토큰 문자열을 검증하고 디코딩된 페이로드를 반환한다."""
+    """Firebase ID 토큰 문자열을 검증하고 디코딩된 페이로드를 반환한다.
+
+    clock_skew_seconds=5 : 로컬 Docker 환경에서 컨테이너 클럭이 호스트보다
+    최대 수 초 느리게 drift하는 현상(Token used too early)을 허용한다.
+    """
     try:
-        return auth.verify_id_token(token)
+        return auth.verify_id_token(token, clock_skew_seconds=5)
     except Exception as e:
         raise HTTPException(
             status_code=401,
