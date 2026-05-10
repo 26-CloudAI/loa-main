@@ -357,7 +357,7 @@ export default function MockStocksWatchPage() {
   const displayRankings  = gameOver && finalRankings.length > 0 ? finalRankings : leaderboard
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
+    <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
 
       {/* ── 헤더 ── */}
       <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-4 shrink-0">
