@@ -4,6 +4,7 @@ import asyncio
 import logging
 import random
 import uuid
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
 from ..bot_interface import BotInterface
@@ -38,6 +39,7 @@ class GameSession:
         self._repo = repo
         self.owner_uid = owner_uid
         self.name = name
+        self.created_at = datetime.now(timezone.utc).isoformat()
 
         self.status = GameStatus.WAITING
         self._bots: list[BotInterface] = []
@@ -127,6 +129,7 @@ class GameSession:
             total_bots=len(self._bots),
             bot_ids=[b.bot_id for b in self._bots],
             name=self.name,
+            created_at=self.created_at,
         )
 
     def get_last_snapshot(self) -> Optional[dict]:

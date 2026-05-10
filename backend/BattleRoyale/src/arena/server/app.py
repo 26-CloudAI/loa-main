@@ -403,7 +403,7 @@ def create_app(
 
             if state_data:
                 infos.append(game_info_from_state(
-                    record.id, state_data, name=record.name, mode=record.mode
+                    record.id, state_data, name=record.name, mode=record.mode, created_at=record.created_at
                 ))
                 continue
 

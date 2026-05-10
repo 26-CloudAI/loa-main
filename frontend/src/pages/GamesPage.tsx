@@ -25,6 +25,7 @@ interface GameInfo {
   bot_ids: string[]
   name?: string | null
   mode?: string
+  created_at?: string | null
   finished_at?: string | null
   rankings?: RankingEntry[]
 }
@@ -104,6 +105,11 @@ export default function GamesPage() {
         }
       }
 
+      merged.sort((a, b) => {
+        const ta = a.created_at ?? ''
+        const tb = b.created_at ?? ''
+        return tb.localeCompare(ta)
+      })
       setGames(merged)
 
       // BattleRoyale 호출만 실패해도 핵심 흐름이 끊기므로 에러로 처리
