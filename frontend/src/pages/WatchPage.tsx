@@ -2,78 +2,30 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_INFO, startMockSimulation } from '../dev/mock'
+import PhaserGame from '../game/PhaserGame'
+import type { TickData, GameEvent } from '../game/BattleRoyaleScene'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
-const WS_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale').replace(/^http/, 'ws')
-
-const MAP_PX     = 600   // canvas px (fixed)
-const MAX_ENERGY = 100   // energy range 0~100
-const MM_SIZE    = 150   // minimap px
-const MM_MARGIN  = 8
+const WS_BASE  = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale').replace(/^http/, 'ws')
 
 // ── Types ──────────────────────────────────────────────────────────────
 
 interface BotState {
-  id: string
-  x: number
-  y: number
-  energy: number
-  score: number
-  alive: boolean
-  shield_active: boolean
+  id: string; x: number; y: number
+  energy: number; score: number; alive: boolean; shield_active: boolean
 }
-
-interface Mineral {
-  x: number
-  y: number
-  rare: boolean
-}
-
-interface LeaderEntry {
-  rank: number
-  id: string
-  score: number
-}
-
-interface TickData {
-  tick: number
-  bots: BotState[]
-  minerals: Mineral[]
-  zone_bounds: [number, number, number, number]
-  alive_count: number
+interface LeaderEntry { rank: number; id: string; score: number }
+interface FullTickData extends TickData {
   leaderboard: LeaderEntry[]
 }
-
 interface RankingEntry {
-  rank: number
-  id: string
-  score?: number
-  final_score?: number
-  kills: number
-  minerals_mined: number
-  survival_ticks: number
-  survival_bonus?: number
+  rank: number; id: string; score?: number; final_score?: number
+  kills: number; minerals_mined: number; survival_ticks: number; survival_bonus?: number
 }
-
-interface GameEndData {
-  reason: string
-  rankings: RankingEntry[]
-}
-
+interface GameEndData { reason: string; rankings: RankingEntry[] }
 interface EventLog {
-  uid: number
-  tick: number
-  type: string
-  actor_id: string
-  target_id?: string
-  detail?: string
-}
-
-interface ViewParams {
-  viewCX: number
-  viewCY: number
-  viewCells: number
-  cellSize: number
+  uid: number; tick: number; type: string
+  actor_id: string; target_id?: string; detail?: string
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -84,19 +36,13 @@ function hashColor(id: string): string {
   return `hsl(${Math.abs(h) % 360}, 65%, 58%)`
 }
 
-/** 봇 이름 패턴 기반 이모지 아이콘 */
 function getBotIcon(botId: string, isMyBot: boolean, myBotIcon: string): string {
   if (isMyBot) return myBotIcon
   const id = botId.toLowerCase()
-  if (id.includes('초식') || id.includes('herbivore'))                            return '🌿'
-  if (id.includes('미친개') || id.includes('maddog') || id.includes('mad_dog'))  return '🐺'
-  if (id.includes('존버')   || id.includes('camper'))                            return '🏕️'
+  if (id.includes('초식') || id.includes('herbivore')) return '🌿'
+  if (id.includes('미친개') || id.includes('maddog'))  return '🐺'
+  if (id.includes('존버')   || id.includes('camper'))  return '🏕️'
   return '🤖'
-}
-
-function getBotMiniColor(botId: string, isMyBot: boolean, colorMap: Map<string, string>): string {
-  if (isMyBot) return '#ffd700'
-  return colorMap.get(botId) ?? '#ffffff'
 }
 
 const REASON_LABEL: Record<string, string> = {
@@ -138,262 +84,6 @@ function FormatEvent({ ev, colorMap }: { ev: EventLog; colorMap: Map<string, str
   }
 }
 
-// ── Coordinate helper ─────────────────────────────────────────────────
-
-function mapToCanvas(mx: number, my: number, vp: ViewParams): [number, number] {
-  const half = vp.viewCells / 2
-  return [
-    (mx - (vp.viewCX - half)) * vp.cellSize,
-    (my - (vp.viewCY - half)) * vp.cellSize,
-  ]
-}
-
-function onScreen(cx: number, cy: number, margin = 0): boolean {
-  return cx >= -margin && cx <= MAP_PX + margin &&
-         cy >= -margin && cy <= MAP_PX + margin
-}
-
-// ── Canvas draw functions ──────────────────────────────────────────────
-
-function drawCanvas(
-  ctx: CanvasRenderingContext2D,
-  data: TickData,
-  colorMap: Map<string, string>,
-  vp: ViewParams,
-  myBotId: string,
-  myBotIcon: string,
-) {
-  ctx.fillStyle = '#0a0a0f'
-  ctx.fillRect(0, 0, MAP_PX, MAP_PX)
-
-  drawGrid(ctx, vp)
-  drawZone(ctx, data.zone_bounds, vp)
-  drawMinerals(ctx, data.minerals, vp)
-
-  // Non-myBot bots first, myBot rendered last (on top)
-  for (const bot of data.bots) {
-    if (bot.id === myBotId) continue
-    drawBot(ctx, bot, false, myBotId, myBotIcon, colorMap, vp)
-  }
-  const myBot = data.bots.find(b => b.id === myBotId)
-  if (myBot) drawBot(ctx, myBot, true, myBotId, myBotIcon, colorMap, vp)
-
-  drawMinimap(ctx, data, colorMap, vp, myBotId)
-}
-
-function drawGrid(ctx: CanvasRenderingContext2D, vp: ViewParams) {
-  if (vp.cellSize < 10) return
-  ctx.save()
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)'
-  ctx.lineWidth = 0.5
-  const half = vp.viewCells / 2
-  for (let x = Math.floor(vp.viewCX - half); x <= Math.ceil(vp.viewCX + half); x++) {
-    const [cx] = mapToCanvas(x, 0, vp)
-    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, MAP_PX); ctx.stroke()
-  }
-  for (let y = Math.floor(vp.viewCY - half); y <= Math.ceil(vp.viewCY + half); y++) {
-    const [, cy] = mapToCanvas(0, y, vp)
-    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(MAP_PX, cy); ctx.stroke()
-  }
-  ctx.restore()
-}
-
-function drawZone(ctx: CanvasRenderingContext2D, bounds: [number,number,number,number], vp: ViewParams) {
-  const [minX, minY, maxX, maxY] = bounds
-  const [x0,    y0   ] = mapToCanvas(0,      0,      vp)
-  const [x100,  y100 ] = mapToCanvas(100,    100,    vp)
-  const [sminX, sminY] = mapToCanvas(minX,   minY,   vp)
-  const [smaxX, smaxY] = mapToCanvas(maxX+1, maxY+1, vp)
-
-  ctx.fillStyle = 'rgba(220,38,38,0.18)'
-  ctx.fillRect(x0,    y0,    x100-x0,    sminY-y0)
-  ctx.fillRect(x0,    smaxY, x100-x0,    y100-smaxY)
-  ctx.fillRect(x0,    sminY, sminX-x0,   smaxY-sminY)
-  ctx.fillRect(smaxX, sminY, x100-smaxX, smaxY-sminY)
-
-  ctx.strokeStyle = 'rgba(239,68,68,0.75)'
-  ctx.lineWidth = 1.5
-  ctx.strokeRect(sminX, sminY, smaxX-sminX, smaxY-sminY)
-}
-
-function drawMinerals(ctx: CanvasRenderingContext2D, minerals: Mineral[], vp: ViewParams) {
-  const emojiSize = Math.max(6, vp.cellSize * 0.62)
-  ctx.textAlign    = 'center'
-  ctx.textBaseline = 'middle'
-  for (const m of minerals) {
-    const [cx, cy] = mapToCanvas(m.x + 0.5, m.y + 0.5, vp)
-    if (!onScreen(cx, cy, vp.cellSize)) continue
-    ctx.font = `${emojiSize}px sans-serif`
-    ctx.fillText(m.rare ? '💜' : '💛', cx, cy)
-  }
-}
-
-function drawBot(
-  ctx: CanvasRenderingContext2D,
-  bot: BotState,
-  isMyBot: boolean,
-  _myBotId: string,
-  myBotIcon: string,
-  colorMap: Map<string, string>,
-  vp: ViewParams,
-) {
-  const [cx, cy] = mapToCanvas(bot.x + 0.5, bot.y + 0.5, vp)
-  if (!onScreen(cx, cy, vp.cellSize * 2.5)) return
-
-  const emojiSize = Math.max(9, vp.cellSize * 0.78)
-  const icon      = getBotIcon(bot.id, isMyBot, myBotIcon)
-
-  if (!bot.alive) {
-    ctx.save()
-    ctx.globalAlpha = 0.3
-    ctx.font = `${emojiSize}px sans-serif`
-    ctx.textAlign    = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('💀', cx, cy)
-    ctx.globalAlpha = 1
-    ctx.restore()
-    return
-  }
-
-  ctx.save()
-
-  // Gold glow ring for my bot
-  if (isMyBot) {
-    ctx.strokeStyle = 'rgba(255,215,0,0.75)'
-    ctx.lineWidth   = Math.max(2, vp.cellSize * 0.13)
-    ctx.beginPath()
-    ctx.arc(cx, cy, emojiSize * 0.65, 0, Math.PI * 2)
-    ctx.stroke()
-  }
-
-  // Cyan shield ring
-  if (bot.shield_active) {
-    ctx.strokeStyle = 'rgba(0,200,220,0.8)'
-    ctx.lineWidth   = Math.max(1.5, vp.cellSize * 0.09)
-    ctx.beginPath()
-    ctx.arc(cx, cy, emojiSize * 0.9, 0, Math.PI * 2)
-    ctx.stroke()
-  }
-
-  // Emoji icon
-  ctx.font         = `${emojiSize}px sans-serif`
-  ctx.textAlign    = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(icon, cx, cy)
-
-  // HP bar (above icon)
-  const hpRatio = Math.min(1, Math.max(0, bot.energy / MAX_ENERGY))
-  const barW = Math.max(22, vp.cellSize * 1.35)
-  const barH = Math.max(3,  vp.cellSize * 0.13)
-  const barX = cx - barW / 2
-  const barY = cy - emojiSize * 0.62 - barH - 3
-
-  ctx.fillStyle = 'rgba(0,0,0,0.75)'
-  ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2)
-  ctx.fillStyle = '#111'
-  ctx.fillRect(barX, barY, barW, barH)
-  ctx.fillStyle = hpRatio > 0.5 ? '#4ade80' : hpRatio > 0.25 ? '#facc15' : '#f87171'
-  ctx.fillRect(barX, barY, barW * hpRatio, barH)
-
-  // Bot name label (only when large enough)
-  if (vp.cellSize >= 13) {
-    const fontSize    = Math.max(8, vp.cellSize * 0.21)
-    const displayName = isMyBot ? `★ ${bot.id}` : bot.id
-    ctx.font         = `${fontSize}px sans-serif`
-    ctx.textAlign    = 'center'
-    ctx.textBaseline = 'bottom'
-    ctx.fillStyle = 'rgba(0,0,0,0.85)'
-    ctx.fillText(displayName, cx + 1, barY - 1)
-    ctx.fillStyle = isMyBot ? '#ffd700' : (colorMap.get(bot.id) ?? 'rgba(210,210,210,0.9)')
-    ctx.fillText(displayName, cx, barY - 2)
-  }
-
-  // Shield badge (top-right corner)
-  if (bot.shield_active && vp.cellSize >= 16) {
-    ctx.font         = `${Math.max(8, vp.cellSize * 0.38)}px sans-serif`
-    ctx.textAlign    = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('🛡️', cx + emojiSize * 0.52, cy - emojiSize * 0.52)
-  }
-
-  ctx.restore()
-}
-
-function drawMinimap(
-  ctx: CanvasRenderingContext2D,
-  data: TickData,
-  colorMap: Map<string, string>,
-  vp: ViewParams,
-  myBotId: string,
-) {
-  const mm   = MM_SIZE
-  const mmX  = MAP_PX - mm - MM_MARGIN
-  const mmY  = MM_MARGIN
-  const cell = mm / 100
-
-  ctx.save()
-
-  // Background
-  ctx.fillStyle = 'rgba(8,8,8,0.88)'
-  ctx.fillRect(mmX, mmY, mm, mm)
-  ctx.strokeStyle = 'rgba(90,90,90,0.7)'
-  ctx.lineWidth = 1
-  ctx.strokeRect(mmX, mmY, mm, mm)
-
-  // Zone
-  const [zx0, zy0, zx1, zy1] = data.zone_bounds
-  ctx.fillStyle = 'rgba(220,38,38,0.30)'
-  ctx.fillRect(mmX,               mmY,                mm,                zy0*cell)
-  ctx.fillRect(mmX,               mmY+(zy1+1)*cell,   mm,                (100-zy1-1)*cell)
-  ctx.fillRect(mmX,               mmY+zy0*cell,       zx0*cell,          (zy1-zy0+1)*cell)
-  ctx.fillRect(mmX+(zx1+1)*cell,  mmY+zy0*cell,       (100-zx1-1)*cell,  (zy1-zy0+1)*cell)
-  ctx.strokeStyle = 'rgba(239,68,68,0.5)'
-  ctx.lineWidth = 0.5
-  ctx.strokeRect(mmX+zx0*cell, mmY+zy0*cell, (zx1-zx0+1)*cell, (zy1-zy0+1)*cell)
-
-  // Minerals
-  for (const m of data.minerals) {
-    ctx.fillStyle = m.rare ? '#a855f7' : '#facc15'
-    ctx.fillRect(mmX + m.x * cell, mmY + m.y * cell, Math.max(1, cell * 0.85), Math.max(1, cell * 0.85))
-  }
-
-  // Bots
-  for (const bot of data.bots) {
-    if (!bot.alive) continue
-    const isMyBot = bot.id === myBotId
-    const dotR = isMyBot ? cell * 2.8 : cell * 1.8
-    ctx.fillStyle = getBotMiniColor(bot.id, isMyBot, colorMap)
-    ctx.beginPath()
-    ctx.arc(mmX + bot.x * cell + cell/2, mmY + bot.y * cell + cell/2, dotR, 0, Math.PI*2)
-    ctx.fill()
-    if (isMyBot) {
-      ctx.strokeStyle = '#ffd700'
-      ctx.lineWidth = 1
-      ctx.stroke()
-    }
-  }
-
-  // Viewport indicator
-  const half = vp.viewCells / 2
-  ctx.strokeStyle = 'rgba(255,255,255,0.65)'
-  ctx.lineWidth = 1
-  ctx.strokeRect(
-    mmX + (vp.viewCX - half) * cell,
-    mmY + (vp.viewCY - half) * cell,
-    vp.viewCells * cell,
-    vp.viewCells * cell,
-  )
-
-  // Label
-  ctx.fillStyle = 'rgba(140,140,140,0.55)'
-  ctx.font = '8px sans-serif'
-  ctx.textAlign    = 'right'
-  ctx.textBaseline = 'bottom'
-  ctx.fillText('미니맵', mmX + mm - 2, mmY + mm - 2)
-
-  ctx.restore()
-}
-
 // ── Main Component ─────────────────────────────────────────────────────
 
 export default function WatchPage() {
@@ -401,20 +91,18 @@ export default function WatchPage() {
   const { token }   = useAuth()
   const navigate    = useNavigate()
 
-  const canvasRef       = useRef<HTMLCanvasElement>(null)
   const wsRef           = useRef<WebSocket | null>(null)
   const hasConnectedRef = useRef(false)
   const colorMapRef     = useRef<Map<string, string>>(new Map())
   const currentTickRef  = useRef(0)
   const eventUidRef     = useRef(0)
-  // Camera position stored as refs — updated every tick without triggering re-render
-  const viewCXRef       = useRef(50)
-  const viewCYRef       = useRef(50)
+  // Shared event queue — WatchPage pushes, Phaser scene drains each frame
+  const eventQueueRef   = useRef<GameEvent[]>([])
 
   type GameStatus = 'waiting' | 'running' | 'finished' | 'error' | null
   const [gameStatus, setGameStatus] = useState<GameStatus>(null)
-  const [wsStatus,   setWsStatus]   = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting')
-  const [tickData,   setTickData]   = useState<TickData | null>(null)
+  const [wsStatus,   setWsStatus]   = useState<'connecting'|'connected'|'disconnected'|'error'>('connecting')
+  const [tickData,   setTickData]   = useState<FullTickData | null>(null)
   const [totalBots,  setTotalBots]  = useState(0)
   const [events,     setEvents]     = useState<EventLog[]>([])
   const [gameEnd,    setGameEnd]    = useState<GameEndData | null>(null)
@@ -422,9 +110,8 @@ export default function WatchPage() {
   const [loadError,  setLoadError]  = useState('')
   const [gameName,   setGameName]   = useState<string | null>(null)
 
-  // ── Visualization settings ──────────────────────────────────────────
-  // Initialize from localStorage (set by GameNewPage at game creation time)
-  const [myBotId, setMyBotId] = useState<string>(() => {
+  // 내 봇 ID/아이콘 — localStorage에서 읽어 고정 (아이콘 귀속용)
+  const [myBotId] = useState<string>(() => {
     try {
       const raw = localStorage.getItem('loa_bot_icon')
       if (raw) return (JSON.parse(raw) as { botId: string; icon: string }).botId
@@ -438,10 +125,9 @@ export default function WatchPage() {
     } catch { /* ignore */ }
     return '⭐'
   })
+  // 카메라 추적 대상 — 드롭박스로 변경 가능, 초기값은 내 봇
+  const [followBotId, setFollowBotId] = useState<string>(myBotId)
   const [zoomLevel, setZoomLevel] = useState(3)
-
-  const viewCells = Math.ceil(100 / zoomLevel)
-  const cellSize  = MAP_PX / viewCells
 
   const botIds = tickData ? tickData.bots.map(b => b.id) : []
 
@@ -450,19 +136,19 @@ export default function WatchPage() {
     if (!game_id) return
     if (MOCK) {
       setTotalBots(MOCK_GAME_INFO.total_bots)
-      setMyBotId(MOCK_GAME_INFO.bot_ids[0] ?? 'my_bot')
+      setFollowBotId(MOCK_GAME_INFO.bot_ids[0] ?? myBotId)
       setGameStatus('running')
       return
     }
     fetch(`${API_BASE}/api/games/${game_id}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-      .then((r) => {
+      .then(r => {
         if (r.status === 404) throw new Error('게임을 찾을 수 없습니다.')
         if (!r.ok) throw new Error(`서버 오류 (${r.status})`)
         return r.json()
       })
-      .then(async (info) => {
+      .then(async info => {
         setTotalBots(info.total_bots ?? 0)
         setGameName(info.name ?? null)
         if (info.status === 'finished') {
@@ -470,19 +156,12 @@ export default function WatchPage() {
           const res = await fetch(`${API_BASE}/api/games/${game_id}/result`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           })
-          if (res.ok) {
-            const result = await res.json()
-            setGameEnd(result)
-            setShowModal(true)
-          }
+          if (res.ok) { setGameEnd(await res.json()); setShowModal(true) }
         } else {
           setGameStatus(info.status ?? 'waiting')
         }
       })
-      .catch((e) => {
-        setLoadError(e.message)
-        setGameStatus('error')
-      })
+      .catch(e => { setLoadError(e.message); setGameStatus('error') })
   }, [game_id, token])
 
   // 2) Connect WebSocket
@@ -494,38 +173,29 @@ export default function WatchPage() {
 
     if (MOCK) {
       setWsStatus('connected')
-      MOCK_GAME_INFO.bot_ids.forEach((id) => {
-        colorMapRef.current.set(id, hashColor(id))
-      })
+      MOCK_GAME_INFO.bot_ids.forEach(id => colorMapRef.current.set(id, hashColor(id)))
       const stop = startMockSimulation({
-        onTick: (data) => {
+        onTick: data => {
           currentTickRef.current = data.tick
-          setTickData(data as TickData)
+          setTickData(data as FullTickData)
         },
-        onEvent: (ev) => {
-          setEvents((prev) => {
-            const entry: EventLog = {
-              uid:       eventUidRef.current++,
-              tick:      currentTickRef.current,
-              type:      ev.event_type,
-              actor_id:  ev.actor_id,
-              target_id: ev.target_id,
-            }
-            return [entry, ...prev].slice(0, 100)
-          })
+        onEvent: ev => {
+          const entry: EventLog = {
+            uid: eventUidRef.current++, tick: currentTickRef.current,
+            type: ev.event_type, actor_id: ev.actor_id, target_id: ev.target_id,
+          }
+          eventQueueRef.current.push({ type: ev.event_type, actor_id: ev.actor_id, target_id: ev.target_id })
+          setEvents(prev => [entry, ...prev].slice(0, 100))
         },
-        onEnd: (data) => {
-          setGameStatus('finished')
-          setWsStatus('disconnected')
-          setGameEnd(data)
-          setShowModal(true)
+        onEnd: data => {
+          setGameStatus('finished'); setWsStatus('disconnected')
+          setGameEnd(data); setShowModal(true)
         },
       })
       return stop
     }
 
-    let cancelled  = false
-    let retryCount = 0
+    let cancelled = false, retryCount = 0
     let retryTimer: ReturnType<typeof setTimeout> | null = null
 
     function connect() {
@@ -537,13 +207,9 @@ export default function WatchPage() {
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
-      ws.onopen = () => {
-        if (cancelled) { ws.close(); return }
-        setWsStatus('connected')
-        retryCount = 0
-      }
+      ws.onopen = () => { if (cancelled) { ws.close(); return }; setWsStatus('connected'); retryCount = 0 }
 
-      ws.onmessage = (e) => {
+      ws.onmessage = e => {
         if (cancelled) return
         const msg = JSON.parse(e.data as string)
         switch (msg.type) {
@@ -551,91 +217,45 @@ export default function WatchPage() {
             setGameStatus('running')
             const ids: string[] = msg.data?.bot_ids ?? []
             if (ids.length > 0) setTotalBots(ids.length)
-            ids.forEach((id) => {
-              if (!colorMapRef.current.has(id)) colorMapRef.current.set(id, hashColor(id))
-            })
+            ids.forEach(id => { if (!colorMapRef.current.has(id)) colorMapRef.current.set(id, hashColor(id)) })
             break
           }
           case 'tick': {
-            const td: TickData = msg.data
+            const td = msg.data as FullTickData
             currentTickRef.current = td.tick
-            td.bots.forEach((b) => {
-              if (!colorMapRef.current.has(b.id)) colorMapRef.current.set(b.id, hashColor(b.id))
-            })
+            td.bots.forEach(b => { if (!colorMapRef.current.has(b.id)) colorMapRef.current.set(b.id, hashColor(b.id)) })
             setTickData(td)
             break
           }
           case 'event': {
             const ev = msg.data
-            setEvents((prev) => {
-              const entry: EventLog = {
-                uid:       eventUidRef.current++,
-                tick:      currentTickRef.current,
-                type:      ev.event_type,
-                actor_id:  ev.actor_id,
-                target_id: ev.target_id,
-                detail:    ev.detail,
-              }
-              return [entry, ...prev].slice(0, 100)
-            })
+            const entry: EventLog = {
+              uid: eventUidRef.current++, tick: currentTickRef.current,
+              type: ev.event_type, actor_id: ev.actor_id,
+              target_id: ev.target_id, detail: ev.detail,
+            }
+            eventQueueRef.current.push({ type: ev.event_type, actor_id: ev.actor_id, target_id: ev.target_id })
+            setEvents(prev => [entry, ...prev].slice(0, 100))
             break
           }
-          case 'game_end': {
-            setGameStatus('finished')
-            setGameEnd(msg.data)
-            setShowModal(true)
-            ws.close()
+          case 'game_end':
+            setGameStatus('finished'); setGameEnd(msg.data); setShowModal(true); ws.close()
             break
-          }
         }
       }
 
       ws.onclose = () => {
         if (cancelled) return
         setWsStatus('disconnected')
-        if (retryCount < 3) {
-          const delay = Math.pow(2, retryCount) * 500
-          retryCount++
-          retryTimer = setTimeout(connect, delay)
-        } else {
-          setWsStatus('error')
-        }
+        if (retryCount < 3) { retryTimer = setTimeout(connect, Math.pow(2, retryCount++) * 500) }
+        else setWsStatus('error')
       }
-
       ws.onerror = () => ws.close()
     }
 
     connect()
-    return () => {
-      cancelled = true
-      if (retryTimer) clearTimeout(retryTimer)
-      wsRef.current?.close()
-    }
+    return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); wsRef.current?.close() }
   }, [game_id, gameStatus, token])
-
-  // 3) Draw canvas whenever tick data or viz settings change
-  useEffect(() => {
-    if (!tickData || !canvasRef.current) return
-    const ctx = canvasRef.current.getContext('2d')
-    if (!ctx) return
-
-    // Update camera to follow myBot (only if alive)
-    const myBot = tickData.bots.find(b => b.id === myBotId)
-    const half  = viewCells / 2
-    if (myBot?.alive) {
-      viewCXRef.current = myBot.x + 0.5
-      viewCYRef.current = myBot.y + 0.5
-    }
-    viewCXRef.current = Math.max(half, Math.min(100 - half, viewCXRef.current))
-    viewCYRef.current = Math.max(half, Math.min(100 - half, viewCYRef.current))
-
-    drawCanvas(ctx, tickData, colorMapRef.current, {
-      viewCX:    viewCXRef.current,
-      viewCY:    viewCYRef.current,
-      viewCells,
-      cellSize,
-    }, myBotId, myBotIcon)
-  }, [tickData, myBotId, myBotIcon, viewCells, cellSize])
 
   // ── Status labels ──────────────────────────────────────────────────
 
@@ -647,20 +267,18 @@ export default function WatchPage() {
     :                               { text: '연결 실패',  cls: 'text-red-400'    }
 
   const gameStatusLabel =
-    gameStatus === 'running'  ? { text: 'RUNNING',  cls: 'bg-green-500/20 text-green-300'  }
+    gameStatus === 'running'  ? { text: 'RUNNING',  cls: 'bg-green-500/20 text-green-300'   }
     : gameStatus === 'waiting'  ? { text: 'WAITING',  cls: 'bg-yellow-500/20 text-yellow-300' }
-    : gameStatus === 'finished' ? { text: 'FINISHED', cls: 'bg-blue-500/20 text-blue-300'   }
-    : gameStatus === 'error'    ? { text: 'ERROR',    cls: 'bg-red-500/20 text-red-400'     }
-    :                             { text: '로딩 중',  cls: 'bg-gray-500/20 text-gray-400'   }
+    : gameStatus === 'finished' ? { text: 'FINISHED', cls: 'bg-blue-500/20 text-blue-300'    }
+    : gameStatus === 'error'    ? { text: 'ERROR',    cls: 'bg-red-500/20 text-red-400'      }
+    :                             { text: '로딩 중',  cls: 'bg-gray-500/20 text-gray-400'    }
 
   if (gameStatus === 'error') {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{loadError || '게임을 찾을 수 없습니다.'}</p>
-        <button
-          onClick={() => navigate('/games')}
-          className="text-sm text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
-        >
+        <button onClick={() => navigate('/games')}
+          className="text-sm text-indigo-400 hover:text-indigo-300 underline underline-offset-2">
           게임 목록으로
         </button>
       </div>
@@ -673,10 +291,8 @@ export default function WatchPage() {
     <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3 shrink-0">
-        <button
-          onClick={() => navigate('/games')}
-          className="text-gray-400 hover:text-white text-sm transition-colors"
-        >
+        <button onClick={() => navigate('/games')}
+          className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 게임 목록
         </button>
         <span className="text-gray-600">|</span>
@@ -687,15 +303,17 @@ export default function WatchPage() {
       {/* Main area */}
       <main className="flex flex-1 overflow-hidden p-4 gap-4 justify-center">
 
-        {/* Canvas column */}
-        <div className="shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-custom" style={{ width: MAP_PX }}>
+        {/* Phaser game column */}
+        <div className="shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-custom" style={{ width: 800 }}>
           <div className="relative shrink-0">
-            <canvas
-              ref={canvasRef}
-              width={MAP_PX}
-              height={MAP_PX}
-              className="rounded-lg border border-gray-700 block"
-              style={{ imageRendering: 'pixelated' }}
+            <PhaserGame
+              tickData={tickData}
+              eventQueueRef={eventQueueRef}
+              myBotId={myBotId}
+              followBotId={followBotId}
+              myBotIcon={myBotIcon}
+              zoomLevel={zoomLevel}
+              onFollowChange={setFollowBotId}
             />
             {gameStatus === 'waiting' && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-950/80 rounded-lg">
@@ -709,9 +327,7 @@ export default function WatchPage() {
             )}
           </div>
 
-          {gameEnd && (
-            <GameResultPanel data={gameEnd} colorMap={colorMapRef.current} />
-          )}
+          {gameEnd && <GameResultPanel data={gameEnd} colorMap={colorMapRef.current} />}
         </div>
 
         {/* Sidebar */}
@@ -733,47 +349,36 @@ export default function WatchPage() {
             </div>
           </div>
 
-          {/* ── My Bot 설정 ── */}
+          {/* 뷰 설정 */}
           <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-3 shrink-0">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">내 봇 설정</h3>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">뷰 설정</h3>
 
-            {/* Bot selector */}
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-500">추적할 봇 (카메라 고정)</label>
               <select
-                value={myBotId}
-                onChange={e => {
-                  setMyBotId(e.target.value)
-                  viewCXRef.current = 50
-                  viewCYRef.current = 50
-                }}
+                value={followBotId}
+                onChange={e => setFollowBotId(e.target.value)}
                 className="bg-gray-700 border border-gray-600 text-white text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 w-full"
               >
                 {botIds.length > 0
                   ? botIds.map(id => <option key={id} value={id}>{id}</option>)
-                  : <option value={myBotId}>{myBotId}</option>
+                  : <option value={followBotId}>{followBotId}</option>
                 }
               </select>
             </div>
 
-            {/* My bot icon — read-only display (set at game creation) */}
             <div className="flex items-center gap-2 text-xs text-gray-500">
               <span className="text-xl leading-none">{myBotIcon}</span>
               <span>내 봇 아이콘 (게임 생성 시 설정됨)</span>
             </div>
 
-            {/* Zoom slider */}
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-center">
                 <label className="text-xs text-gray-500">줌 레벨</label>
                 <span className="text-xs font-mono text-indigo-400 font-semibold">{zoomLevel}×</span>
               </div>
               <input
-                type="range"
-                min={1}
-                max={5}
-                step={1}
-                value={zoomLevel}
+                type="range" min={1} max={5} step={1} value={zoomLevel}
                 onChange={e => setZoomLevel(Number(e.target.value))}
                 className="w-full accent-indigo-500"
               />
@@ -792,8 +397,8 @@ export default function WatchPage() {
             ) : (
               <div className="overflow-y-auto scrollbar-custom flex flex-col gap-1" style={{ maxHeight: 140 }}>
                 {[...(tickData?.bots ?? [])]
-                  .sort((a, b) => b.score - a.score)
-                  .map((bot, i) => (
+                  .sort((a: BotState, b: BotState) => b.score - a.score)
+                  .map((bot: BotState, i: number) => (
                     <div key={bot.id} className="flex items-center gap-2 text-sm">
                       <span className="text-gray-500 w-5 text-right shrink-0 text-xs">#{i + 1}</span>
                       <span className="text-base leading-none shrink-0">
@@ -804,6 +409,9 @@ export default function WatchPage() {
                         style={{ color: bot.id === myBotId ? '#ffd700' : (colorMapRef.current.get(bot.id) ?? '#aaa') }}
                       >
                         {bot.id}
+                      </span>
+                      <span className="font-mono text-gray-300 shrink-0 text-xs">
+                        {bot.score.toFixed(1)}
                       </span>
                     </div>
                   ))}
@@ -818,7 +426,7 @@ export default function WatchPage() {
               {events.length === 0 ? (
                 <p className="text-gray-600 text-xs">이벤트 없음</p>
               ) : (
-                events.map((ev) => (
+                events.map(ev => (
                   <div key={ev.uid} className="text-xs leading-relaxed border-b border-gray-800/50 pb-1">
                     <span className="text-orange-400 font-bold mr-1">{ev.tick}틱</span>
                     <span className={EVENT_STYLE[ev.type] ?? 'text-gray-300'}>
@@ -834,22 +442,18 @@ export default function WatchPage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-800 px-6 py-2 flex items-center gap-4 text-xs shrink-0">
-        <span>
-          연결 상태:{' '}
+        <span>연결 상태:{' '}
           <span className={`font-medium ${gameStatusLabel.cls}`}>{gameStatusLabel.text}</span>
         </span>
-        <span>
-          WebSocket:{' '}
+        <span>WebSocket:{' '}
           <span className={`font-medium ${wsLabel.cls}`}>{wsLabel.text}</span>
         </span>
       </footer>
 
       {gameEnd && showModal && (
         <GameEndModal
-          data={gameEnd}
-          colorMap={colorMapRef.current}
-          onClose={() => setShowModal(false)}
-          onGoList={() => navigate('/games')}
+          data={gameEnd} colorMap={colorMapRef.current}
+          onClose={() => setShowModal(false)} onGoList={() => navigate('/games')}
         />
       )}
     </div>
@@ -880,7 +484,7 @@ function GameResultPanel({ data, colorMap }: { data: GameEndData; colorMap: Map<
       </div>
 
       <div className="flex flex-col gap-2">
-        {data.rankings.map((r) => {
+        {data.rankings.map(r => {
           const color      = colorMap.get(r.id) ?? '#888'
           const finalScore = r.final_score ?? r.score ?? 0
           const killPts    = r.kills * 30
@@ -891,13 +495,13 @@ function GameResultPanel({ data, colorMap }: { data: GameEndData; colorMap: Map<
           const isWinner   = r.rank === 1
 
           return (
-            <div
-              key={r.id}
+            <div key={r.id}
               className="rounded-xl border overflow-hidden cursor-pointer transition-colors"
               style={{ borderColor: isOpen ? color + '66' : '#1f2937' }}
               onClick={() => setOpenId(isOpen ? null : r.id)}
             >
-              <div className="flex items-center gap-3 px-4 py-3" style={{ background: isOpen ? color + '12' : undefined }}>
+              <div className="flex items-center gap-3 px-4 py-3"
+                style={{ background: isOpen ? color + '12' : undefined }}>
                 <span className="text-gray-500 text-sm w-6 shrink-0">#{r.rank}</span>
                 {isWinner && <span className="text-base leading-none">🏆</span>}
                 <span className="flex-1 font-semibold text-sm truncate" style={{ color }}>{r.id}</span>
@@ -967,12 +571,11 @@ function GameEndModal({
               </tr>
             </thead>
             <tbody>
-              {data.rankings.map((r) => (
+              {data.rankings.map(r => (
                 <tr key={r.id} className="border-b border-gray-800/50">
                   <td className="py-1.5 text-gray-500">#{r.rank}</td>
-                  <td className="py-1.5 font-medium truncate max-w-[120px]" style={{ color: colorMap.get(r.id) ?? '#ccc' }}>
-                    {r.id}
-                  </td>
+                  <td className="py-1.5 font-medium truncate max-w-[120px]"
+                    style={{ color: colorMap.get(r.id) ?? '#ccc' }}>{r.id}</td>
                   <td className="py-1.5 text-right font-mono">{(r.final_score ?? r.score ?? 0).toFixed(1)}</td>
                   <td className="py-1.5 text-right text-gray-400">{r.kills}</td>
                   <td className="py-1.5 text-right text-gray-400">{r.minerals_mined}</td>
@@ -983,19 +586,14 @@ function GameEndModal({
           </table>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white text-sm rounded-lg py-2 transition-colors"
-          >
+          <button onClick={onClose}
+            className="flex-1 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white text-sm rounded-lg py-2 transition-colors">
             닫기
           </button>
-          <button
-            onClick={onGoList}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg py-2 transition-colors"
-          >
+          <button onClick={onGoList}
+            className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg py-2 transition-colors">
             게임 목록으로
-          </button>
-        </div>
+          </button>        </div>
       </div>
     </div>
   )
