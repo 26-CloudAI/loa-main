@@ -4,14 +4,12 @@ import Phaser from 'phaser'
 const CELLS = 100
 const CELL  = 6            // 6 px per cell → 600×600 world
 const W     = CELLS * CELL // 600
-const CW    = 800          // canvas width/height
 
-// ── Minimap constants (screen-space coords for cameras.add) ───────────
-const MM_W  = 180
-const MM_H  = 180
-const MM_X  = CW - MM_W - 8   // 612
-const MM_Y  = CW - MM_H - 8   // 612
-const MM_ZOOM = MM_W / W       // 0.3 — fit full world in minimap
+// ── Minimap constants (fixed size; position is computed dynamically) ───
+const MM_W    = 180
+const MM_H    = 180
+const MM_PAD  = 8
+const MM_ZOOM = MM_W / W   // 0.3 — fit full world in minimap
 
 // ── Shared types ──────────────────────────────────────────────────────
 
@@ -79,9 +77,13 @@ export class BattleRoyaleScene extends Phaser.Scene {
   // ── Internal state ─────────────────────────────────────────────────
   private bots     = new Map<string, BotGfx>()
   private minerals = new Map<string, Phaser.GameObjects.Image>()
-  private zoneGfx!: Phaser.GameObjects.Graphics
+  private zoneGfx!:    Phaser.GameObjects.Graphics
   // mmGfx: seen only by minimap camera (viewport indicator + border)
-  private mmGfx!:   Phaser.GameObjects.Graphics
+  private mmGfx!:      Phaser.GameObjects.Graphics
+  private minimapCam!: Phaser.Cameras.Scene2D.Camera
+  // minimap screen-space position (updated on resize)
+  private mmX = 0
+  private mmY = 0
   private death!:   Phaser.GameObjects.Particles.ParticleEmitter
   private sparks!:  Phaser.GameObjects.Particles.ParticleEmitter
   private lastTick = -1
@@ -162,9 +164,11 @@ export class BattleRoyaleScene extends Phaser.Scene {
     // Main camera ignores mmGfx (viewport rect is for minimap only)
     this.cameras.main.ignore(this.mmGfx)
 
-    // ── Minimap camera (screen-space position: MM_X, MM_Y) ────────────
+    // ── Minimap camera (screen-space position: dynamic, bottom-right) ──
     // cameras.add(x, y, width, height) uses SCREEN coords — no zoom issue!
-    this.cameras.add(MM_X, MM_Y, MM_W, MM_H)
+    this.mmX = this.scale.width  - MM_W - MM_PAD
+    this.mmY = this.scale.height - MM_H - MM_PAD
+    this.minimapCam = this.cameras.add(this.mmX, this.mmY, MM_W, MM_H)
       .setZoom(MM_ZOOM)            // show full world
       .setBounds(0, 0, W, W)
       .setBackgroundColor(0x050508)
@@ -181,8 +185,8 @@ export class BattleRoyaleScene extends Phaser.Scene {
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (this.isPanning && p.isDown) {
         this.minimapPan(
-          Phaser.Math.Clamp(p.x, MM_X, MM_X + MM_W),
-          Phaser.Math.Clamp(p.y, MM_Y, MM_Y + MM_H),
+          Phaser.Math.Clamp(p.x, this.mmX, this.mmX + MM_W),
+          Phaser.Math.Clamp(p.y, this.mmY, this.mmY + MM_H),
         )
       }
     })
@@ -192,14 +196,21 @@ export class BattleRoyaleScene extends Phaser.Scene {
   // ── Minimap helpers ───────────────────────────────────────────────
 
   private inMinimap(sx: number, sy: number): boolean {
-    return sx >= MM_X && sx <= MM_X + MM_W && sy >= MM_Y && sy <= MM_Y + MM_H
+    return sx >= this.mmX && sx <= this.mmX + MM_W && sy >= this.mmY && sy <= this.mmY + MM_H
   }
 
   private minimapPan(sx: number, sy: number) {
     // screen px → cell index → world pos
-    const cellX = (sx - MM_X) / (MM_W / CELLS)
-    const cellY = (sy - MM_Y) / (MM_H / CELLS)
+    const cellX = (sx - this.mmX) / (MM_W / CELLS)
+    const cellY = (sy - this.mmY) / (MM_H / CELLS)
     this.cameras.main.pan(cellX * CELL, cellY * CELL, 80, 'Sine.easeOut')
+  }
+
+  // ── Public resize hook (called from React when canvas size changes) ─
+  resize(canvasSize: number) {
+    this.mmX = canvasSize - MM_W - MM_PAD
+    this.mmY = canvasSize - MM_H - MM_PAD
+    this.minimapCam?.setPosition(this.mmX, this.mmY)
   }
 
   // ── update ─────────────────────────────────────────────────────────

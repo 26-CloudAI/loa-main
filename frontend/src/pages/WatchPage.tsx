@@ -98,6 +98,8 @@ export default function WatchPage() {
   const eventUidRef     = useRef(0)
   // Shared event queue — WatchPage pushes, Phaser scene drains each frame
   const eventQueueRef   = useRef<GameEvent[]>([])
+  const mainRef         = useRef<HTMLDivElement>(null)
+  const gameColRef      = useRef<HTMLDivElement>(null)
 
   type GameStatus = 'waiting' | 'running' | 'finished' | 'error' | null
   const [gameStatus, setGameStatus] = useState<GameStatus>(null)
@@ -128,6 +130,32 @@ export default function WatchPage() {
   // 카메라 추적 대상 — 드롭박스로 변경 가능, 초기값은 내 봇
   const [followBotId, setFollowBotId] = useState<string>(myBotId)
   const [zoomLevel, setZoomLevel] = useState(3)
+
+  // sidebar(280) + gap(16) + padding(16*2)
+  const SIDEBAR_TOTAL = 280 + 16 + 32
+  // header(56) + footer(~36) + padding(16*2)
+  const CHROME_H = 56 + 36 + 32
+  const [gameSize, setGameSize] = useState(() =>
+    Math.max(300, Math.min(
+      (typeof window !== 'undefined' ? window.innerWidth : 900) - SIDEBAR_TOTAL,
+      (typeof window !== 'undefined' ? window.innerHeight : 900) - CHROME_H,
+    ))
+  )
+
+  useEffect(() => {
+    const main = mainRef.current
+    if (!main) return
+    const update = () => {
+      const avH = main.clientHeight - 32
+      // 중앙 정렬 기준: main 전체 너비에서 사이드바(280) + gap(16) + padding(32) 제외
+      const avW = main.clientWidth - SIDEBAR_TOTAL - 16
+      setGameSize(Math.max(280, Math.min(avW, avH)))
+    }
+    const obs = new ResizeObserver(update)
+    obs.observe(main)
+    update()
+    return () => obs.disconnect()
+  }, [])
 
   const botIds = tickData ? tickData.bots.map(b => b.id) : []
 
@@ -301,10 +329,10 @@ export default function WatchPage() {
       </header>
 
       {/* Main area */}
-      <main className="flex flex-1 overflow-hidden p-4 gap-4 justify-center">
+      <main ref={mainRef} className="flex flex-1 overflow-hidden p-4 gap-4 min-w-0 justify-center">
 
         {/* Phaser game column */}
-        <div className="shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-custom" style={{ width: 800 }}>
+        <div ref={gameColRef} className="shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-custom" style={{ width: gameSize }}>
           <div className="relative shrink-0">
             <PhaserGame
               tickData={tickData}
@@ -314,6 +342,8 @@ export default function WatchPage() {
               myBotIcon={myBotIcon}
               zoomLevel={zoomLevel}
               onFollowChange={setFollowBotId}
+              width={gameSize}
+              height={gameSize}
             />
             {gameStatus === 'waiting' && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-950/80 rounded-lg">
@@ -331,7 +361,7 @@ export default function WatchPage() {
         </div>
 
         {/* Sidebar */}
-        <aside className="flex flex-col gap-3 overflow-hidden h-full" style={{ width: 280, minWidth: 280 }}>
+        <aside className="shrink-0 flex flex-col gap-3 overflow-hidden h-full" style={{ width: 280 }}>
 
           {/* Tick / alive */}
           <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-1 shrink-0">
