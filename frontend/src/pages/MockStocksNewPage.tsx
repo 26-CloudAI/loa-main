@@ -134,6 +134,7 @@ export default function MockStocksNewPage() {
   const [prepareId, setPrepareId] = useState<string | null>(null)
   const [newsReady, setNewsReady] = useState(false)
   const [newsCount, setNewsCount] = useState(0)
+  const [newsSource, setNewsSource] = useState<'gemini' | 'template' | 'loading'>('loading')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 마운트 시 뉴스 사전 생성 시작
@@ -143,20 +144,22 @@ export default function MockStocksNewPage() {
     async function startPrepare() {
       try {
         const res = await fetch(`${STOCKS_API}/api/stocks/prepare`, { method: 'POST' })
-        if (!res.ok) return
+        if (!res.ok || cancelled) return
         const { prepare_id } = await res.json()
         if (cancelled) return
         setPrepareId(prepare_id)
 
         // 준비 완료될 때까지 폴링
         pollRef.current = setInterval(async () => {
+          if (cancelled) { clearInterval(pollRef.current!); return }
           try {
             const r = await fetch(`${STOCKS_API}/api/stocks/prepare/${prepare_id}`)
             if (!r.ok) return
-            const { ready, count } = await r.json()
+            const { ready, count, source } = await r.json()
             if (ready) {
               setNewsReady(true)
               setNewsCount(count)
+              setNewsSource(source ?? 'template')
               if (pollRef.current) clearInterval(pollRef.current)
             }
           } catch { /* 무시 */ }
@@ -173,7 +176,7 @@ export default function MockStocksNewPage() {
 
   const codeBytes = byteSize(code)
   const codeOverLimit = codeBytes > MAX_CODE_BYTES
-  const canSubmit = !submitting && code.trim().length > 0 && !codeOverLimit
+  const canSubmit = !submitting && newsReady && code.trim().length > 0 && !codeOverLimit
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -222,21 +225,6 @@ export default function MockStocksNewPage() {
         </button>
         <span className="text-gray-600">|</span>
         <span className="font-bold">📈 모의주식 — 새 게임</span>
-
-        {/* 뉴스 준비 상태 */}
-        <div className="ml-4 flex items-center gap-2 text-xs">
-          {newsReady ? (
-            <span className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2.5 py-1 rounded-full border border-green-400/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-              뉴스 {newsCount}개 준비 완료
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 text-yellow-400 bg-yellow-400/10 px-2.5 py-1 rounded-full border border-yellow-400/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
-              Gemini 뉴스 생성 중...
-            </span>
-          )}
-        </div>
 
         <button
           type="button"
@@ -388,7 +376,7 @@ export default function MockStocksNewPage() {
             disabled={!canSubmit}
             className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-3 transition-colors"
           >
-            {submitting ? '게임 생성 중...' : '게임 시작'}
+            {submitting ? '게임 생성 중...' : !newsReady ? '뉴스 생성 중...' : '게임 시작'}
           </button>
         </form>
       </main>
