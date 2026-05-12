@@ -142,7 +142,7 @@ export default function GamesPage() {
     <div className="min-h-screen bg-gray-900 text-white">
       {/* 헤더 */}
       <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center justify-between">
-        <span className="font-bold text-lg">League of Agents</span>
+        <button onClick={() => navigate('/games')} className="font-bold text-lg hover:text-gray-300 transition-colors">League of Agents</button>
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/rankings')}
@@ -226,13 +226,12 @@ function GameCard({ game }: { game: GameInfo }) {
         : `/games/${game.game_id}/mock-stocks/watch`)
       return
     }
-    navigate(`/games/${game.game_id}/watch`)
+    navigate(isFinished
+      ? `/games/${game.game_id}/result`
+      : `/games/${game.game_id}/watch`)
   }
 
-  const actionLabel = isStocks
-    ? (isFinished ? '결과 보기' : '관전하기')
-    : '관전하기'
-  const actionDisabled = false
+  const actionLabel = isFinished ? '결과 보기' : '관전하기'
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
@@ -247,13 +246,13 @@ function GameCard({ game }: { game: GameInfo }) {
       <div className="flex items-center shrink-0">
         <div className="w-20 flex items-center justify-center">
           {modeBadge && (
-            <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${modeBadge.className}`}>
+            <span className={`text-xs leading-none rounded-full px-2 py-1 font-medium ${modeBadge.className}`}>
               {modeBadge.label}
             </span>
           )}
         </div>
         <div className="w-16 flex items-center justify-center">
-          <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLOR[game.status]}`}>
+          <span className={`text-xs leading-none rounded-full px-2 py-1 font-medium ${STATUS_COLOR[game.status]}`}>
             {STATUS_LABEL[game.status]}
           </span>
         </div>
@@ -268,25 +267,14 @@ function GameCard({ game }: { game: GameInfo }) {
         </span>
         <span>
           봇{' '}
-          <span className="text-white font-medium">{isStocks ? game.total_bots : game.alive_bots}</span>
-          {!isStocks && (
-            <>
-              {' / '}
-              {game.total_bots}
-            </>
-          )}
+          <span className="text-white font-medium">{game.total_bots}</span>
         </span>
       </div>
 
       {/* 오른쪽: 관전 / 결과 보기 버튼 */}
       <button
         onClick={handleAction}
-        disabled={actionDisabled}
-        className={`shrink-0 text-sm rounded-lg px-3 py-1.5 transition-colors ${
-          actionDisabled
-            ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-            : 'bg-gray-600 hover:bg-gray-500 text-white'
-        }`}
+        className="shrink-0 text-sm rounded-lg px-3 py-1.5 transition-colors bg-gray-600 hover:bg-gray-500 text-white"
       >
         {actionLabel}
       </button>
