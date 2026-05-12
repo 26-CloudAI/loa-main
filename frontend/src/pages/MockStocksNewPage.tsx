@@ -133,8 +133,8 @@ export default function MockStocksNewPage() {
   // 뉴스 사전 생성 상태
   const [prepareId, setPrepareId] = useState<string | null>(null)
   const [newsReady, setNewsReady] = useState(false)
-  const [newsCount, setNewsCount] = useState(0)
-  const [newsSource, setNewsSource] = useState<'gemini' | 'template' | 'loading'>('loading')
+  const [, setNewsCount] = useState(0)
+  const [, setNewsSource] = useState<'gemini' | 'template' | 'loading'>('loading')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 마운트 시 뉴스 사전 생성 시작
