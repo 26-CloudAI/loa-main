@@ -49,7 +49,10 @@ def _call_gemini(prompt: str, timeout: int = 30) -> str | None:
             f"/models/gemini-2.5-flash:generateContent?key={_GEMINI_KEY}"
         )
         body = json.dumps({
-            "contents": [{"parts": [{"text": prompt}]}]
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "thinkingConfig": {"thinkingBudget": 0}
+            }
         }).encode("utf-8")
         req = urllib.request.Request(
             url, data=body,
@@ -138,15 +141,15 @@ class Market:
             if len(hist) > self._cfg.game.history_window + 1:
                 hist.pop(0)
 
-    def pregenerate_news_batch(self, count: int = 20) -> None:
-        """게임 시작 전 Gemini로 뉴스 배열을 한 번에 생성해 큐에 저장."""
-        if not _GEMINI_KEY:
-            return
+    def pregenerate_news_batch(self, count: int = 20) -> str:
+        """게임 시작 전 뉴스 배열을 한 번에 생성해 큐에 저장.
+        반환값: 'gemini' (AI 생성 성공) | 'template' (폴백)
+        """
+        if _GEMINI_KEY:
+            lines = [f"- {s.symbol} ({s.name}, {s.sector})" for s in self._cfg.stocks]
+            stocks_text = "\n".join(lines)
 
-        lines = [f"- {s.symbol} ({s.name}, {s.sector})" for s in self._cfg.stocks]
-        stocks_text = "\n".join(lines)
-
-        prompt = f"""당신은 한국 주식 시장 뉴스를 생성하는 AI입니다.
+            prompt = f"""당신은 한국 주식 시장 뉴스를 생성하는 AI입니다.
 
 종목 목록:
 {stocks_text}
@@ -160,23 +163,43 @@ class Market:
 JSON 배열로만 응답하세요 (마크다운·설명 없이):
 [{{"symbol": "심볼", "headline": "뉴스 헤드라인", "direction": 1}}, ...]"""
 
-        text = _call_gemini(prompt, timeout=60)
-        if not text:
-            return
+            text = _call_gemini(prompt, timeout=30)
+            if text:
+                try:
+                    text = _extract_json(text, expect_array=True)
+                    # JSON 문자열 내 제어 문자 제거 (Gemini가 가끔 삽입)
+                    import re
+                    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+                    items = json.loads(text)
+                    valid_symbols = {s.symbol for s in self._cfg.stocks}
+                    parsed = []
+                    for item in items:
+                        symbol = str(item["symbol"])
+                        headline = str(item["headline"])
+                        direction = int(item["direction"])
+                        if symbol in valid_symbols and direction in (1, -1):
+                            parsed.append((symbol, f"[G] {headline}", direction))
+                    if parsed:
+                        self._news_queue.extend(parsed)
+                        logger.info("Gemini 뉴스 사전 생성 완료: %d개", len(self._news_queue))
+                        return "gemini"
+                    else:
+                        logger.warning("Gemini 응답 파싱 결과가 비어 있음 — 템플릿으로 폴백")
+                except Exception as e:
+                    logger.warning("Gemini 뉴스 배치 파싱 실패: %s — 템플릿으로 폴백", e)
+            else:
+                logger.warning("Gemini API 응답 없음 — 템플릿으로 폴백")
 
-        try:
-            text = _extract_json(text, expect_array=True)
-            items = json.loads(text)
-            valid_symbols = {s.symbol for s in self._cfg.stocks}
-            for item in items:
-                symbol = str(item["symbol"])
-                headline = str(item["headline"])
-                direction = int(item["direction"])
-                if symbol in valid_symbols and direction in (1, -1):
-                    self._news_queue.append((symbol, f"[G] {headline}", direction))
-            logger.info("Gemini 뉴스 사전 생성 완료: %d개", len(self._news_queue))
-        except Exception as e:
-            logger.warning("Gemini 뉴스 배치 파싱 실패: %s", e)
+        # 템플릿 폴백: Gemini 키 없거나 호출/파싱 실패 시
+        specs = list(self._cfg.stocks)
+        rng = self._rng
+        for _ in range(count):
+            spec = rng.choice(specs)
+            template, direction = rng.choice(_NEWS_TEMPLATES)
+            headline = template.format(name=spec.name)
+            self._news_queue.append((spec.symbol, headline, direction))
+        logger.info("템플릿 뉴스 생성 완료: %d개", len(self._news_queue))
+        return "template"
 
     def _try_generate_news(self) -> None:
         if self._current_tick < self._next_news_tick:

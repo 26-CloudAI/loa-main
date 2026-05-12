@@ -165,6 +165,11 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         except Exception as e:
             registry._repo = None
             logger.exception("MockStocks DB 초기화 실패, DB 없이 기동: %s", e)
+
+        # 서버 시작 시 뉴스 풀 미리 채우기 시작
+        asyncio.create_task(_fill_pool())
+        logger.info("뉴스 풀 사전 생성 시작")
+
         yield
         if conn is not None:
             conn.close()
@@ -181,32 +186,89 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
 
     registry = GameRegistry(spectator_manager)
 
-    # prepare_id → 사전 생성된 뉴스 큐 (None = 아직 생성 중)
-    _prepared_news: dict[str, list | None] = {}
+    # ── 뉴스 풀 ───────────────────────────────────────────────────────────────
+    # 서버가 미리 만들어두는 뉴스 배치. 유저가 /prepare 호출 시 즉시 꺼내줌.
+    NEWS_POOL_TARGET = 2                 # 항상 유지할 배치 수
+    _news_pool: list[dict] = []          # {"queue": [...], "source": str}
+    _pool_filling: bool = False          # 현재 채우는 중 여부 (중복 방지)
+
+    async def _fill_pool() -> None:
+        """풀이 목표치(2개) 미달이면 백그라운드에서 순차적으로 채운다."""
+        nonlocal _pool_filling
+        if _pool_filling:
+            return  # 이미 채우는 중이면 스킵
+        if len(_news_pool) >= NEWS_POOL_TARGET:
+            return  # 이미 충분함
+
+        _pool_filling = True
+        try:
+            market = Market(DEFAULT_CONFIG)
+            source = await asyncio.get_event_loop().run_in_executor(
+                None, market.pregenerate_news_batch, 20
+            )
+            _news_pool.append({"queue": market._news_queue, "source": source})
+            logger.info(
+                "뉴스 풀 채움: %d/%d (source=%s)",
+                len(_news_pool), NEWS_POOL_TARGET, source,
+            )
+        except Exception:
+            logger.exception("뉴스 풀 채우기 실패")
+        finally:
+            _pool_filling = False
+
+        # 아직 목표치 미달이면 한 번 더 채우기
+        if len(_news_pool) < NEWS_POOL_TARGET:
+            asyncio.create_task(_fill_pool())
+
+    # prepare_id → {"queue": list, "source": str} | None(생성 중)
+    _prepared_news: dict[str, dict | None] = {}
 
     # ── 뉴스 사전 생성 ──────────────────────────────────────────────────────────
 
     @app.post("/api/stocks/prepare")
     async def prepare_news():
         prepare_id = str(uuid.uuid4())[:8]
-        _prepared_news[prepare_id] = None  # 생성 중 표시
 
-        async def _do_prepare():
-            market = Market(DEFAULT_CONFIG)
-            await asyncio.get_event_loop().run_in_executor(
-                None, market.pregenerate_news_batch, 20
+        if _news_pool:
+            # 풀에 준비된 배치가 있으면 즉시 꺼내줌
+            batch = _news_pool.pop(0)
+            _prepared_news[prepare_id] = batch
+            logger.info(
+                "뉴스 풀에서 즉시 제공: prepare_id=%s, %d개 (source=%s)",
+                prepare_id, len(batch["queue"]), batch["source"],
             )
-            _prepared_news[prepare_id] = market._news_queue
-            logger.info("뉴스 사전 생성 완료: prepare_id=%s, %d개", prepare_id, len(market._news_queue))
+            # 풀이 비었으니 백그라운드에서 다시 채우기 시작
+            asyncio.create_task(_fill_pool())
+        else:
+            # 풀이 비어있으면 이 요청 전용으로 직접 생성
+            _prepared_news[prepare_id] = None
 
-        asyncio.create_task(_do_prepare())
+            async def _do_prepare():
+                market = Market(DEFAULT_CONFIG)
+                source = await asyncio.get_event_loop().run_in_executor(
+                    None, market.pregenerate_news_batch, 20
+                )
+                _prepared_news[prepare_id] = {
+                    "queue": market._news_queue,
+                    "source": source,
+                }
+                logger.info(
+                    "뉴스 온디맨드 생성 완료: prepare_id=%s, %d개 (source=%s)",
+                    prepare_id, len(market._news_queue), source,
+                )
+
+            asyncio.create_task(_do_prepare())
+
         return {"prepare_id": prepare_id}
 
     @app.get("/api/stocks/prepare/{prepare_id}")
     async def prepare_status(prepare_id: str):
-        news = _prepared_news.get(prepare_id)
-        ready = isinstance(news, list) and len(news) > 0
-        return {"ready": ready, "count": len(news) if ready else 0}
+        entry = _prepared_news.get(prepare_id)
+        if entry is None:
+            return {"ready": False, "count": 0, "source": "loading"}
+        queue = entry.get("queue", [])
+        source = entry.get("source", "template")
+        return {"ready": True, "count": len(queue), "source": source}
 
     # ── 엔드포인트 ──────────────────────────────────────────────────────────────
 
@@ -291,7 +353,9 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         # 사전 생성된 뉴스 꺼내기
         prepared_news = None
         if body.prepare_id and body.prepare_id in _prepared_news:
-            prepared_news = _prepared_news.pop(body.prepare_id)
+            entry = _prepared_news.pop(body.prepare_id)
+            if entry is not None:
+                prepared_news = entry.get("queue") or None
 
         uid = _require_uid(request)
         if registry._repo is None:
