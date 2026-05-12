@@ -1,37 +1,57 @@
 """
-AI Arena — 봇 공용 유틸리티
-
-세 봇(herbivore, mad_dog, camper) 모두에서 쓰이는 공통 상수와 헬퍼 함수.
+AI Arena - Shared bot utilities (8-directional movement support).
 """
 
 from src.arena.types import Action, CellType
 
-# 시야 중심 (5×5 고정)
+# Vision center (5x5 grid)
 CX, CY = 2, 2
 
-# 인접 4칸 정의 — (dx, dy, move_action, attack_action)
+# Adjacent 8 cells: (dx, dy, move_action, attack_action)
 ADJACENT_DIRS = [
-    (0, -1, Action.MOVE_UP,    Action.ATTACK_UP),
-    (0,  1, Action.MOVE_DOWN,  Action.ATTACK_DOWN),
-    (-1, 0, Action.MOVE_LEFT,  Action.ATTACK_LEFT),
-    (1,  0, Action.MOVE_RIGHT, Action.ATTACK_RIGHT),
+    (0,  -1, Action.MOVE_UP,         Action.ATTACK_UP),
+    (0,   1, Action.MOVE_DOWN,       Action.ATTACK_DOWN),
+    (-1,  0, Action.MOVE_LEFT,       Action.ATTACK_LEFT),
+    (1,   0, Action.MOVE_RIGHT,      Action.ATTACK_RIGHT),
+    (-1, -1, Action.MOVE_UP_LEFT,    Action.ATTACK_UP_LEFT),
+    (1,  -1, Action.MOVE_UP_RIGHT,   Action.ATTACK_UP_RIGHT),
+    (-1,  1, Action.MOVE_DOWN_LEFT,  Action.ATTACK_DOWN_LEFT),
+    (1,   1, Action.MOVE_DOWN_RIGHT, Action.ATTACK_DOWN_RIGHT),
 ]
 
-# 이동 액션 목록
-MOVE_ACTIONS = [Action.MOVE_UP, Action.MOVE_DOWN, Action.MOVE_LEFT, Action.MOVE_RIGHT]
+# 8-directional move action list
+MOVE_ACTIONS = [
+    Action.MOVE_UP, Action.MOVE_DOWN, Action.MOVE_LEFT, Action.MOVE_RIGHT,
+    Action.MOVE_UP_LEFT, Action.MOVE_UP_RIGHT, Action.MOVE_DOWN_LEFT, Action.MOVE_DOWN_RIGHT,
+]
+
+# Diagonal threshold: use diagonal if short-axis / long-axis >= this ratio
+_DIAG_RATIO = 0.4
 
 
 def move_toward(dx: int, dy: int, on_spot: str = Action.STAY) -> str:
-    """(dx, dy) 방향으로 이동하는 액션을 반환. 원점이면 on_spot 반환."""
+    """Return 8-directional move action toward (dx, dy). Returns on_spot if at origin."""
     if dx == 0 and dy == 0:
         return on_spot
-    if abs(dx) >= abs(dy):
+
+    ax, ay = abs(dx), abs(dy)
+
+    # Use diagonal when both axes are significant
+    if ax > 0 and ay > 0 and min(ax, ay) / max(ax, ay) >= _DIAG_RATIO:
+        if dx > 0 and dy < 0:
+            return Action.MOVE_UP_RIGHT
+        if dx < 0 and dy < 0:
+            return Action.MOVE_UP_LEFT
+        if dx > 0 and dy > 0:
+            return Action.MOVE_DOWN_RIGHT
+        return Action.MOVE_DOWN_LEFT
+
+    # Single-axis move
+    if ax >= ay:
         return Action.MOVE_RIGHT if dx > 0 else Action.MOVE_LEFT
     return Action.MOVE_DOWN if dy > 0 else Action.MOVE_UP
 
 
 def flee(enemy_dx: int, enemy_dy: int) -> str:
-    """적 방향의 반대로 도망가는 액션을 반환."""
-    if abs(enemy_dx) >= abs(enemy_dy):
-        return Action.MOVE_LEFT if enemy_dx > 0 else Action.MOVE_RIGHT
-    return Action.MOVE_UP if enemy_dy > 0 else Action.MOVE_DOWN
+    """Return 8-directional move action away from the enemy."""
+    return move_toward(-enemy_dx, -enemy_dy, on_spot=Action.STAY)
