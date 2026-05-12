@@ -226,9 +226,7 @@ function GameCard({ game }: { game: GameInfo }) {
         : `/games/${game.game_id}/mock-stocks/watch`)
       return
     }
-    navigate(isFinished
-      ? `/games/${game.game_id}/result`
-      : `/games/${game.game_id}/watch`)
+    navigate(`/games/${game.game_id}/watch`)
   }
 
   const actionLabel = isFinished ? '결과 보기' : '관전하기'
