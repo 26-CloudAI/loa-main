@@ -11,58 +11,37 @@ from typing import Optional
 
 
 class Action(str, Enum):
-    """봇이 매 틱 반환할 수 있는 19가지 행동 (8방향 이동/공격 포함)."""
+    """봇이 매 틱 반환할 수 있는 11가지 행동."""
     STAY = "STAY"
     MOVE_UP = "MOVE_UP"
     MOVE_DOWN = "MOVE_DOWN"
     MOVE_LEFT = "MOVE_LEFT"
     MOVE_RIGHT = "MOVE_RIGHT"
-    MOVE_UP_LEFT = "MOVE_UP_LEFT"
-    MOVE_UP_RIGHT = "MOVE_UP_RIGHT"
-    MOVE_DOWN_LEFT = "MOVE_DOWN_LEFT"
-    MOVE_DOWN_RIGHT = "MOVE_DOWN_RIGHT"
     MINE = "MINE"
     ATTACK_UP = "ATTACK_UP"
     ATTACK_DOWN = "ATTACK_DOWN"
     ATTACK_LEFT = "ATTACK_LEFT"
     ATTACK_RIGHT = "ATTACK_RIGHT"
-    ATTACK_UP_LEFT = "ATTACK_UP_LEFT"
-    ATTACK_UP_RIGHT = "ATTACK_UP_RIGHT"
-    ATTACK_DOWN_LEFT = "ATTACK_DOWN_LEFT"
-    ATTACK_DOWN_RIGHT = "ATTACK_DOWN_RIGHT"
     SHIELD = "SHIELD"
 
 
-# 방향 → 좌표 변위 매핑 (4방향 + 대각선 4방향)
+# 방향 → 좌표 변위 매핑
 DIRECTION_DELTA: dict[str, tuple[int, int]] = {
     "UP": (0, -1),
     "DOWN": (0, 1),
     "LEFT": (-1, 0),
     "RIGHT": (1, 0),
-    "UP_LEFT": (-1, -1),
-    "UP_RIGHT": (1, -1),
-    "DOWN_LEFT": (-1, 1),
-    "DOWN_RIGHT": (1, 1),
 }
 
-# Action → 방향 추출 (MOVE_UP → "UP", ATTACK_UP_LEFT → "UP_LEFT" 등)
-MOVE_ACTIONS = {
-    Action.MOVE_UP, Action.MOVE_DOWN, Action.MOVE_LEFT, Action.MOVE_RIGHT,
-    Action.MOVE_UP_LEFT, Action.MOVE_UP_RIGHT, Action.MOVE_DOWN_LEFT, Action.MOVE_DOWN_RIGHT,
-}
-ATTACK_ACTIONS = {
-    Action.ATTACK_UP, Action.ATTACK_DOWN, Action.ATTACK_LEFT, Action.ATTACK_RIGHT,
-    Action.ATTACK_UP_LEFT, Action.ATTACK_UP_RIGHT, Action.ATTACK_DOWN_LEFT, Action.ATTACK_DOWN_RIGHT,
-}
-
-# 길이 내림차순 정렬 — 긴 방향명이 먼저 매칭되도록 (UP_LEFT가 LEFT보다 먼저 매칭)
-_SORTED_DIRECTIONS = sorted(DIRECTION_DELTA.keys(), key=len, reverse=True)
+# Action → 방향 추출 (MOVE_UP → "UP", ATTACK_LEFT → "LEFT")
+MOVE_ACTIONS = {Action.MOVE_UP, Action.MOVE_DOWN, Action.MOVE_LEFT, Action.MOVE_RIGHT}
+ATTACK_ACTIONS = {Action.ATTACK_UP, Action.ATTACK_DOWN, Action.ATTACK_LEFT, Action.ATTACK_RIGHT}
 
 
 def action_to_direction(action: Action) -> Optional[str]:
-    """MOVE_UP → 'UP', ATTACK_UP_LEFT → 'UP_LEFT' 등. 방향 없는 액션은 None."""
+    """MOVE_UP → 'UP', ATTACK_LEFT → 'LEFT' 등. 방향 없는 액션은 None."""
     name = action.value
-    for direction in _SORTED_DIRECTIONS:
+    for direction in DIRECTION_DELTA:
         if name.endswith(direction):
             return direction
     return None
