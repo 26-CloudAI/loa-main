@@ -66,6 +66,12 @@ COLDSTART_FACTORIES = [
     (CamperBot,    "존버"),
 ]
 
+# 샘플 유저봇 — DB 봇이 없을 때 콜드스타트보다 우선 사용
+try:
+    from bots.sample_user_bots import SAMPLE_USER_BOTS
+except ImportError:
+    SAMPLE_USER_BOTS = []
+
 WEIGHTS_PATH = _PROJECT_ROOT / "bots" / "trained_weights.json"
 
 # ---------------------------------------------------------------------------
@@ -180,10 +186,17 @@ def _build_opponents(
         opponents.append(_InProcessUserBot(bot_id=bot_id, code=code))
         used += 1
 
-    # 부족분은 콜드스타트로 채움
+    # 부족분은 샘플 유저봇 → 콜드스타트 순으로 채움
+    sample_pool = list(SAMPLE_USER_BOTS)
+    rng.shuffle(sample_pool)
+    sample_idx = 0
     while len(opponents) < n_opponents:
-        cls, label = rng.choice(COLDSTART_FACTORIES)
         idx = len(opponents)
+        if sample_idx < len(sample_pool):
+            cls, label = sample_pool[sample_idx % len(sample_pool)]
+            sample_idx += 1
+        else:
+            cls, label = rng.choice(COLDSTART_FACTORIES)
         opponents.append(cls(bot_id=f"{label}_{idx:02d}", seed=seed + idx))
 
     return opponents
