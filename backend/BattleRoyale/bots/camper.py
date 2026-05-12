@@ -74,7 +74,9 @@ class CamperBot(BotInterface):
         cost_map = {
             "STAY": 1, "MINE": 3, "SHIELD": 3,
             "MOVE_UP": 2, "MOVE_DOWN": 2, "MOVE_LEFT": 2, "MOVE_RIGHT": 2,
-            "ATTACK_UP": 5, "ATTACK_DOWN": 5, "ATTACK_LEFT": 5, "ATTACK_RIGHT": 5
+            "MOVE_UP_LEFT": 2, "MOVE_UP_RIGHT": 2, "MOVE_DOWN_LEFT": 2, "MOVE_DOWN_RIGHT": 2,
+            "ATTACK_UP": 5, "ATTACK_DOWN": 5, "ATTACK_LEFT": 5, "ATTACK_RIGHT": 5,
+            "ATTACK_UP_LEFT": 5, "ATTACK_UP_RIGHT": 5, "ATTACK_DOWN_LEFT": 5, "ATTACK_DOWN_RIGHT": 5,
         }
         expected_loss = cost_map.get(self._last_action, 1)
 
@@ -176,13 +178,9 @@ class CamperBot(BotInterface):
         return self._move_toward(15 - pos_x, 15 - pos_y)
 
     def _move_toward(self, dx: int, dy: int) -> str:
-        if dx == 0 and dy == 0:
-            return "STAY"
-        if abs(dx) >= abs(dy):
-            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
-        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+        from bots.utils import move_toward
+        return move_toward(dx, dy, on_spot="STAY")
 
     def _flee(self, enemy_dx: int, enemy_dy: int) -> str:
-        if abs(enemy_dx) >= abs(enemy_dy):
-            return "MOVE_LEFT" if enemy_dx > 0 else "MOVE_RIGHT"
-        return "MOVE_UP" if enemy_dy > 0 else "MOVE_DOWN"
+        from bots.utils import flee
+        return flee(enemy_dx, enemy_dy)
