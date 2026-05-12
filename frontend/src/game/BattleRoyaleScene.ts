@@ -11,6 +11,13 @@ const MM_H    = 180
 const MM_PAD  = 8
 const MM_ZOOM = MM_W / W   // 0.3 — fit full world in minimap
 
+// ── Label rendering constants ─────────────────────────────────────────
+// 텍스트를 LABEL_RES배 해상도로 그려 선명도 확보
+// LABEL_WORLD: 기준 월드 크기(px), update()에서 줌 반비례 보정됨
+const LABEL_RES   = 10          // 오버샘플 배수
+const LABEL_WORLD = 4           // 기준 월드 표시 크기(px) — 보정 전 기준값
+const LABEL_PX    = LABEL_WORLD * LABEL_RES  // 실제 렌더 폰트 크기(40px)
+
 // ── Shared types ──────────────────────────────────────────────────────
 
 export interface BotState {
@@ -223,6 +230,16 @@ export class BattleRoyaleScene extends Phaser.Scene {
       this.cameras.main.zoom, this.zoom, 0.1,
     )
 
+    // 줌에 반비례해서 라벨 스케일 보정:
+    // 화면상 목표 크기(TARGET_SCREEN_PX)를 유지하도록 월드 스케일 계산
+    // scale = TARGET_SCREEN_PX / (LABEL_PX × zoom)
+    const TARGET_SCREEN_PX = 13  // 화면상 라벨 높이(px) — 줌 무관 고정
+    const zoom = this.cameras.main.zoom
+    const labelScale = TARGET_SCREEN_PX / (LABEL_PX * zoom)
+    for (const [, gfx] of this.bots) {
+      gfx.label.setScale(labelScale)
+    }
+
     const td = this.tickRef.current
     if (td && td.tick !== this.lastTick) {
       this.lastTick = td.tick
@@ -324,9 +341,17 @@ export class BattleRoyaleScene extends Phaser.Scene {
     const hp     = this.add.graphics()
     const icon   = this.add.image(0, 0.5, this.emojiTex(botIcon(id, this.myBotId, this.myBotIcon)))
       .setDisplaySize(CELL * 0.92, CELL * 0.92).setOrigin(0.5)
-    const label  = this.add.text(0, CELL * 0.88, isMe ? `★ ${id}` : id, {
-      fontSize: '3px', color: isMe ? '#ffd700' : '#d1d5db',
-    }).setOrigin(0.5, 0)
+    // 텍스트를 LABEL_RES배 해상도로 렌더링 후 스케일 다운 → 선명
+    // 실제 화면 크기는 update()에서 줌 반비례로 매 프레임 보정됨
+    const label  = this.add.text(0, CELL * 0.95, isMe ? `★ ${id}` : id, {
+      fontSize: `${LABEL_PX}px`,
+      fontFamily: '"Noto Sans KR", "Apple SD Gothic Neo", sans-serif',
+      color: isMe ? '#ffd700' : '#e2e8f0',
+      stroke: '#000000',
+      strokeThickness: LABEL_RES * 2,
+      resolution: 2,
+      padding: { x: LABEL_RES, y: LABEL_RES / 2 },
+    }).setOrigin(0.5, 0).setScale(LABEL_WORLD / LABEL_PX)
     root.add([ring, shield, hpBg, hp, icon, label])
     this.bots.set(id, { root, icon, hpBg, hp, ring, shield, label })
   }

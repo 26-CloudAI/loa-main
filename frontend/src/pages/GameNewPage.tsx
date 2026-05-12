@@ -126,7 +126,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
                   ['my_bot.score', '현재 누적 점수'],
                   ['my_bot.alive', 'True / False'],
                   ['vision.grid', '5×5 리스트. 중심(2,2)이 내 위치. 셀 값 ↓'],
-                  ['vision.grid 셀 값', '"empty" / "mineral" / "mineral_rare" / "bot_enemy" / "bot_self" / "wall"'],
+                  ['vision.grid 셀 값', '"empty" / "mineral" / "mineral_rare" / "bot_enemy" / "ME" / "wall"'],
                   ['zone_bounds', '(min_x, min_y, max_x, max_y) — 안전 구역 범위'],
                   ['other_bots', '시야 내 적 봇 리스트: [{id, position, energy}]'],
                 ].map(([k, v]) => (
