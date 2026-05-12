@@ -128,12 +128,20 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
     return fillers
 
 
-def _create_boss_bot(existing_ids: set[str], difficulty: str = "상") -> BotInterface:
+def _create_boss_bot(
+    existing_ids: set[str],
+    difficulty: str = "상",
+    rl_singleton_state: Optional[dict] = None,
+) -> BotInterface:
     """
     보스전용 봇 생성. 난이도에 따라 봇 종류가 다름.
       하 → RuleBossEasyBot  (룰베이스, 채굴·생존 중심)
       중 → RuleBossMediumBot (룰베이스, 채굴+전투 균형)
       상 → RLBossBot         (강화학습, GCS 가중치 사용)
+
+    rl_singleton_state: 주어지면 "rl_boss_bot" 키에 RLBossBot 인스턴스를
+    캐싱하여 보스전마다 동일 인스턴스를 재사용한다. 리플레이 버퍼/가중치/
+    epsilon이 게임 사이에 유지되어 프로덕션 학습이 가능해진다.
     """
     bot_id = "AI_보스"
     existing_ids.add(bot_id)
@@ -146,16 +154,33 @@ def _create_boss_bot(existing_ids: set[str], difficulty: str = "상") -> BotInte
         from bots.rule_boss_bot import RuleBossMediumBot
         return RuleBossMediumBot(bot_id=bot_id, seed=42)
 
-    # 상 (기본값): RLBossBot + GCS 가중치
+    # 상 (기본값): RLBossBot + GCS 가중치 — 싱글톤 재사용
     from bots.rl_boss_bot import RLBossBot
     import gcs_weights
+
+    # 싱글톤 캐시가 있으면 reset 후 재사용
+    if rl_singleton_state is not None:
+        cached = rl_singleton_state.get("rl_boss_bot")
+        if cached is not None:
+            try:
+                cached.reset_for_episode()
+                return cached
+            except Exception:
+                logger.exception("RLBossBot 싱글톤 reset 실패 — 새 인스턴스 생성")
+
     cache = gcs_weights.local_cache_path()
     # 캐시가 없고 GCS가 활성화된 경우 서버 시작 시 다운로드 실패를 재시도
     if not cache.exists() and gcs_weights.enabled():
         logger.info("보스봇 가중치 캐시 없음 — GCS 재다운로드 시도")
         gcs_weights.download()
     weights_path = cache if cache.exists() else None
-    return RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
+    bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
+
+    if rl_singleton_state is not None:
+        rl_singleton_state["rl_boss_bot"] = bot
+        logger.info("RLBossBot 싱글톤 인스턴스 생성 — 이후 보스전에서 재사용")
+
+    return bot
 
 # ──────────────────────────────────────────────
 #  Pydantic 스키마 (데이터 검증용) -> 클라이언트가 보낸 JSON울 파이썬 객체로 변환
@@ -202,6 +227,10 @@ def create_app(
         "bot_repo": None,
         "game_repo": None,
         "firebase_user_svc": None,
+        # 보스전(난이도 상)에서 재사용되는 RLBossBot 싱글톤.
+        # 매 게임마다 새로 만들면 리플레이 버퍼가 비어 학습이 시작되지 않으므로
+        # 한 번 생성한 인스턴스를 모든 보스전에 재활용한다.
+        "rl_boss_bot": None,
     }
 
     # 레이트리밋: IP별 요청 타임스탬프 (슬라이딩 윈도우)
@@ -526,7 +555,11 @@ def create_app(
             # 보스전: 유저 봇 1명 + 보스봇 1명 (난이도별)
             if len(bot_interfaces) != 1:
                 raise HTTPException(400, "보스전은 봇 1개만 등록할 수 있습니다.")
-            boss_bot = _create_boss_bot(existing_ids, difficulty=difficulty)
+            boss_bot = _create_boss_bot(
+                existing_ids,
+                difficulty=difficulty,
+                rl_singleton_state=state,
+            )
             bot_interfaces.append(boss_bot)
             participant_specs.append((boss_bot.bot_id, True))
         elif fill_with_ai and len(bot_interfaces) < min_bots:

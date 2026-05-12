@@ -24,9 +24,14 @@ RLBossBot — Deep Q-Network (DQN) 기반 보스 봇
                  mineral_rare_in_adj, mineral_in_vision,
                  is_in_zone, rank_norm, bias
 
-액션 (N_ACTIONS = 11):
-  STAY, MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT,
-  MINE, ATTACK_UP, ATTACK_DOWN, ATTACK_LEFT, ATTACK_RIGHT, SHIELD
+액션 (N_ACTIONS = 19, 8방향 이동/공격):
+  STAY,
+  MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT,
+  MOVE_UP_LEFT, MOVE_UP_RIGHT, MOVE_DOWN_LEFT, MOVE_DOWN_RIGHT,
+  MINE,
+  ATTACK_UP, ATTACK_DOWN, ATTACK_LEFT, ATTACK_RIGHT,
+  ATTACK_UP_LEFT, ATTACK_UP_RIGHT, ATTACK_DOWN_LEFT, ATTACK_DOWN_RIGHT,
+  SHIELD
 """
 
 from __future__ import annotations
@@ -52,17 +57,25 @@ _DEFAULT_WEIGHTS_PATH = Path(__file__).parent / "trained_weights.json"
 ACTIONS = list(Action)
 N_ACTIONS = len(ACTIONS)
 
-IDX_STAY        = ACTIONS.index(Action.STAY)
-IDX_MOVE_UP     = ACTIONS.index(Action.MOVE_UP)
-IDX_MOVE_DOWN   = ACTIONS.index(Action.MOVE_DOWN)
-IDX_MOVE_LEFT   = ACTIONS.index(Action.MOVE_LEFT)
-IDX_MOVE_RIGHT  = ACTIONS.index(Action.MOVE_RIGHT)
-IDX_MINE        = ACTIONS.index(Action.MINE)
-IDX_ATTACK_UP   = ACTIONS.index(Action.ATTACK_UP)
-IDX_ATTACK_DOWN = ACTIONS.index(Action.ATTACK_DOWN)
-IDX_ATTACK_LEFT = ACTIONS.index(Action.ATTACK_LEFT)
-IDX_ATTACK_RIGHT = ACTIONS.index(Action.ATTACK_RIGHT)
-IDX_SHIELD      = ACTIONS.index(Action.SHIELD)
+IDX_STAY               = ACTIONS.index(Action.STAY)
+IDX_MOVE_UP            = ACTIONS.index(Action.MOVE_UP)
+IDX_MOVE_DOWN          = ACTIONS.index(Action.MOVE_DOWN)
+IDX_MOVE_LEFT          = ACTIONS.index(Action.MOVE_LEFT)
+IDX_MOVE_RIGHT         = ACTIONS.index(Action.MOVE_RIGHT)
+IDX_MOVE_UP_LEFT       = ACTIONS.index(Action.MOVE_UP_LEFT)
+IDX_MOVE_UP_RIGHT      = ACTIONS.index(Action.MOVE_UP_RIGHT)
+IDX_MOVE_DOWN_LEFT     = ACTIONS.index(Action.MOVE_DOWN_LEFT)
+IDX_MOVE_DOWN_RIGHT    = ACTIONS.index(Action.MOVE_DOWN_RIGHT)
+IDX_MINE               = ACTIONS.index(Action.MINE)
+IDX_ATTACK_UP          = ACTIONS.index(Action.ATTACK_UP)
+IDX_ATTACK_DOWN        = ACTIONS.index(Action.ATTACK_DOWN)
+IDX_ATTACK_LEFT        = ACTIONS.index(Action.ATTACK_LEFT)
+IDX_ATTACK_RIGHT       = ACTIONS.index(Action.ATTACK_RIGHT)
+IDX_ATTACK_UP_LEFT     = ACTIONS.index(Action.ATTACK_UP_LEFT)
+IDX_ATTACK_UP_RIGHT    = ACTIONS.index(Action.ATTACK_UP_RIGHT)
+IDX_ATTACK_DOWN_LEFT   = ACTIONS.index(Action.ATTACK_DOWN_LEFT)
+IDX_ATTACK_DOWN_RIGHT  = ACTIONS.index(Action.ATTACK_DOWN_RIGHT)
+IDX_SHIELD             = ACTIONS.index(Action.SHIELD)
 
 CELL_ENCODING: dict[str, float] = {
     "empty":        0.0,
@@ -80,12 +93,16 @@ MAX_TICKS = 200
 ENERGY_CRITICAL  = 30    # 극위기: 하드코딩 실드
 ENERGY_MINE_COST = 3
 
-# 인접 방향
+# 인접 방향 (8방향: 상하좌우 + 대각선 4방향)
 _ADJ_DIRS = [
-    (0, -1, IDX_MOVE_UP,    IDX_ATTACK_UP),
-    (0,  1, IDX_MOVE_DOWN,  IDX_ATTACK_DOWN),
-    (-1, 0, IDX_MOVE_LEFT,  IDX_ATTACK_LEFT),
-    (1,  0, IDX_MOVE_RIGHT, IDX_ATTACK_RIGHT),
+    (0,  -1, IDX_MOVE_UP,         IDX_ATTACK_UP),
+    (0,   1, IDX_MOVE_DOWN,       IDX_ATTACK_DOWN),
+    (-1,  0, IDX_MOVE_LEFT,       IDX_ATTACK_LEFT),
+    (1,   0, IDX_MOVE_RIGHT,      IDX_ATTACK_RIGHT),
+    (-1, -1, IDX_MOVE_UP_LEFT,    IDX_ATTACK_UP_LEFT),
+    (1,  -1, IDX_MOVE_UP_RIGHT,   IDX_ATTACK_UP_RIGHT),
+    (-1,  1, IDX_MOVE_DOWN_LEFT,  IDX_ATTACK_DOWN_LEFT),
+    (1,   1, IDX_MOVE_DOWN_RIGHT, IDX_ATTACK_DOWN_RIGHT),
 ]
 _CX, _CY = 2, 2
 _ADJ_CELL_COORDS = frozenset((_CX + dx, _CY + dy) for dx, dy, _, _ in _ADJ_DIRS)
@@ -93,11 +110,42 @@ _MOVE_TO_DELTA: dict[int, tuple[int, int]] = {
     move_idx: (dx, dy) for dx, dy, move_idx, _ in _ADJ_DIRS
 }
 _OPPOSITE_MOVE = {
-    IDX_MOVE_UP:    IDX_MOVE_DOWN,
-    IDX_MOVE_DOWN:  IDX_MOVE_UP,
-    IDX_MOVE_LEFT:  IDX_MOVE_RIGHT,
-    IDX_MOVE_RIGHT: IDX_MOVE_LEFT,
+    IDX_MOVE_UP:         IDX_MOVE_DOWN,
+    IDX_MOVE_DOWN:       IDX_MOVE_UP,
+    IDX_MOVE_LEFT:       IDX_MOVE_RIGHT,
+    IDX_MOVE_RIGHT:      IDX_MOVE_LEFT,
+    IDX_MOVE_UP_LEFT:    IDX_MOVE_DOWN_RIGHT,
+    IDX_MOVE_UP_RIGHT:   IDX_MOVE_DOWN_LEFT,
+    IDX_MOVE_DOWN_LEFT:  IDX_MOVE_UP_RIGHT,
+    IDX_MOVE_DOWN_RIGHT: IDX_MOVE_UP_LEFT,
 }
+
+# 대각선 이동 허용 최소 비율 (utils.py의 move_toward와 동일 — 짧은 축/긴 축 ≥ 0.4)
+_DIAG_RATIO = 0.4
+
+
+def _move_idx_toward(ddx: int, ddy: int) -> int:
+    """
+    (ddx, ddy) 방향으로 이동하는 8방향 액션 인덱스를 반환.
+    utils.py의 move_toward와 동일한 규칙: |min|/|max| >= _DIAG_RATIO 이면 대각선.
+    (ddx, ddy) == (0, 0)이면 IDX_STAY.
+    """
+    if ddx == 0 and ddy == 0:
+        return IDX_STAY
+    ax, ay = abs(ddx), abs(ddy)
+    # 대각선
+    if ax > 0 and ay > 0 and min(ax, ay) / max(ax, ay) >= _DIAG_RATIO:
+        if ddx > 0 and ddy < 0:
+            return IDX_MOVE_UP_RIGHT
+        if ddx < 0 and ddy < 0:
+            return IDX_MOVE_UP_LEFT
+        if ddx > 0 and ddy > 0:
+            return IDX_MOVE_DOWN_RIGHT
+        return IDX_MOVE_DOWN_LEFT
+    # 단축
+    if ax >= ay:
+        return IDX_MOVE_RIGHT if ddx > 0 else IDX_MOVE_LEFT
+    return IDX_MOVE_DOWN if ddy > 0 else IDX_MOVE_UP
 
 # DQN 하이퍼파라미터
 N_FEATURES       = 38
@@ -112,6 +160,10 @@ EPSILON_START    = 1.0       # 탐색 시작값 (처음엔 무조건 탐색)
 EPSILON_MIN      = 0.05      # 최소 탐색률
 EPSILON_DECAY    = 0.992     # 에피소드마다 곱해지는 감쇠율 (약 360ep에 MIN 도달)
 EXPLOIT_GUIDE_PROB = 0.25    # 착취 시에도 guided exploration 유지 확률
+
+# 학습된 가중치를 GCS에 올리는 주기 (에피소드 단위).
+# 보스전마다 업로드하면 네트워크 I/O가 과도하므로 N판마다 한 번만 동기화한다.
+GCS_UPLOAD_INTERVAL = 5
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +416,7 @@ class RewardCalculator:
     틱 단위 보상과 에피소드 종료 보상을 계산한다.
 
     보상 설계:
-      - 킬 (score ≥25 급증)  : +10.0
+      - 킬 (score ≥25 급증)  : +20.0  (전투 학습 강화)
       - 일반 채굴 (score 증가): +0.3 / 점
       - 에너지 회복          : +0.02 / 에너지
       - 에너지 위험          : -1.0 (LOW) / -3.0 (CRITICAL)
@@ -393,11 +445,11 @@ class RewardCalculator:
         # 킬 보상 (kills 필드가 있으면 직접 사용, 없으면 score_delta 휴리스틱으로 폴백)
         kill_delta = curr_my.get("kills", -1) - prev_my.get("kills", -1)
         if kill_delta > 0:
-            reward += 10.0 * kill_delta
+            reward += 20.0 * kill_delta
         else:
             score_delta = curr_my["score"] - prev_my["score"]
             if score_delta >= 25:
-                reward += 10.0
+                reward += 20.0
             elif score_delta > 0:
                 reward += score_delta * 0.3
 
@@ -416,8 +468,8 @@ class RewardCalculator:
         if cx < safe_min_x or cx > safe_max_x or cy < safe_min_y or cy > safe_max_y:
             reward -= 4.0
 
-        # 이동 보상 / STAY 패널티
-        if action_idx in (IDX_MOVE_UP, IDX_MOVE_DOWN, IDX_MOVE_LEFT, IDX_MOVE_RIGHT):
+        # 이동 보상 / STAY 패널티 (8방향 모두 동일하게 +0.1)
+        if action_idx in _MOVE_TO_DELTA:
             reward += 0.1
         elif action_idx == IDX_STAY:
             reward -= 0.4
@@ -676,9 +728,7 @@ class RLBossBot(BotInterface):
                     best = (ddx, ddy)
         if best is not None:
             ddx, ddy = best
-            return (IDX_MOVE_RIGHT if ddx > 0 else IDX_MOVE_LEFT) \
-                   if abs(ddx) >= abs(ddy) \
-                   else (IDX_MOVE_DOWN if ddy > 0 else IDX_MOVE_UP)
+            return _move_idx_toward(ddx, ddy)
 
         # 메모리 기반 광물 방향
         if self._mineral_memory:
@@ -694,16 +744,19 @@ class RLBossBot(BotInterface):
                     mem_best = (mx - pos_x, my - pos_y)
             if mem_best is not None:
                 ddx, ddy = mem_best
-                return (IDX_MOVE_RIGHT if ddx > 0 else IDX_MOVE_LEFT) \
-                       if abs(ddx) >= abs(ddy) \
-                       else (IDX_MOVE_DOWN if ddy > 0 else IDX_MOVE_UP)
+                return _move_idx_toward(ddx, ddy)
 
         return None
 
     def _valid_actions(self, grid: list) -> list[int]:
         """실행 가능한 액션 목록 (마스킹 포함 탐색용)."""
-        valid = [IDX_STAY, IDX_MOVE_UP, IDX_MOVE_DOWN,
-                 IDX_MOVE_LEFT, IDX_MOVE_RIGHT, IDX_SHIELD]
+        valid = [
+            IDX_STAY,
+            IDX_MOVE_UP, IDX_MOVE_DOWN, IDX_MOVE_LEFT, IDX_MOVE_RIGHT,
+            IDX_MOVE_UP_LEFT, IDX_MOVE_UP_RIGHT,
+            IDX_MOVE_DOWN_LEFT, IDX_MOVE_DOWN_RIGHT,
+            IDX_SHIELD,
+        ]
         for _, _, _, attack_idx, cell in self._adj_cells(grid):
             if cell == "bot_enemy":
                 valid.append(attack_idx)
@@ -795,6 +848,27 @@ class RLBossBot(BotInterface):
         # 학습 지속성: 게임 종료마다 가중치 저장 (버퍼는 제외 — IO 최적화)
         self.save_weights(save_buffer=False)
 
+        # GCS 업로드: N 에피소드마다 한 번만 (네트워크 I/O 최소화).
+        # 실패해도 학습 플로우를 막지 않는다 — 다음 주기에 다시 시도된다.
+        if self._episode_count % GCS_UPLOAD_INTERVAL == 0:
+            try:
+                import gcs_weights  # 지연 import — 학습 외 상황에선 필요 없음
+                if gcs_weights.enabled():
+                    ok = gcs_weights.upload(_DEFAULT_WEIGHTS_PATH)
+                    if not ok:
+                        # 업로드 실패는 조용히 로그만 — 봇 동작에 영향 없음
+                        import logging
+                        logging.getLogger(__name__).warning(
+                            "RLBossBot 가중치 GCS 업로드 실패 (ep=%d) — 다음 주기 재시도",
+                            self._episode_count,
+                        )
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "RLBossBot GCS 업로드 중 예외 (ep=%d): %s",
+                    self._episode_count, exc,
+                )
+
     # -----------------------------------------------------------------------
     # 하드코딩 헬퍼 (최소한만)
     # -----------------------------------------------------------------------
@@ -807,11 +881,7 @@ class RLBossBot(BotInterface):
     ) -> int:
         cx = (min_x + max_x) // 2
         cy = (min_y + max_y) // 2
-        dx = cx - pos_x
-        dy = cy - pos_y
-        if abs(dx) >= abs(dy):
-            return IDX_MOVE_RIGHT if dx > 0 else IDX_MOVE_LEFT
-        return IDX_MOVE_DOWN if dy > 0 else IDX_MOVE_UP
+        return _move_idx_toward(cx - pos_x, cy - pos_y)
 
     # -----------------------------------------------------------------------
     # 체크포인트 저장 / 로드 (학습 지속성)
