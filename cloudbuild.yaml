@@ -8,7 +8,7 @@ substitutions:
   _CORS_ORIGINS: 'https://ai-arena-b2b4b.web.app,https://ai-arena-b2b4b.firebaseapp.com'
   # GCS 버킷: Cloud Build 트리거 설정의 substitution 변수에서 직접 입력
   # (버킷명 노출 방지 — 여기에 실제 URI를 적지 말 것)
-  _BOSS_WEIGHTS_GCS_URI: ''
+  _BOSS_WEIGHTS_GCS_URI: 'gs://boss-weights/trained_weights.json'
 
 steps:
   # 1a. 서버 Docker 이미지 빌드
