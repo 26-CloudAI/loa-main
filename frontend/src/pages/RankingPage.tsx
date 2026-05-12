@@ -53,19 +53,17 @@ export default function RankingPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center justify-between">
-        <span
-          className="font-bold text-lg cursor-pointer hover:text-indigo-300 transition-colors"
-          onClick={() => navigate('/games')}
-        >
-          League of Agents
-        </span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/games')}
-            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
+            className="text-gray-400 hover:text-white text-sm transition-colors"
           >
-            게임 목록
+            ◀ 게임 목록
           </button>
+          <span className="text-gray-600">|</span>
+          <span className="font-bold">리더보드</span>
+        </div>
+        <div className="flex items-center gap-4">
           {user && (
             <span className="text-sm text-gray-400">
               {user.display_name ?? user.username}
@@ -114,7 +112,7 @@ export default function RankingPage() {
                   <th className="px-4 py-3">ELO</th>
                   <th className="px-4 py-3">전적</th>
                   <th className="px-4 py-3">승률</th>
-                  <th className="px-4 py-3">봇 보기</th>
+                  <th className="px-4 py-3">코드 보기</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,10 +122,10 @@ export default function RankingPage() {
                   return (
                     <tr
                       key={entry.user_id}
-                      className={`border-t border-gray-700 transition-colors ${
+                      className={`border-t transition-colors ${
                         isMe
-                          ? 'bg-indigo-900/30'
-                          : 'hover:bg-gray-800/60'
+                          ? 'border-l-4 border-l-indigo-400 border-t-gray-700 bg-indigo-600/25'
+                          : 'border-t-gray-700 hover:bg-gray-800/60'
                       }`}
                     >
                       <td className="px-4 py-3 font-mono text-gray-400 text-center">
@@ -148,13 +146,8 @@ export default function RankingPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <div className="font-medium text-white">
+                        <div className={`font-medium ${isMe ? 'text-indigo-300' : 'text-white'}`}>
                           {entry.display_name}
-                          {isMe && (
-                            <span className="ml-2 text-xs bg-indigo-600 rounded px-1 py-0.5">
-                              나
-                            </span>
-                          )}
                         </div>
                         <div className="text-xs text-gray-500">{entry.username}</div>
                       </td>

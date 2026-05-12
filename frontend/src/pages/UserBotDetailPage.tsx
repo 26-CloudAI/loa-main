@@ -62,19 +62,17 @@ export default function UserBotDetailPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center justify-between">
-        <span
-          className="font-bold text-lg cursor-pointer hover:text-indigo-300 transition-colors"
-          onClick={() => navigate('/games')}
-        >
-          League of Agents
-        </span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/rankings')}
-            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
+            className="text-gray-400 hover:text-white text-sm transition-colors"
           >
-            리더보드
+            ◀ 리더보드
           </button>
+          <span className="text-gray-600">|</span>
+          <span className="font-bold">봇 코드</span>
+        </div>
+        <div className="flex items-center gap-4">
           {user && (
             <span className="text-sm text-gray-400">
               {user.display_name ?? user.username}
@@ -93,12 +91,6 @@ export default function UserBotDetailPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
-        <button
-          onClick={() => navigate('/rankings')}
-          className="mb-6 flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors"
-        >
-          ← 리더보드로 돌아가기
-        </button>
 
         {error && (
           <div className="mb-4 text-sm text-red-400 bg-red-500/10 rounded-lg px-4 py-3">
