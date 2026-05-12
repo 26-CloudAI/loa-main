@@ -225,7 +225,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         uid = _require_uid(request)
         repo = registry._repo
         if repo is None:
-            return []
+            raise HTTPException(503, "MockStocks DB를 사용할 수 없습니다.")
 
         games = repo.get_finished_games(limit=limit, owner_uid=uid)
         result = []
@@ -294,8 +294,10 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             prepared_news = _prepared_news.pop(body.prepare_id)
 
         uid = _require_uid(request)
+        if registry._repo is None:
+            raise HTTPException(503, "MockStocks DB를 사용할 수 없습니다.")
         name = body.name.strip() if body.name else None
-        next_index = registry._repo.count_games_by_owner(uid) + 1 if registry._repo else 1
+        next_index = registry._repo.count_games_by_owner(uid) + 1
         session = registry.create_game(
             config=cfg,
             tick_interval=body.tick_interval,

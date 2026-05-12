@@ -193,13 +193,8 @@ def _init_postgresql():
             stmt = statement.strip()
             if stmt:
                 cur.execute(stmt)
-        cur.execute(
-            "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS owner_uid TEXT"
-        )
-        cur.execute(
-            "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS name TEXT"
-        )
 
     conn.commit()
+    conn.autocommit = True          # SELECT 후 트랜잭션 누수 방지
     conn.cursor_factory = psycopg2.extras.RealDictCursor
     return conn
