@@ -99,6 +99,21 @@ def build_bot_state(
     if leaderboard is None:
         leaderboard = build_leaderboard(all_bots, config)
 
+    # 시야(5x5) 내 다른 봇 목록
+    radius = config.bot.vision_radius
+    other_bots_list = []
+    for other in all_bots.values():
+        if not other.alive or other.id == bot.id:
+            continue
+        odx = other.position.x - bot.position.x
+        ody = other.position.y - bot.position.y
+        if abs(odx) <= radius and abs(ody) <= radius:
+            other_bots_list.append({
+                "id": other.id,
+                "position": [other.position.x, other.position.y],
+                "energy": other.energy,
+            })
+
     return {
         "tick": tick,
         "my_bot": {
@@ -106,6 +121,7 @@ def build_bot_state(
             "position": [bot.position.x, bot.position.y],
             "energy": bot.energy,
             "score": bot.score,
+            "alive": bot.alive,
             "shield_active": bot.shield_active,
             "kills": bot.kills,
             "survival_ticks": bot.survival_ticks,
@@ -115,5 +131,6 @@ def build_bot_state(
             "grid": vision_grid,
         },
         "zone_bounds": zone.bounds,
+        "other_bots": other_bots_list,
         "leaderboard": leaderboard,
     }

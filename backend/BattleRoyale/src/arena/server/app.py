@@ -102,7 +102,8 @@ class InProcessBot(BotInterface):
         try:
             result = self._action_fn(state)
             return str(result) if result else "STAY"
-        except Exception:
+        except Exception as e:
+            logger.warning("봇 %s 액션 실행 오류, STAY 처리: %s", self._bot_id, e, exc_info=True)
             return "STAY"
 
 
