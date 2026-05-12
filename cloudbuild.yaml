@@ -6,9 +6,9 @@ substitutions:
   # ↓ 인프라 생성 후 Cloud Build 트리거 설정에서 채워넣기
   _REDIS_HOST: '10.197.54.43'
   _CORS_ORIGINS: 'https://ai-arena-b2b4b.web.app,https://ai-arena-b2b4b.firebaseapp.com'
-  # GCS 버킷: 아래 형식으로 채워넣기 (버킷은 별도 생성 필요)
-  # gsutil mb -l asia-northeast3 gs://${PROJECT_ID}-boss-weights
-  _BOSS_WEIGHTS_GCS_URI: 'gs://boss-weights/trained_weights.json'
+  # GCS 버킷: Cloud Build 트리거 설정의 substitution 변수에서 직접 입력
+  # (버킷명 노출 방지 — 여기에 실제 URI를 적지 말 것)
+  _BOSS_WEIGHTS_GCS_URI: ''
 
 steps:
   # 1a. 서버 Docker 이미지 빌드
