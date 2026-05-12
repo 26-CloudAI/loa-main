@@ -11,13 +11,17 @@ interface Props {
   myBotIcon:      string
   zoomLevel:      number
   onFollowChange: (botId: string) => void  // 관전 봇 사망 시 React 상태 동기화
+  width:          number
+  height:         number
 }
 
 export default function PhaserGame({
   tickData, eventQueueRef, myBotId, followBotId, myBotIcon, zoomLevel, onFollowChange,
+  width, height,
 }: Props) {
   const divRef   = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<BattleRoyaleScene | null>(null)
+  const gameRef  = useRef<Phaser.Game | null>(null)
 
   // Create Phaser game once on mount
   useEffect(() => {
@@ -29,8 +33,8 @@ export default function PhaserGame({
 
     const game = new Phaser.Game({
       type:            Phaser.AUTO,
-      width:           800,
-      height:          800,
+      width,
+      height,
       parent:          divRef.current,
       backgroundColor: '#0a0a0f',
       scene:           [scene],
@@ -40,13 +44,23 @@ export default function PhaserGame({
     })
 
     sceneRef.current = scene
+    gameRef.current  = game
 
     return () => {
       game.destroy(true)
       sceneRef.current = null
+      gameRef.current  = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Resize Phaser canvas when container size changes,
+  // then reposition the minimap camera to stay bottom-right
+  useEffect(() => {
+    if (!gameRef.current) return
+    gameRef.current.scale.resize(width, height)
+    sceneRef.current?.resize(width)
+  }, [width, height])
 
   // Sync tick data (Phaser reads from this ref each frame — no re-render)
   useEffect(() => {
@@ -79,7 +93,7 @@ export default function PhaserGame({
     <div
       ref={divRef}
       className="rounded-lg border border-gray-700 overflow-hidden"
-      style={{ width: 800, height: 800, background: '#0a0a0f' }}
+      style={{ width, height, background: '#0a0a0f' }}
     />
   )
 }
