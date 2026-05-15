@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
+import AuthPage from './pages/AuthPage'
 import GamesPage from './pages/GamesPage'
 import GameSelectPage from './pages/GameSelectPage'
 import GameNewPage from './pages/GameNewPage'
@@ -74,10 +75,11 @@ function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       {/* 이미 로그인 상태이면 /login → /games 리다이렉트 */}
       <Route
         path="/login"
-        element={token ? <Navigate to="/games" replace /> : <LandingPage />}
+        element={token ? <Navigate to="/games" replace /> : <AuthPage />}
       />
       <Route path="/games" element={<GamesPage />} />
       <Route path="/games/new" element={<GameSelectPage />} />
@@ -90,7 +92,7 @@ function AppRoutes() {
       <Route path="/rankings" element={<RankingPage />} />
       <Route path="/users/:user_id/bots" element={<UserBotDetailPage />} />
       {/* 기본 진입점 */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

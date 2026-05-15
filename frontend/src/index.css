@@ -1,8 +1,38 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "JalnanGothic";
+  src: url("./assets/fonts/JalnanGothicTTF.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SB Aggro";
+  src: url("./assets/fonts/SB_Aggro_Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SB Aggro";
+  src: url("./assets/fonts/SB_Aggro_Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SB Aggro";
+  src: url("./assets/fonts/SB_Aggro_Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
   --font-sans: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+  --font-aggro: "SB Aggro", system-ui, sans-serif;
 }
 
 
