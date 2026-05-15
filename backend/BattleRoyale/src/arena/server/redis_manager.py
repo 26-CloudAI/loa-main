@@ -56,6 +56,21 @@ class StateStore(ABC):
         """활성 게임 ID 목록."""
         ...
 
+    @abstractmethod
+    async def append_replay_frame(self, game_id: str, frame: dict) -> None:
+        """리플레이 프레임을 순서대로 추가."""
+        ...
+
+    @abstractmethod
+    async def get_replay_frames(self, game_id: str) -> list[dict]:
+        """저장된 모든 리플레이 프레임을 반환."""
+        ...
+
+    @abstractmethod
+    async def delete_replay(self, game_id: str) -> None:
+        """리플레이 데이터를 삭제."""
+        ...
+
 
 class PubSubBroker(ABC):
     """Pub/Sub 브로커 추상 인터페이스."""
@@ -133,6 +148,7 @@ class RedisStateStore(StateStore):
         keys = [
             self._key("game", game_id, "state"),
             self._key("game", game_id, "result"),
+            self._key("game", game_id, "replay"),  # 추가
         ]
         await self._redis.delete(*keys)
 
@@ -145,6 +161,20 @@ class RedisStateStore(StateStore):
             if len(parts) >= 4:
                 keys.append(parts[2])
         return keys
+
+    async def append_replay_frame(self, game_id: str, frame: dict) -> None:
+        key = self._key("game", game_id, "replay")
+        await self._redis.rpush(key, json.dumps(frame))
+        await self._redis.expire(key, self.config.game_result_ttl)
+
+    async def get_replay_frames(self, game_id: str) -> list[dict]:
+        key = self._key("game", game_id, "replay")
+        raws = await self._redis.lrange(key, 0, -1)
+        return [json.loads(r) for r in raws]
+
+    async def delete_replay(self, game_id: str) -> None:
+        key = self._key("game", game_id, "replay")
+        await self._redis.delete(key)
 
 
 class RedisPubSubBroker(PubSubBroker):
@@ -206,6 +236,7 @@ class InMemoryStateStore(StateStore):
     def __init__(self):
         self._states: dict[str, dict] = {}
         self._results: dict[str, dict] = {}
+        self._replays: dict[str, list[dict]] = {}
 
     async def save_game_state(self, game_id: str, data: dict) -> None:
         self._states[game_id] = data
@@ -222,9 +253,21 @@ class InMemoryStateStore(StateStore):
     async def delete_game(self, game_id: str) -> None:
         self._states.pop(game_id, None)
         self._results.pop(game_id, None)
+        self._replays.pop(game_id, None)
 
     async def list_games(self) -> list[str]:
         return list(self._states.keys())
+
+    async def append_replay_frame(self, game_id: str, frame: dict) -> None:
+        if game_id not in self._replays:
+            self._replays[game_id] = []
+        self._replays[game_id].append(frame)
+
+    async def get_replay_frames(self, game_id: str) -> list[dict]:
+        return list(self._replays.get(game_id, []))
+
+    async def delete_replay(self, game_id: str) -> None:
+        self._replays.pop(game_id, None)
 
 
 class InMemoryPubSubBroker(PubSubBroker):

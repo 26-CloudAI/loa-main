@@ -734,6 +734,24 @@ def create_app(
         participants = _game_repo().get_participants(game_id)
         return game_result_from_record(record, participants)
 
+    @app.get("/api/games/{game_id}/replay")
+    async def get_game_replay(game_id: str, user: dict = Depends(verify_firebase_token)):
+        """게임 리플레이 전체 프레임을 반환."""
+        db_user = _current_db_user(user)
+        if not _game_repo().get_game_by_owner(game_id, db_user.id):
+            raise HTTPException(404, "게임을 찾을 수 없습니다.")
+        registry = _registry()
+        frames = await registry.state_store.get_replay_frames(game_id)
+        if not frames:
+            raise HTTPException(404, "리플레이 데이터가 없습니다.")
+        result = await registry.state_store.get_game_result(game_id)
+        return {
+            "game_id": game_id,
+            "total_frames": len(frames),
+            "frames": frames,
+            "result": result,
+        }
+
     @app.delete("/api/games/{game_id}")
     async def stop_game(game_id: str, user: dict = Depends(verify_firebase_token)):
         """게임을 강제 종료."""

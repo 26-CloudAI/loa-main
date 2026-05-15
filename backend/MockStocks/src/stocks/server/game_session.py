@@ -46,6 +46,7 @@ class GameSession:
         self._engine: Optional[GameEngine] = None
         self._task: Optional[asyncio.Task] = None
         self._last_snapshot: Optional[dict] = None
+        self._replay_frames: list[dict] = []
 
     def register_bot(self, bot: BotInterface) -> None:
         if self.status != GameStatus.WAITING:
@@ -135,6 +136,9 @@ class GameSession:
     def get_last_snapshot(self) -> Optional[dict]:
         return self._last_snapshot
 
+    def get_replay_frames(self) -> list[dict]:
+        return list(self._replay_frames)
+
     async def _run_loop(self) -> None:
         assert self._engine is not None
         try:
@@ -148,6 +152,11 @@ class GameSession:
                 )
                 snapshot = self._engine.snapshot()
                 self._last_snapshot = snapshot
+                # 리플레이 프레임 저장 (실패해도 게임 루프 계속)
+                try:
+                    self._replay_frames.append(snapshot)
+                except Exception:
+                    logger.warning("게임 %s 리플레이 프레임 누적 실패 (무시)", self.game_id)
                 await self._sm.broadcast(self.game_id, make_tick_message(self.game_id, snapshot))
                 await asyncio.sleep(self.tick_interval)
 

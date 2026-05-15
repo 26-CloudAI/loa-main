@@ -10,6 +10,8 @@ import WatchPage from './pages/WatchPage'
 import MockStocksNewPage from './pages/MockStocksNewPage'
 import MockStocksWatchPage from './pages/MockStocksWatchPage'
 import MockStocksResultPage from './pages/MockStocksResultPage'
+import BattleRoyaleReplayPage from './pages/BattleRoyaleReplayPage'
+import MockStocksReplayPage from './pages/MockStocksReplayPage'
 import RankingPage from './pages/RankingPage'
 import UserBotDetailPage from './pages/UserBotDetailPage'
 
@@ -89,6 +91,8 @@ function AppRoutes() {
       <Route path="/games/new/mock-stocks" element={<MockStocksNewPage />} />
       <Route path="/games/:game_id/mock-stocks/watch" element={<MockStocksWatchPage />} />
       <Route path="/games/:game_id/mock-stocks/result" element={<MockStocksResultPage />} />
+      <Route path="/games/:game_id/replay" element={<BattleRoyaleReplayPage />} />
+      <Route path="/games/:game_id/mock-stocks/replay" element={<MockStocksReplayPage />} />
       <Route path="/rankings" element={<RankingPage />} />
       <Route path="/users/:user_id/bots" element={<UserBotDetailPage />} />
       {/* 기본 진입점 */}

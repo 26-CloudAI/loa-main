@@ -188,13 +188,32 @@ class GameSession:
                     None, self._engine.process_tick
                 )
 
-                # 상태 브로드캐스팅
-                await self._broadcast_tick()
+                # 페이로드를 한 번만 계산해 broadcast와 replay에 재사용
+                tick_payload = self._build_state_payload()
 
-                # 이벤트 브로드캐스팅
+                # 상태 브로드캐스팅
+                await self._broadcast_tick(tick_payload)
+
+                # 이벤트 브로드캐스팅 + replay 이벤트 수집
+                replay_events: list[dict] = []
                 for event in events:
                     if event.event_type in ("kill", "mine_success", "death"):
                         await self._broadcast_event(event)
+                        replay_events.append({
+                            "event_type": event.event_type,
+                            "actor_id": event.actor_id,
+                            "target_id": event.target_id,
+                            "detail": event.detail,
+                        })
+
+                # 리플레이 프레임 저장 (실패해도 게임 루프 계속)
+                try:
+                    await self.state_store.append_replay_frame(self.game_id, {
+                        "tick_data": tick_payload,
+                        "events": replay_events,
+                    })
+                except Exception:
+                    logger.warning("게임 %s 리플레이 프레임 저장 실패 (무시)", self.game_id)
 
                 # 틱 간격 대기 (관전 속도 제어)
                 await asyncio.sleep(self.tick_interval)
@@ -212,15 +231,13 @@ class GameSession:
             self.status = GameStatus.ERROR
             raise
 
-    async def _broadcast_tick(self) -> None:
+    async def _broadcast_tick(self, tick_payload: Optional[dict] = None) -> None:
         """현재 틱 상태를 저장하고 브로드캐스팅."""
-        msg = {
-            "type": "tick",
-            "data": self._build_state_payload(),
-        }
+        data = tick_payload if tick_payload is not None else self._build_state_payload()
+        msg = {"type": "tick", "data": data}
 
         # Redis 저장 + Pub/Sub 발행
-        await self.state_store.save_game_state(self.game_id, msg["data"])
+        await self.state_store.save_game_state(self.game_id, data)
         await self.pubsub.publish(self.tick_channel, msg)
 
     async def _broadcast_event(self, event: TickEvent) -> None:
