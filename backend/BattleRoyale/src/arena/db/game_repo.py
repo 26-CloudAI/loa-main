@@ -213,6 +213,28 @@ class GameRepository:
             })
         return results
 
+    def get_game_info_for_bot(self, bot_id: int) -> Optional[dict]:
+        """봇이 참여한 게임의 name, mode를 반환한다."""
+        cursor = self._execute(
+            """
+            SELECT g.name, g.mode
+            FROM games g
+            JOIN game_participants gp ON g.id = gp.game_id
+            WHERE gp.bot_id = ?
+            ORDER BY g.created_at DESC
+            LIMIT 1
+            """,
+            (bot_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        keys = row.keys() if hasattr(row, "keys") else []
+        return {
+            "name": row["name"] if "name" in keys else None,
+            "mode": row["mode"] if "mode" in keys else "battle-royale",
+        }
+
     def cleanup_stale_games(self) -> int:
         """서버 재시작 시 미완료 게임을 error 상태로 변경. 변경된 수를 반환."""
         cursor = self._execute(

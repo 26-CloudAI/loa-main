@@ -513,26 +513,24 @@ def create_app(
                     f"봇 {b.get('bot_id', '?')} 코드가 {max_size}B를 초과합니다.",
                 )
 
-        # 유저 봇을 DB에 저장/업데이트하여 bot_id 확보
+        # 유저 봇을 DB에 저장하여 bot_id 확보
+        _MODE_LABEL = {"battle-royale": "배틀로얄", "boss": "보스전"}
+        mode_label = _MODE_LABEL.get(mode, mode)
+        game_description = f"{mode_label} · {name}" if name else mode_label
+
         bot_repo_inst = _bot_repo()
         bot_name_to_db_id: dict[str, int] = {}
         for b in bots_data:
             bot_name = b["bot_id"]
-            is_public = bool(b.get("is_public", False))
-            existing = bot_repo_inst.get_by_user_and_name(db_user.id, bot_name)
-            if existing:
-                bot_repo_inst.update_code(existing.id, b["code"])
-                if is_public != existing.is_public:
-                    bot_repo_inst.set_public(existing.id, is_public)
-                bot_name_to_db_id[bot_name] = existing.id
-            else:
-                new_bot = bot_repo_inst.create(
-                    user_id=db_user.id,
-                    name=bot_name,
-                    code=b["code"],
-                    is_public=is_public,
-                )
-                bot_name_to_db_id[bot_name] = new_bot.id
+            is_public = bool(b.get("is_public", True))
+            new_bot = bot_repo_inst.create(
+                user_id=db_user.id,
+                name=bot_name,
+                code=b["code"],
+                is_public=is_public,
+                description=game_description,
+            )
+            bot_name_to_db_id[bot_name] = new_bot.id
 
         # 게임 세션 생성
         session = registry.create_game(
@@ -981,11 +979,34 @@ def create_app(
 
     @app.get("/api/users/{user_id}/bots")
     async def get_user_public_bots(user_id: int):
-        """특정 유저의 공개 봇 목록과 코드를 반환한다. (인증 불필요)"""
+        """특정 유저의 봇 목록을 반환한다. 비공개 봇은 코드를 null로 반환. (인증 불필요)"""
         user = _user_repo().get_by_id(user_id)
         if not user or not user.is_active:
             raise HTTPException(404, "유저를 찾을 수 없습니다.")
-        bots = _bot_repo().get_public_bots_by_user(user_id)
+        bots = _bot_repo().get_by_user(user_id, active_only=True)
+        _MODE_LABEL = {
+            "battle-royale": "배틀로얄",
+            "boss": "보스전",
+            "mock-stocks": "모의주식",
+        }
+        bot_list = []
+        for b in bots:
+            game_info = _game_repo().get_game_info_for_bot(b.id)
+            game_mode = _MODE_LABEL.get(game_info["mode"], game_info["mode"]) if game_info else None
+            game_name = game_info["name"] if game_info else None
+            bot_list.append({
+                "id": b.id,
+                "name": b.name,
+                "game_mode": game_mode,
+                "game_name": game_name,
+                "code": b.code if b.is_public else None,
+                "is_public": b.is_public,
+                "version": b.version,
+                "wins": b.wins,
+                "losses": b.losses,
+                "games_played": b.games_played,
+                "updated_at": b.updated_at,
+            })
         return {
             "user": {
                 "user_id": user.id,
@@ -996,21 +1017,7 @@ def create_app(
                 "losses": user.losses,
                 "games_played": user.games_played,
             },
-            "bots": [
-                {
-                    "id": b.id,
-                    "name": b.name,
-                    "description": b.description,
-                    "code": b.code,
-                    "version": b.version,
-                    "wins": b.wins,
-                    "losses": b.losses,
-                    "games_played": b.games_played,
-                    "win_rate": round(b.win_rate, 3),
-                    "updated_at": b.updated_at,
-                }
-                for b in bots
-            ],
+            "bots": bot_list,
         }
 
     return app
