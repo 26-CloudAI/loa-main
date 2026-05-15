@@ -37,7 +37,7 @@ interface UserInfo {
 export default function UserBotDetailPage() {
   const { user_id } = useParams<{ user_id: string }>()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, token, logout } = useAuth()
 
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
   const [bots, setBots] = useState<BotInfo[]>([])
@@ -47,7 +47,9 @@ export default function UserBotDetailPage() {
 
   useEffect(() => {
     if (!user_id) return
-    fetch(`${API_BASE}/api/users/${user_id}/bots`)
+    fetch(`${API_BASE}/api/users/${user_id}/bots`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((r) => {
         if (!r.ok) throw new Error(`서버 오류 (${r.status})`)
         return r.json()

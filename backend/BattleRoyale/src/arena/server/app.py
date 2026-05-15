@@ -978,11 +978,23 @@ def create_app(
         return {"available": available}
 
     @app.get("/api/users/{user_id}/bots")
-    async def get_user_public_bots(user_id: int):
-        """특정 유저의 봇 목록을 반환한다. 비공개 봇은 코드를 null로 반환. (인증 불필요)"""
+    async def get_user_public_bots(user_id: int, request: Request):
+        """특정 유저의 봇 목록을 반환한다. 본인이면 비공개 코드도 반환."""
         user = _user_repo().get_by_id(user_id)
         if not user or not user.is_active:
             raise HTTPException(404, "유저를 찾을 수 없습니다.")
+
+        # 본인 여부 확인 (토큰이 있으면 검증, 없으면 타인으로 처리)
+        is_owner = False
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                decoded = _decode_auth_token(auth_header[7:])
+                requester = _firebase_user_svc().get_or_create_user(decoded)
+                is_owner = (requester.id == user_id)
+            except Exception:
+                pass
+
         bots = _bot_repo().get_by_user(user_id, active_only=True)
         _MODE_LABEL = {
             "battle-royale": "배틀로얄",
@@ -994,12 +1006,13 @@ def create_app(
             game_info = _game_repo().get_game_info_for_bot(b.id)
             game_mode = _MODE_LABEL.get(game_info["mode"], game_info["mode"]) if game_info else None
             game_name = game_info["name"] if game_info else None
+            show_code = b.is_public or is_owner
             bot_list.append({
                 "id": b.id,
                 "name": b.name,
                 "game_mode": game_mode,
                 "game_name": game_name,
-                "code": b.code if b.is_public else None,
+                "code": b.code if show_code else None,
                 "is_public": b.is_public,
                 "version": b.version,
                 "wins": b.wins,
