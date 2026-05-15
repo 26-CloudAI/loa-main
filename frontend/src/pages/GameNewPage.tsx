@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_ID } from '../dev/mock'
-import PythonEditor from '../components/PythonEditor'
+import BotCodeInput from '../components/BotCodeInput'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
@@ -440,7 +440,7 @@ export default function GameNewPage() {
             </div>
           </section>
 
-          {/* 코드 에디터 */}
+          {/* 코드 입력 (직접입력 / 파일 업로드) */}
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-gray-300">봇 코드 (Python)</label>
@@ -453,10 +453,11 @@ export default function GameNewPage() {
                 {codeOverLimit && ' — 초과'}
               </span>
             </div>
-            <PythonEditor
+            <BotCodeInput
               value={code}
               onChange={setCode}
               hasError={codeOverLimit}
+              accentColor="indigo"
             />
             {codeOverLimit && (
               <p className="text-red-400 text-xs">코드가 50KB를 초과합니다. 줄여주세요.</p>

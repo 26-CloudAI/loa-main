@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import PythonEditor from '../components/PythonEditor'
+import BotCodeInput from '../components/BotCodeInput'
 
 const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 const MAX_CODE_BYTES = 50 * 1024
@@ -269,7 +269,7 @@ export default function MockStocksNewPage() {
             />
           </section>
 
-          {/* 코드 에디터 */}
+          {/* 코드 입력 (직접입력 / 파일 업로드) */}
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-gray-300">봇 코드 (Python)</label>
@@ -278,10 +278,11 @@ export default function MockStocksNewPage() {
                 {codeOverLimit && ' — 초과'}
               </span>
             </div>
-            <PythonEditor
+            <BotCodeInput
               value={code}
               onChange={setCode}
               hasError={codeOverLimit}
+              accentColor="green"
             />
           </section>
 
