@@ -38,7 +38,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from ..bot_interface import BotInterface
-from ..config import DEFAULT_CONFIG
+from ..config import DEFAULT_CONFIG, boss_battle_config
 from . import settings as _settings
 from .config import DEFAULT_SERVER_CONFIG, ServerConfig
 from .game_session import GameRegistry, GameSession
@@ -534,9 +534,13 @@ def create_app(
                 )
                 bot_name_to_db_id[bot_name] = new_bot.id
 
+        # 모드별 게임 설정 (보스전은 지역 config 오버라이드, 전역 설정 불변)
+        game_cfg = boss_battle_config() if mode == "boss" else DEFAULT_CONFIG
+
         # 게임 세션 생성
         session = registry.create_game(
             game_repo=repo,
+            game_config=game_cfg,
             tick_interval=tick_interval,
             seed=seed,
         )
@@ -552,10 +556,14 @@ def create_app(
             existing_ids.add(b["bot_id"])
             participant_specs.append((b["bot_id"], False))
 
+        _BOSS_MAX_USER_BOTS = 3  # 보스전 유저 봇 최대 수
         if mode == "boss":
-            # 보스전: 유저 봇 1명 + 보스봇 1명 (난이도별)
-            if len(bot_interfaces) != 1:
-                raise HTTPException(400, "보스전은 봇 1개만 등록할 수 있습니다.")
+            # 보스전: 유저 봇 1~3개 + 보스봇 1개 (난이도별)
+            if not (1 <= len(bot_interfaces) <= _BOSS_MAX_USER_BOTS):
+                raise HTTPException(
+                    400,
+                    f"보스전은 봇 1~{_BOSS_MAX_USER_BOTS}개를 등록할 수 있습니다.",
+                )
             boss_bot = _create_boss_bot(
                 existing_ids,
                 difficulty=difficulty,
