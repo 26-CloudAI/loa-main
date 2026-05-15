@@ -105,3 +105,48 @@ def get_generation(gcs_uri: str = "") -> Optional[int]:
 
 def local_cache_path() -> Path:
     return _LOCAL_CACHE
+
+
+def _sibling_uri(suffix: str) -> str:
+    """weights URI와 같은 디렉토리의 파일 URI 반환. (예: training_meta.json)"""
+    if not _GCS_URI:
+        return ""
+    base = _GCS_URI.rsplit("/", 1)[0]
+    return f"{base}/{suffix}"
+
+
+def upload_json(data: dict, filename: str) -> bool:
+    """임의 dict를 JSON으로 GCS에 업로드. weights와 같은 버킷/디렉토리."""
+    uri = _sibling_uri(filename)
+    if not uri:
+        return False
+    try:
+        import json
+        from google.cloud import storage  # type: ignore
+        bucket_name, blob_name = _parse_uri(uri)
+        client = storage.Client()
+        blob = client.bucket(bucket_name).blob(blob_name)
+        blob.upload_from_string(json.dumps(data, ensure_ascii=False), content_type="application/json")
+        logger.info("JSON uploaded: %s → %s", filename, uri)
+        return True
+    except Exception as exc:
+        logger.error("upload_json failed (%s): %s", filename, exc)
+        return False
+
+
+def download_json(filename: str) -> Optional[dict]:
+    """GCS에서 JSON 파일 다운로드. 없거나 실패 시 None."""
+    uri = _sibling_uri(filename)
+    if not uri:
+        return None
+    try:
+        import json
+        from google.cloud import storage  # type: ignore
+        bucket_name, blob_name = _parse_uri(uri)
+        blob = storage.Client().bucket(bucket_name).blob(blob_name)
+        if not blob.exists():
+            return None
+        return json.loads(blob.download_as_text())
+    except Exception as exc:
+        logger.error("download_json failed (%s): %s", filename, exc)
+        return None
