@@ -126,6 +126,7 @@ export default function MockStocksNewPage() {
   const [minBots, setMinBots] = useState<number | ''>(4)
   const [tickInterval, setTickInterval] = useState(0.1)
   const [seed, setSeed] = useState('')
+  const [isPublic, setIsPublic] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [showRules, setShowRules] = useState(false)
@@ -192,7 +193,7 @@ export default function MockStocksNewPage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          bots: [{ bot_id: botId.trim() || 'my_bot', code }],
+          bots: [{ bot_id: botId.trim() || 'my_bot', code, is_public: isPublic }],
           tick_interval: tickInterval,
           fill_with_ai: fillWithAi,
           min_bots: minBots || 2,
@@ -292,6 +293,21 @@ export default function MockStocksNewPage() {
           {/* 게임 옵션 */}
           <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
+
+            {/* 봇 코드 공개 여부 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-white">봇 코드 공개</p>
+                <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPublic((v) => !v)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-green-600' : 'bg-gray-700'}`}
+              >
+                <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
 
             <div className="flex items-center justify-between">
               <div>

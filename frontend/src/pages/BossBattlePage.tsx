@@ -161,6 +161,7 @@ export default function BossBattlePage() {
   const [seed, setSeed] = useState('')
   const [difficulty, setDifficulty] = useState<Difficulty>('중')
 
+  const [isPublic, setIsPublic] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -182,7 +183,7 @@ export default function BossBattlePage() {
 
     try {
       const body: Record<string, unknown> = {
-        bots: [{ bot_id: botId.trim() || 'challenger', code }],
+        bots: [{ bot_id: botId.trim() || 'challenger', code, is_public: isPublic }],
         tick_interval: tickInterval,
         mode: 'boss',
         difficulty,
@@ -288,6 +289,21 @@ export default function BossBattlePage() {
           {/* 게임 옵션 */}
           <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
+
+            {/* 봇 코드 공개 여부 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-white">봇 코드 공개</p>
+                <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPublic((v) => !v)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-red-600' : 'bg-gray-700'}`}
+              >
+                <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">

@@ -4,16 +4,23 @@ import { useAuth } from '../context/AuthContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
+const MODE_STYLE: Record<string, string> = {
+  '배틀로얄': 'bg-indigo-600/30 text-indigo-300 border border-indigo-600/50',
+  '보스전':   'bg-red-700/30 text-red-300 border border-red-700/50',
+  '모의주식': 'bg-emerald-600/30 text-emerald-300 border border-emerald-600/50',
+}
+
 interface BotInfo {
   id: number
   name: string
-  description: string
-  code: string
+  game_mode: string | null
+  game_name: string | null
+  code: string | null
+  is_public: boolean
   version: number
   wins: number
   losses: number
   games_played: number
-  win_rate: number
   updated_at: string
 }
 
@@ -150,12 +157,28 @@ export default function UserBotDetailPage() {
                           : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
                       }`}
                     >
-                      <div className="font-medium text-sm truncate">{bot.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">v{bot.version}</div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        <span className="text-green-400">{bot.wins}승</span>
-                        {' / '}
-                        <span className="text-red-400">{bot.losses}패</span>
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="font-medium text-sm truncate">{bot.name}</span>
+                        {bot.game_mode && (
+                          <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${MODE_STYLE[bot.game_mode] ?? 'bg-gray-600/20 text-gray-400'}`}>
+                            {bot.game_mode}
+                          </span>
+                        )}
+                      </div>
+                      {bot.game_name && (
+                        <div className="text-xs text-gray-500 mt-0.5 truncate">{bot.game_name}</div>
+                      )}
+                      <div className="text-xs mt-1 flex items-center gap-1.5">
+                        {bot.games_played === 0 ? (
+                          <span className="text-gray-500">미경기</span>
+                        ) : bot.wins > 0 ? (
+                          <span className="text-green-400">승</span>
+                        ) : (
+                          <span className="text-red-400">패</span>
+                        )}
+                        {!bot.is_public && (
+                          <span className="text-gray-600">🔒</span>
+                        )}
                       </div>
                     </button>
                   ))}
@@ -169,19 +192,27 @@ export default function UserBotDetailPage() {
                         <span className="font-medium">{selectedBot.name}</span>
                         <span className="ml-2 text-xs text-gray-500">v{selectedBot.version}</span>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        승률 {(selectedBot.win_rate * 100).toFixed(1)}% ({selectedBot.games_played}게임)
+                      <div className="flex items-center gap-1.5">
+                        {selectedBot.game_mode && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${MODE_STYLE[selectedBot.game_mode] ?? 'bg-gray-600/20 text-gray-400'}`}>
+                            {selectedBot.game_mode}
+                          </span>
+                        )}
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${selectedBot.is_public ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-gray-600/20 text-gray-400 border border-gray-600/50'}`}>
+                          {selectedBot.is_public ? '공개' : '비공개'}
+                        </span>
                       </div>
                     </div>
-                    {selectedBot.description && (
-                      <div className="px-5 py-2 border-b border-gray-700 text-sm text-gray-400 bg-gray-850">
-                        {selectedBot.description}
-                      </div>
-                    )}
                     <div className="flex-1 overflow-auto">
-                      <pre className="px-5 py-4 text-xs font-mono text-gray-200 leading-relaxed whitespace-pre">
-                        {selectedBot.code}
-                      </pre>
+                      {selectedBot.code ? (
+                        <pre className="px-5 py-4 text-xs font-mono text-gray-200 leading-relaxed whitespace-pre">
+                          {selectedBot.code}
+                        </pre>
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <p className="text-gray-500 text-sm">🔒 비공개 코드입니다.</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
