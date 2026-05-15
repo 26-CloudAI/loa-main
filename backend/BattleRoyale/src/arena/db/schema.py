@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS bots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_bots_user_id ON bots(user_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bots_user_name ON bots(user_id, name);
+CREATE INDEX IF NOT EXISTS idx_bots_user_name ON bots(user_id, name);
 
 -- 게임 세션 기록
 CREATE TABLE IF NOT EXISTS games (
@@ -218,7 +218,7 @@ CREATE TABLE IF NOT EXISTS bots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_bots_user_id ON bots(user_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bots_user_name ON bots(user_id, name);
+CREATE INDEX IF NOT EXISTS idx_bots_user_name ON bots(user_id, name);
 
 -- 게임 세션 기록
 CREATE TABLE IF NOT EXISTS games (
@@ -483,6 +483,19 @@ def _migrate_sqlite(conn: sqlite3.Connection) -> None:
     if "is_public" not in bot_cols:
         conn.execute("ALTER TABLE bots ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0")
 
+    # 유니크 인덱스 → 일반 인덱스로 변경 (같은 이름 봇 중복 허용)
+    indexes = {row[1] for row in conn.execute("PRAGMA index_list(bots)").fetchall()}
+    if "idx_bots_user_name" in indexes:
+        idx_info = conn.execute("PRAGMA index_info(idx_bots_user_name)").fetchall()
+        is_unique = any(
+            row[0] for row in conn.execute(
+                "SELECT \"unique\" FROM pragma_index_list('bots') WHERE name='idx_bots_user_name'"
+            ).fetchall()
+        )
+        if is_unique:
+            conn.execute("DROP INDEX IF EXISTS idx_bots_user_name")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_bots_user_name ON bots(user_id, name)")
+
 
 def _migrate_postgresql(cur) -> None:
     """PostgreSQL 기존 DB에 필요한 컬럼/인덱스를 보강한다."""
@@ -530,6 +543,19 @@ def _migrate_postgresql(cur) -> None:
     )
     if cur.fetchone() is None:
         cur.execute("ALTER TABLE bots ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT FALSE")
+
+    # 유니크 인덱스 → 일반 인덱스로 변경
+    cur.execute(
+        "SELECT indexname FROM pg_indexes WHERE tablename='bots' AND indexname='idx_bots_user_name'"
+    )
+    if cur.fetchone():
+        cur.execute(
+            "SELECT indisunique FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='idx_bots_user_name'"
+        )
+        row = cur.fetchone()
+        if row and row[0]:
+            cur.execute("DROP INDEX IF EXISTS idx_bots_user_name")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_bots_user_name ON bots(user_id, name)")
 
 
 def get_schema_version(conn) -> int:
