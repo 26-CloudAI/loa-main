@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import AuthPage from './pages/AuthPage'
+import MainPage from './pages/MainPage'
 import GamesPage from './pages/GamesPage'
 import GameSelectPage from './pages/GameSelectPage'
 import GameNewPage from './pages/GameNewPage'
@@ -83,7 +84,8 @@ function AppRoutes() {
         path="/login"
         element={token ? <Navigate to="/games" replace /> : <AuthPage />}
       />
-      <Route path="/games" element={<GamesPage />} />
+      <Route path="/games" element={<MainPage />} />
+      <Route path="/games/list" element={<GamesPage />} />
       <Route path="/games/new" element={<GameSelectPage />} />
       <Route path="/games/new/battle-royale" element={<GameNewPage />} />
       <Route path="/games/new/boss-battle" element={<BossBattlePage />} />

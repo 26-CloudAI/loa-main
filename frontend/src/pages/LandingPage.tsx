@@ -1,4 +1,4 @@
-import { useEffect, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -34,6 +34,12 @@ const ANIM_CSS = `
   .lf5{animation:loa-flt  11s ease-in-out infinite;animation-delay:-7s}
   .lf6{animation:loa-fltr 10s ease-in-out infinite;animation-delay:-4s}
   .loa-glw{animation:loa-glw 4s ease-in-out infinite}
+  .loa-reveal{opacity:0;transform:translateY(44px);transition:opacity .85s cubic-bezier(.16,1,.3,1),transform .85s cubic-bezier(.16,1,.3,1)}
+  .loa-visible{opacity:1;transform:translateY(0)}
+  .loa-sect .sect-g1{opacity:0;transform:translateY(32px);transition:opacity .75s cubic-bezier(.16,1,.3,1),transform .75s cubic-bezier(.16,1,.3,1)}
+  .loa-sect .sect-g2{opacity:0;transform:translateY(32px);transition:opacity .75s .24s cubic-bezier(.16,1,.3,1),transform .75s .24s cubic-bezier(.16,1,.3,1)}
+  .loa-sect .sect-g3{opacity:0;transform:translateY(32px);transition:opacity .75s .48s cubic-bezier(.16,1,.3,1),transform .75s .48s cubic-bezier(.16,1,.3,1)}
+  .loa-sect.loa-visible .sect-g1,.loa-sect.loa-visible .sect-g2,.loa-sect.loa-visible .sect-g3{opacity:1;transform:translateY(0)}
 `
 
 export default function LandingPage() {
@@ -53,7 +59,7 @@ export default function LandingPage() {
   return (
     <div
       className="min-h-screen overflow-x-hidden"
-      style={{ background: '#0C0818', color: '#F0EBFF', fontFamily: '"JalnanGothic", system-ui, sans-serif' }}
+      style={{ background: '#1A1030', color: '#F0EBFF', fontFamily: '"JalnanGothic", system-ui, sans-serif' }}
     >
       <Nav token={token} ctaTo={ctaTo} />
       <HeroSection ctaTo={ctaTo} />
@@ -73,10 +79,9 @@ function Nav({ token, ctaTo }: { token: string | null; ctaTo: string }) {
     <header
       className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4"
       style={{
-        background: 'rgba(12,8,24,.88)',
+        background: 'rgba(26,16,48,.88)',
         backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
-        borderBottom: '1px solid rgba(255,255,255,.05)',
       }}
     >
       <Link
@@ -107,10 +112,13 @@ function Nav({ token, ctaTo }: { token: string | null; ctaTo: string }) {
         <Link
           to={ctaTo}
           style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             background: '#E8334A',
             color: '#fff',
             fontSize: 13,
-            fontWeight: 700,
+            fontWeight: 500,
             padding: '8px 18px',
             borderRadius: 6,
             textDecoration: 'none',
@@ -150,7 +158,7 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
       <FloatEl animCls="lf5" style={{ top: '42%', left: '4%',   fontSize: 40, color: '#9B59F5', opacity: .04 }}>✦</FloatEl>
       <FloatEl animCls="lf6" style={{ top: '38%', right: '5%',  fontSize: 44, color: '#F5A624', opacity: .05 }}>◆</FloatEl>
 
-      <div className="relative z-10" style={{ maxWidth: 680 }}>
+      <div className="relative z-10" style={{ maxWidth: 680, marginTop: -60 }}>
         {/* Live badge */}
         <div
           style={{
@@ -212,14 +220,17 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
           배틀로얄 · 보스전 · 모의주식 — 세 가지 전장이 기다립니다.
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
           <Link
             to={ctaTo}
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               background: '#E8334A',
               color: '#fff',
-              fontSize: 15,
-              fontWeight: 700,
+              fontSize: 17,
+              fontWeight: 500,
               letterSpacing: '0.06em',
               padding: '14px 36px',
               borderRadius: 8,
@@ -227,50 +238,11 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
               boxShadow: '0 4px 32px rgba(232,51,74,.38)',
             }}
           >
-            ▸ 지금 플레이하기
-          </Link>
-          <Link
-            to="/rankings"
-            style={{
-              color: '#9088B0',
-              fontSize: 14,
-              fontWeight: 600,
-              padding: '14px 24px',
-              borderRadius: 8,
-              textDecoration: 'none',
-              border: '1px solid rgba(144,136,176,.2)',
-            }}
-          >
-            리더보드 보기
+            지금 플레이하기 →
           </Link>
         </div>
       </div>
 
-      {/* Scroll hint */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 28,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 6,
-          color: '#2C2848',
-          fontSize: 10,
-          letterSpacing: '0.12em',
-        }}
-      >
-        <span>SCROLL</span>
-        <div
-          style={{
-            width: 1,
-            height: 36,
-            background: 'linear-gradient(to bottom, #2C2848, transparent)',
-          }}
-        />
-      </div>
     </section>
   )
 }
@@ -297,13 +269,40 @@ interface GameSectProps {
   floats: FloatDef[]
   visual: ReactNode
   reverse?: boolean
+  fadeInThreshold?: number
+  fadeOutThreshold?: number
 }
 
 function GameSect({
   num, title, sub, desc, features,
   accent, faint, border, glow,
   floats, visual, reverse,
+  fadeInThreshold = 0.35,
+  fadeOutThreshold = 0.7,
 }: GameSectProps) {
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+
+    const fadeInObs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) el.classList.add('loa-visible') },
+      { threshold: fadeInThreshold },
+    )
+    const fadeOutObs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting && entry.boundingClientRect.top > 0)
+          el.classList.remove('loa-visible')
+      },
+      { threshold: fadeOutThreshold },
+    )
+
+    fadeInObs.observe(el)
+    fadeOutObs.observe(el)
+    return () => { fadeInObs.disconnect(); fadeOutObs.disconnect() }
+  }, [])
+
   return (
     <section
       className="relative min-h-screen flex items-center overflow-hidden"
@@ -320,7 +319,8 @@ function GameSect({
       ))}
 
       <div
-        className="relative z-10 w-full max-w-6xl mx-auto px-8 py-24"
+        ref={contentRef}
+        className="loa-sect relative z-10 w-full max-w-6xl mx-auto px-8 py-24"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -330,40 +330,45 @@ function GameSect({
       >
         {/* Text column */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              background: faint,
-              border: `1px solid ${border}`,
-              borderRadius: 999,
-              padding: '4px 12px',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.12em',
-              color: accent,
-              marginBottom: 20,
-            }}
-          >
-            GAME MODE {num}
+          {/* Group 1: 뱃지 + 타이틀 + 소제목 */}
+          <div className="sect-g1">
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                background: faint,
+                border: `1px solid ${border}`,
+                borderRadius: 999,
+                padding: '4px 12px',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                color: accent,
+                marginBottom: 20,
+              }}
+            >
+              GAME MODE {num}
+            </div>
+
+            <h2
+              style={{
+                fontSize: 'clamp(30px, 3.8vw, 52px)',
+                fontWeight: 500,
+                lineHeight: 1.1,
+                letterSpacing: '-0.02em',
+                color: '#F0EBFF',
+                marginBottom: 10,
+              }}
+            >
+              {title}
+            </h2>
+
+            <p style={{ fontSize: 17, fontWeight: 600, color: accent, marginBottom: 16 }}>{sub}</p>
           </div>
 
-          <h2
-            style={{
-              fontSize: 'clamp(30px, 3.8vw, 52px)',
-              fontWeight: 500,
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-              color: '#F0EBFF',
-              marginBottom: 10,
-            }}
-          >
-            {title}
-          </h2>
-
-          <p style={{ fontSize: 17, fontWeight: 600, color: accent, marginBottom: 16 }}>{sub}</p>
-
+          {/* Group 2: 설명 */}
           <p
+            className="sect-g2"
             style={{
               fontSize: 15,
               color: '#726890',
@@ -375,7 +380,8 @@ function GameSect({
             {desc}
           </p>
 
-          <ul style={{ display: 'flex', flexDirection: 'column', gap: 12, listStyle: 'none', padding: 0 }}>
+          {/* Group 3: 특징 목록 */}
+          <ul className="sect-g3" style={{ display: 'flex', flexDirection: 'column', gap: 12, listStyle: 'none', padding: 0 }}>
             {features.map((f, i) => (
               <li
                 key={i}
@@ -390,8 +396,8 @@ function GameSect({
           </ul>
         </div>
 
-        {/* Visual column */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 256 }}>
+        {/* Visual column — Group 1과 함께 등장 */}
+        <div className="sect-g1" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 256 }}>
           {visual}
         </div>
       </div>
@@ -531,6 +537,8 @@ function BossBattleSection() {
       ]}
       visual={<BossVisual />}
       reverse
+      fadeInThreshold={0.5}
+      fadeOutThreshold={0.85}
     />
   )
 }
@@ -698,9 +706,32 @@ function StocksVisual() {
    Bottom CTA
 ═══════════════════════════════════════════ */
 function BottomCTA({ ctaTo, loggedIn }: { ctaTo: string; loggedIn: boolean }) {
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+
+    const fadeInObs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) el.classList.add('loa-visible') },
+      { threshold: 0.4 },
+    )
+    const fadeOutObs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting && entry.boundingClientRect.top > 0)
+          el.classList.remove('loa-visible')
+      },
+      { threshold: 0.7 },
+    )
+
+    fadeInObs.observe(el)
+    fadeOutObs.observe(el)
+    return () => { fadeInObs.disconnect(); fadeOutObs.disconnect() }
+  }, [])
+
   return (
     <section
-      className="relative flex flex-col items-center justify-center text-center py-36 px-6"
+      className="relative flex flex-col items-center justify-center text-center py-36 pb-28 px-6"
       style={{ borderTop: '1px solid rgba(255,255,255,.04)' }}
     >
       <div
@@ -710,7 +741,7 @@ function BottomCTA({ ctaTo, loggedIn }: { ctaTo: string; loggedIn: boolean }) {
             'radial-gradient(ellipse 60% 70% at 50% 50%, rgba(232,51,74,.07) 0%, transparent 70%)',
         }}
       />
-      <div className="relative z-10">
+      <div ref={contentRef} className="loa-reveal relative z-10">
         <h2
           style={{
             fontSize: 'clamp(26px, 3.8vw, 46px)',
@@ -728,19 +759,21 @@ function BottomCTA({ ctaTo, loggedIn }: { ctaTo: string; loggedIn: boolean }) {
         <Link
           to={ctaTo}
           style={{
-            display: 'inline-block',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             background: '#E8334A',
             color: '#fff',
-            fontSize: 15,
-            fontWeight: 700,
+            fontSize: 17,
+            fontWeight: 500,
             letterSpacing: '0.06em',
-            padding: '16px 44px',
+            padding: '11px 32px',
             borderRadius: 8,
             textDecoration: 'none',
             boxShadow: '0 4px 40px rgba(232,51,74,.32)',
           }}
         >
-          {loggedIn ? '아레나 입장 ▸' : '무료로 시작하기 ▸'}
+          {loggedIn ? '아레나 입장 →' : '무료로 시작하기 →'}
         </Link>
       </div>
     </section>
