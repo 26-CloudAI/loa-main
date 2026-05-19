@@ -184,8 +184,10 @@ def _pick_attack(
 def _try_lastbit(
     adj_enemies: list, pos_x: int, pos_y: int, energy: int, pos_to_energy: dict
 ) -> Optional[str]:
-    """인접 적 중 라스트힛 가능한 적 공격. 없으면 None."""
-    if energy < _ATTACK_COST:
+    """인접 적 중 라스트힛 가능한 적 공격. 없으면 None.
+    engine이 ATTACK_COST 차감 후 사망 판정하면서 공격을 취소하므로
+    실제로 적중하려면 energy > ATTACK_COST이어야 한다."""
+    if energy <= _ATTACK_COST:
         return None
     for adx, ady, _, atk in adj_enemies:
         if pos_to_energy.get((pos_x + adx, pos_y + ady), 999) <= _LASTBIT:

@@ -617,8 +617,11 @@ class RLBossBot(BotInterface):
         self, grid: list, pos_x: int, pos_y: int,
         energy: int, other_bots: list
     ) -> Optional[int]:
-        """인접 적 중 한 방에 처치 가능한 적 공격 인덱스. 없으면 None."""
-        if energy < _ATTACK_COST:
+        """인접 적 중 한 방에 처치 가능한 적 공격 인덱스. 없으면 None.
+        engine은 ATTACK_COST 차감 후 energy<=0이면 사망 처리하면서 공격을
+        취소한다. 따라서 공격이 실제로 적중하려면 energy > ATTACK_COST가
+        필요하다 (>= 가 아니라 >)."""
+        if energy <= _ATTACK_COST:
             return None
         pos_to_e = {
             (b["position"][0], b["position"][1]): b["energy"]
@@ -898,8 +901,29 @@ class RLBossBot(BotInterface):
             "target":        self._target.to_dict(),
             "buffer":        self._buffer.to_list() if save_buffer else [],
         }
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(data, f)
+        # Atomic write: tmp file + rename. SIGTERM/SIGKILL 도중에도
+        # 최종 파일은 항상 완전한 JSON 상태를 유지한다.
+        import os, tempfile
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=save_path.name + ".",
+            suffix=".tmp",
+            dir=str(save_path.parent),
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+            os.replace(tmp_path, save_path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def _load_checkpoint(self, path: Path) -> None:
         try:

@@ -17,12 +17,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
+
+# RLBossBot 싱글톤 보호용 락. _create_boss_bot은 FastAPI 워커 스레드 풀에서
+# 동시에 호출될 수 있으며, reset_for_episode 도중에 다른 요청이 같은 인스턴스를
+# 사용하면 _prev_state 등이 오염된다. 락으로 직렬화한다.
+_BOSS_BOT_LOCK = threading.Lock()
 
 # FastAPI import를 안전하게 처리
 try:
@@ -70,6 +76,32 @@ logger = logging.getLogger(__name__)
 #  콜드스타트 봇 팩토리 (인프로세스용)
 # ──────────────────────────────────────────────
 
+# 유저 코드 실행 시 노출할 builtins 화이트리스트(블랙리스트 기반).
+# 완전한 샌드박스는 아니지만 open/exec/eval/__import__/input 등을 제거해
+# 우발적 파일 IO·동적 import·대화형 차단을 한다. 진정한 격리는 Docker/seccomp가
+# 필요하지만 현재 인프라에서는 이 제한이 최소한의 방어선이다.
+_FORBIDDEN_BUILTINS = frozenset({
+    "open", "exec", "eval", "compile", "__import__",
+    "input", "breakpoint", "memoryview",
+    "globals", "vars",
+})
+
+
+def _restricted_builtins() -> dict:
+    import builtins as _b
+    safe = {}
+    for name in dir(_b):
+        if name.startswith("_"):
+            continue
+        if name in _FORBIDDEN_BUILTINS:
+            continue
+        safe[name] = getattr(_b, name)
+    return safe
+
+
+_RESTRICTED_BUILTINS = _restricted_builtins()
+
+
 class InProcessBot(BotInterface):
     """
     유저 코드를 같은 프로세스에서 실행하는 어댑터.
@@ -82,7 +114,7 @@ class InProcessBot(BotInterface):
         self._load_error: Optional[str] = None
 
         try:
-            local_ns: dict = {"__builtins__": __builtins__}
+            local_ns: dict = {"__builtins__": _RESTRICTED_BUILTINS}
             exec(code, local_ns)
             fn = local_ns.get("action")
             if fn is None or not callable(fn):
@@ -119,12 +151,16 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
 
     for i in range(count):
         cls_idx = i % len(bot_classes)
-        bot_id = f"{labels[cls_idx]}_{i:02d}"
+        # 이름 충돌 시 suffix를 증가시키며 빈 ID 탐색.
+        # (이전 구현은 for 루프 변수 i를 while 내부에서 재할당했는데, 다음 반복에서
+        #  range가 원래 시퀀스를 그대로 진행하므로 무한 충돌 가능성이 있었다.)
+        suffix = i
+        bot_id = f"{labels[cls_idx]}_{suffix:02d}"
         while bot_id in existing_ids:
-            i += count
-            bot_id = f"{labels[cls_idx]}_{i:02d}"
+            suffix += count
+            bot_id = f"{labels[cls_idx]}_{suffix:02d}"
         existing_ids.add(bot_id)
-        fillers.append(bot_classes[cls_idx](bot_id=bot_id, seed=i))
+        fillers.append(bot_classes[cls_idx](bot_id=bot_id, seed=suffix))
 
     return fillers
 
@@ -159,29 +195,35 @@ def _create_boss_bot(
     from bots.rl_boss_bot import RLBossBot
     import gcs_weights
 
-    # 싱글톤 캐시가 있으면 reset 후 재사용
-    if rl_singleton_state is not None:
-        cached = rl_singleton_state.get("rl_boss_bot")
-        if cached is not None:
-            try:
-                cached.reset_for_episode()
-                return cached
-            except Exception:
-                logger.exception("RLBossBot 싱글톤 reset 실패 — 새 인스턴스 생성")
+    # 동시 보스전 요청이 같은 인스턴스를 reset_for_episode하는 경쟁 상태를 방지.
+    # 락 내부에서 싱글톤 조회/reset/생성/저장을 모두 직렬화한다.
+    with _BOSS_BOT_LOCK:
+        if rl_singleton_state is not None:
+            cached = rl_singleton_state.get("rl_boss_bot")
+            if cached is not None:
+                try:
+                    cached.reset_for_episode()
+                    return cached
+                except Exception:
+                    logger.exception(
+                        "RLBossBot 싱글톤 reset 실패 — 새 인스턴스 생성"
+                    )
 
-    cache = gcs_weights.local_cache_path()
-    # 캐시가 없고 GCS가 활성화된 경우 서버 시작 시 다운로드 실패를 재시도
-    if not cache.exists() and gcs_weights.enabled():
-        logger.info("보스봇 가중치 캐시 없음 — GCS 재다운로드 시도")
-        gcs_weights.download()
-    weights_path = cache if cache.exists() else None
-    bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
+        cache = gcs_weights.local_cache_path()
+        # 캐시가 없고 GCS가 활성화된 경우 서버 시작 시 다운로드 실패를 재시도
+        if not cache.exists() and gcs_weights.enabled():
+            logger.info("보스봇 가중치 캐시 없음 — GCS 재다운로드 시도")
+            gcs_weights.download()
+        weights_path = cache if cache.exists() else None
+        bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
 
-    if rl_singleton_state is not None:
-        rl_singleton_state["rl_boss_bot"] = bot
-        logger.info("RLBossBot 싱글톤 인스턴스 생성 — 이후 보스전에서 재사용")
+        if rl_singleton_state is not None:
+            rl_singleton_state["rl_boss_bot"] = bot
+            logger.info(
+                "RLBossBot 싱글톤 인스턴스 생성 — 이후 보스전에서 재사용"
+            )
 
-    return bot
+        return bot
 
 # ──────────────────────────────────────────────
 #  Pydantic 스키마 (데이터 검증용) -> 클라이언트가 보낸 JSON울 파이썬 객체로 변환
@@ -311,6 +353,9 @@ def create_app(
         cleanup_task = asyncio.create_task(_cleanup_loop())
 
         # 보스봇 가중치 hot-reload 태스크 (10분 주기, GCS 설정 시에만)
+        # download만으로는 캐시 파일만 갱신되고 메모리의 RL 싱글톤은 그대로다.
+        # 새 generation을 감지하면 싱글톤을 무효화하여 다음 보스전에서 신규
+        # 가중치로 재생성되도록 한다. (락으로 동시 보스전과 직렬화.)
         reload_task = None
         if gcs_weights.enabled():
             _last_generation: list[int | None] = [gcs_weights.get_generation()]
@@ -318,11 +363,23 @@ def create_app(
             async def _weights_reload_loop():
                 while True:
                     await asyncio.sleep(600)
-                    gen = gcs_weights.get_generation()
-                    if gen is not None and gen != _last_generation[0]:
+                    try:
+                        gen = gcs_weights.get_generation()
+                        if gen is None or gen == _last_generation[0]:
+                            continue
                         gcs_weights.download()
+                        with _BOSS_BOT_LOCK:
+                            if state.get("rl_boss_bot") is not None:
+                                state["rl_boss_bot"] = None
+                                logger.info(
+                                    "보스봇 싱글톤 무효화 — 다음 보스전에서 신규 가중치 로드"
+                                )
                         _last_generation[0] = gen
                         logger.info("보스봇 가중치 갱신됨 (generation %s)", gen)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        logger.exception("가중치 hot-reload 실패")
 
             reload_task = asyncio.create_task(_weights_reload_loop())
 
@@ -627,24 +684,40 @@ def create_app(
             return
 
         # participant final_rank가 모두 기록될 때까지 대기 (최대 5초)
+        participants: list = []
         real_participants = []
         for _ in range(10):
             participants = _game_repo().get_participants(game_id)
-            real_participants = [p for p in participants if not p.is_ai_filler and not p.is_boss_bot and p.bot_id and p.final_rank]
+            real_participants = [
+                p for p in participants
+                if not p.is_ai_filler and not p.is_boss_bot
+                and p.bot_id and p.final_rank
+            ]
             if real_participants:
                 break
             await asyncio.sleep(0.5)
 
         # 보스전 결과 기록 — real_participants early-return 전에 처리해야 보스 승리도 기록됨
         if game_record and game_record.mode == "boss":
-            boss_participants = [p for p in participants if p.is_boss_bot and p.final_rank]
-            user_ranked = [p for p in participants
-                           if not p.is_ai_filler and not p.is_boss_bot and p.final_rank]
+            boss_participants = [
+                p for p in participants if p.is_boss_bot and p.final_rank
+            ]
+            user_ranked = [
+                p for p in participants
+                if not p.is_ai_filler and not p.is_boss_bot and p.final_rank
+            ]
             if boss_participants and user_ranked:
                 boss_rank = boss_participants[0].final_rank
                 best_user_rank = min(p.final_rank for p in user_ranked)
                 if boss_rank != best_user_rank:  # 동점(동일 rank)이면 draw — NULL 유지
-                    _game_repo().update_game_boss_result(game_id, boss_won=(boss_rank < best_user_rank))
+                    try:
+                        _game_repo().update_game_boss_result(
+                            game_id, boss_won=(boss_rank < best_user_rank)
+                        )
+                    except Exception:
+                        logger.exception(
+                            "보스전 결과 기록 실패 game=%s", game_id
+                        )
 
         if not real_participants:
             return

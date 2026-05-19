@@ -332,7 +332,9 @@ class RLBossBotTorch(BotInterface):
         )
 
     def _lastbit_idx(self, grid, pos_x, pos_y, energy, other_bots) -> Optional[int]:
-        if energy < _ATTACK_COST:
+        # engine은 ATTACK_COST 차감 후 energy<=0이면 사망 처리하면서 공격을
+        # 취소한다. 공격이 실제로 적중하려면 energy > ATTACK_COST가 필요.
+        if energy <= _ATTACK_COST:
             return None
         pos_to_e = {(b["position"][0], b["position"][1]): b["energy"] for b in other_bots}
         for dx, dy, _, atk_idx in _ADJ_DIRS:
@@ -535,7 +537,7 @@ class RLBossBotTorch(BotInterface):
     def save_weights(self, path=None) -> None:
         save_path = Path(path) if path is not None else _DEFAULT_WEIGHTS_PATH
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({
+        payload = {
             "version":       4,
             "n_features":    N_FEATURES,
             "n_hidden1":     N_HIDDEN1,
@@ -547,7 +549,25 @@ class RLBossBotTorch(BotInterface):
             "online":        self._online.state_dict(),
             "target":        self._target.state_dict(),
             "optimizer":     self._optimizer.state_dict(),
-        }, save_path)
+        }
+        # Atomic write: tmp 파일에 torch.save 후 os.replace.
+        # 다중 worker 환경에서 부분 쓰기로 인한 체크포인트 손상을 방지한다.
+        import os, tempfile
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=save_path.name + ".",
+            suffix=".tmp",
+            dir=str(save_path.parent),
+        )
+        os.close(fd)
+        try:
+            torch.save(payload, tmp_path)
+            os.replace(tmp_path, save_path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def _load_checkpoint(self, path: Path) -> None:
         try:

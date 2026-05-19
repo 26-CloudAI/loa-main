@@ -170,6 +170,7 @@ def _save_bot_history(history: list[dict], new_bot_ids: list[int]) -> None:
         gcs_weights.upload_json(history, HISTORY_FILENAME)
     else:
         local = _PROJECT_ROOT / "bots" / HISTORY_FILENAME
+        local.parent.mkdir(parents=True, exist_ok=True)
         local.write_text(json.dumps(history, ensure_ascii=False, indent=2))
 
 
@@ -178,14 +179,23 @@ def _select_training_bots(
 ) -> tuple[list[dict], list[int]]:
     """
     이미 학습한 봇을 제외하고 rating 상위 MAX_BOTS_PER_SESSION개 선택.
-    반환: (선택된 봇 목록, 선택된 봇 ID 목록)
+    반환: (선택된 봇 목록, 선택된 봇 ID 목록).
+    id/code 누락 항목은 안전하게 건너뛴다.
     """
     trained_ids: set[int] = set()
     for session in history:
         trained_ids.update(session.get("bot_ids", []))
 
-    new_bots = [b for b in quality_bots if b["id"] not in trained_ids]
-    # rating 상위 선택
+    def _valid(b: dict) -> bool:
+        return (
+            isinstance(b, dict)
+            and isinstance(b.get("id"), int)
+            and isinstance(b.get("code"), str)
+            and b["code"].strip()
+            and b["id"] not in trained_ids
+        )
+
+    new_bots = [b for b in quality_bots if _valid(b)]
     new_bots.sort(key=lambda x: x.get("rating", 0), reverse=True)
     selected = new_bots[:MAX_BOTS_PER_SESSION]
     return selected, [b["id"] for b in selected]
@@ -205,17 +215,44 @@ def _check_last_training_time(history: list[dict]) -> datetime | None:
 # 유저봇 어댑터
 # ---------------------------------------------------------------------------
 
+# 학습 VM에서 유저 코드를 실행하므로 가능한 한 능력을 제한한다.
+# 완전한 샌드박스는 아니지만 (실제 격리는 컨테이너/seccomp가 필요),
+# 우발적·평이한 악성 코드의 직접적인 자격증명 접근/파일 IO/네트워크를 차단한다.
+_FORBIDDEN_BUILTINS = frozenset({
+    "open", "exec", "eval", "compile", "__import__",
+    "input", "breakpoint", "memoryview",
+    "globals", "vars",
+})
+
+
+def _restricted_builtins() -> dict:
+    import builtins as _b
+    safe = {}
+    for name in dir(_b):
+        if name.startswith("_"):
+            continue
+        if name in _FORBIDDEN_BUILTINS:
+            continue
+        safe[name] = getattr(_b, name)
+    # 학습 봇이 필요로 할 수 있는 최소 객체만 노출
+    return safe
+
+
+_RESTRICTED_BUILTINS = _restricted_builtins()
+
+
 class _InProcessUserBot(BotInterface):
     def __init__(self, bot_id: str, code: str):
         self._bot_id = bot_id
         self._action_fn = None
         try:
-            ns: dict = {"__builtins__": __builtins__}
+            ns: dict = {"__builtins__": _RESTRICTED_BUILTINS}
             exec(code, ns)
             fn = ns.get("action")
             if callable(fn):
                 self._action_fn = fn
         except Exception:
+            # 악성/문법오류 코드는 STAY만 반환하도록 비활성 처리
             pass
 
     @property
@@ -463,9 +500,18 @@ def train(
         remain = max(1, deadline_seconds - (time.time() - t_start))
         p.join(timeout=remain)
         if p.is_alive():
-            logger.warning("런타임 상한 초과 — worker %d 강제 종료", p.pid)
+            logger.warning("런타임 상한 초과 — worker %d SIGTERM", p.pid)
             p.terminate()
-            p.join(timeout=5)
+            p.join(timeout=10)
+            if p.is_alive():
+                # SIGTERM 후에도 살아있으면 SIGKILL. (atomic save 적용된
+                # checkpoint는 SIGKILL에도 손상되지 않는다.)
+                logger.warning("worker %d SIGKILL", p.pid)
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+                p.join(timeout=5)
 
     # ── 결과 수집 ────────────────────────────────────────────────────────
     results = []

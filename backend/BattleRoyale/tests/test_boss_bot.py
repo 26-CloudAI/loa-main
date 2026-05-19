@@ -33,7 +33,6 @@ from bots.rl_boss_bot import (
     ALPHA,
     BUFFER_SIZE,
     ENERGY_CRITICAL,
-    ENERGY_MINE_COST,
     GAMMA,
     IDX_ATTACK_DOWN,
     IDX_ATTACK_LEFT,
@@ -256,19 +255,15 @@ class TestDQNetwork:
         q = net.forward(phi)
         assert np.allclose(q, net.b2)
 
-    def test_update_single_changes_weights(self):
+    def test_update_batch_changes_weights(self):
         net = DQNetwork(seed=0)
-        phi = np.ones(N_FEATURES, dtype=np.float32)
+        B = 4
+        phis = np.ones((B, N_FEATURES), dtype=np.float32)
+        actions = np.array([IDX_MINE] * B, dtype=np.int32)
+        targets = np.ones(B, dtype=np.float32)
         w2_before = net.W2.copy()
-        net.update_single(phi, IDX_MINE, td_target=1.0, alpha=ALPHA)
+        net.update_batch(phis, actions, targets, ALPHA)
         assert not np.allclose(net.W2, w2_before)
-
-    def test_update_single_returns_td_error(self):
-        net = DQNetwork(seed=0)
-        phi = np.zeros(N_FEATURES, dtype=np.float32)
-        # Q=b2[IDX_MINE]=0, target=1 → delta=1
-        delta = net.update_single(phi, IDX_MINE, td_target=1.0, alpha=ALPHA)
-        assert delta == pytest.approx(1.0, abs=1e-5)
 
     def test_update_batch_returns_loss(self):
         net = DQNetwork(seed=0)
@@ -418,11 +413,11 @@ class TestRLBossBotIntegration:
             action = boss.get_action(_make_state(tick=tick))
             assert action in [a.value for a in Action]
 
-    def test_shield_when_energy_critical(self):
-        """ENERGY_CRITICAL 이하 + 인접 광물/적 없음 → 실드 하드코딩."""
+    def test_energy_critical_no_target_falls_back_to_stay(self):
+        """ENERGY_CRITICAL 이하 + 인접 적/광물·시야 광물·기억 모두 없으면 STAY."""
         boss = _make_boss(epsilon=0.0)
         action = boss.get_action(_make_state(energy=ENERGY_CRITICAL))
-        assert action == Action.SHIELD.value
+        assert action == Action.STAY.value
 
     def test_zone_escape_toward_center(self):
         """자기장 안이면 중앙 방향으로 이동."""
