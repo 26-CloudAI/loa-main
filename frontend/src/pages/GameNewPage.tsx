@@ -477,9 +477,7 @@ export default function GameNewPage() {
               <button
                 type="button"
                 onClick={() => setIsPublic((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
-                  isPublic ? 'bg-indigo-600' : 'bg-gray-700'
-                }`}
+                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-indigo-600' : 'bg-gray-700'}`}
               >
                 <span
                   className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${
@@ -498,9 +496,7 @@ export default function GameNewPage() {
               <button
                 type="button"
                 onClick={() => setFillWithAi((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
-                  fillWithAi ? 'bg-indigo-600' : 'bg-gray-700'
-                }`}
+                className={`relative w-11 h-6 rounded-full transition-colors ${fillWithAi ? 'bg-indigo-600' : 'bg-gray-700'}`}
               >
                 <span
                   className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${
@@ -584,7 +580,7 @@ export default function GameNewPage() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-3 transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-3 transition-colors"
           >
             {submitting ? '게임 생성 중...' : '게임 시작'}
           </button>

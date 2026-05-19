@@ -59,7 +59,7 @@ export default function LandingPage() {
   return (
     <div
       className="min-h-screen overflow-x-hidden"
-      style={{ background: '#1A1030', color: '#F0EBFF', fontFamily: '"JalnanGothic", system-ui, sans-serif' }}
+      style={{ background: '#0D0F14', color: '#E8EAF0', fontFamily: '"JalnanGothic", system-ui, sans-serif' }}
     >
       <Nav token={token} ctaTo={ctaTo} />
       <HeroSection ctaTo={ctaTo} />
@@ -79,14 +79,14 @@ function Nav({ token, ctaTo }: { token: string | null; ctaTo: string }) {
     <header
       className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4"
       style={{
-        background: 'rgba(26,16,48,.88)',
+        background: 'rgba(13,15,20,.92)',
         backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
       }}
     >
       <Link
         to="/"
-        style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: '#F0EBFF' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: '#E8EAF0' }}
       >
         <span style={{ fontSize: 16, lineHeight: 1, color: '#E8334A' }}>◆</span>
         <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
@@ -97,14 +97,14 @@ function Nav({ token, ctaTo }: { token: string | null; ctaTo: string }) {
       <nav style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
         <Link
           to="/rankings"
-          style={{ color: '#726890', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
+          style={{ color: '#5A6270', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
         >
           리더보드
         </Link>
         {token && (
           <Link
             to="/games"
-            style={{ color: '#726890', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
+            style={{ color: '#5A6270', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
           >
             게임 목록
           </Link>
@@ -151,12 +151,12 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
       />
 
       {/* Floating symbols */}
-      <FloatEl animCls="lf1" style={{ top: '14%', left: '8%',   fontSize: 90, color: '#E8334A', opacity: .06 }}>◆</FloatEl>
-      <FloatEl animCls="lf2" style={{ top: '18%', right: '10%', fontSize: 65, color: '#9B59F5', opacity: .06 }}>◉</FloatEl>
-      <FloatEl animCls="lf3" style={{ bottom: '22%', left: '12%', fontSize: 50, color: '#F5A624', opacity: .06 }}>▲</FloatEl>
-      <FloatEl animCls="lf4" style={{ bottom: '18%', right: '9%', fontSize: 75, color: '#E8334A', opacity: .05 }}>◈</FloatEl>
-      <FloatEl animCls="lf5" style={{ top: '42%', left: '4%',   fontSize: 40, color: '#9B59F5', opacity: .04 }}>✦</FloatEl>
-      <FloatEl animCls="lf6" style={{ top: '38%', right: '5%',  fontSize: 44, color: '#F5A624', opacity: .05 }}>◆</FloatEl>
+      <FloatEl animCls="lf1" style={{ top: '14%', left: '8%',   fontSize: 90, color: '#E8334A', opacity: .18 }}>◆</FloatEl>
+      <FloatEl animCls="lf2" style={{ top: '18%', right: '10%', fontSize: 65, color: '#9B59F5', opacity: .18 }}>◉</FloatEl>
+      <FloatEl animCls="lf3" style={{ bottom: '22%', left: '12%', fontSize: 50, color: '#F5A624', opacity: .18 }}>▲</FloatEl>
+      <FloatEl animCls="lf4" style={{ bottom: '18%', right: '9%', fontSize: 75, color: '#E8334A', opacity: .15 }}>◈</FloatEl>
+      <FloatEl animCls="lf5" style={{ top: '42%', left: '4%',   fontSize: 40, color: '#9B59F5', opacity: .13 }}>✦</FloatEl>
+      <FloatEl animCls="lf6" style={{ top: '38%', right: '5%',  fontSize: 44, color: '#F5A624', opacity: .15 }}>◆</FloatEl>
 
       <div className="relative z-10" style={{ maxWidth: 680, marginTop: -60 }}>
         {/* Live badge */}
@@ -164,12 +164,12 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 7,
+            gap: 8,
             background: 'rgba(232,51,74,.12)',
             border: '1px solid rgba(232,51,74,.3)',
             borderRadius: 999,
-            padding: '5px 14px',
-            fontSize: 10,
+            padding: '7px 18px',
+            fontSize: 11,
             fontWeight: 700,
             letterSpacing: '0.1em',
             color: '#F05E70',
@@ -178,15 +178,15 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
         >
           <span
             style={{
-              width: 6,
-              height: 6,
+              width: 7,
+              height: 7,
               borderRadius: '50%',
               background: '#E8334A',
               boxShadow: '0 0 6px #E8334A',
-              display: 'inline-block',
+              flexShrink: 0,
             }}
           />
-          AI BATTLE ARENA
+          <span style={{ lineHeight: 1, display: 'block', transform: 'translateY(1.75px)' }}>AI BATTLE ARENA</span>
         </div>
 
         <h1
@@ -195,7 +195,7 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
             fontWeight: 500,
             lineHeight: 1.08,
             letterSpacing: '-0.025em',
-            color: '#F0EBFF',
+            color: '#E8EAF0',
             marginBottom: 22,
           }}
         >
@@ -207,7 +207,7 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
         <p
           style={{
             fontSize: 17,
-            color: '#726890',
+            color: '#5A6270',
             lineHeight: 1.75,
             marginBottom: 40,
             maxWidth: 480,
@@ -356,7 +356,7 @@ function GameSect({
                 fontWeight: 500,
                 lineHeight: 1.1,
                 letterSpacing: '-0.02em',
-                color: '#F0EBFF',
+                color: '#E8EAF0',
                 marginBottom: 10,
               }}
             >
@@ -371,7 +371,7 @@ function GameSect({
             className="sect-g2"
             style={{
               fontSize: 15,
-              color: '#726890',
+              color: '#5A6270',
               lineHeight: 1.8,
               marginBottom: 28,
               maxWidth: 420,
@@ -385,7 +385,7 @@ function GameSect({
             {features.map((f, i) => (
               <li
                 key={i}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#9088B0' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#8090A0' }}
               >
                 <span
                   style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0 }}
@@ -420,17 +420,17 @@ function BattleRoyaleSection() {
         '실시간 전장 관전 및 플레이 로그',
         'ELO 기반 랭킹 시스템',
       ]}
-      accent="#E8334A"
-      faint="rgba(232,51,74,.12)"
-      border="rgba(232,51,74,.35)"
-      glow="radial-gradient(ellipse 55% 70% at 75% 50%, rgba(232,51,74,.1) 0%, transparent 70%)"
+      accent="#9B59F5"
+      faint="rgba(155,89,245,.12)"
+      border="rgba(155,89,245,.35)"
+      glow="radial-gradient(ellipse 55% 70% at 75% 50%, rgba(155,89,245,.1) 0%, transparent 70%)"
       floats={[
-        { sym: '◆', animCls: 'lf1', style: { top: '8%',   right: '5%',  fontSize: 110, color: '#E8334A', opacity: .07 } },
-        { sym: '✦', animCls: 'lf2', style: { bottom: '12%', right: '18%', fontSize: 70, color: '#E8334A', opacity: .06 } },
-        { sym: '◈', animCls: 'lf3', style: { top: '35%',  right: '32%', fontSize: 45, color: '#F0EBFF', opacity: .04 } },
-        { sym: '▲', animCls: 'lf4', style: { bottom: '28%', right: '6%', fontSize: 55, color: '#E8334A', opacity: .07 } },
-        { sym: '◉', animCls: 'lf5', style: { top: '55%',  right: '24%', fontSize: 65, color: '#F0EBFF', opacity: .03 } },
-        { sym: '◆', animCls: 'lf6', style: { top: '18%',  right: '44%', fontSize: 38, color: '#E8334A', opacity: .04 } },
+        { sym: '◆', animCls: 'lf1', style: { top: '8%',   right: '5%',  fontSize: 110, color: '#9B59F5', opacity: .07 } },
+        { sym: '✦', animCls: 'lf2', style: { bottom: '12%', right: '18%', fontSize: 70, color: '#9B59F5', opacity: .06 } },
+        { sym: '◈', animCls: 'lf3', style: { top: '35%',  right: '32%', fontSize: 45, color: '#E8EAF0', opacity: .04 } },
+        { sym: '▲', animCls: 'lf4', style: { bottom: '28%', right: '6%', fontSize: 55, color: '#9B59F5', opacity: .07 } },
+        { sym: '◉', animCls: 'lf5', style: { top: '55%',  right: '24%', fontSize: 65, color: '#E8EAF0', opacity: .03 } },
+        { sym: '◆', animCls: 'lf6', style: { top: '18%',  right: '44%', fontSize: 38, color: '#9B59F5', opacity: .04 } },
       ]}
       visual={<BRVisual />}
     />
@@ -439,112 +439,6 @@ function BattleRoyaleSection() {
 
 function BRVisual() {
   const dots = [0, 60, 120, 180, 240, 300]
-  return (
-    <div
-      style={{
-        position: 'relative',
-        width: 280,
-        height: 280,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(232,51,74,.2) 0%, transparent 70%)',
-        }}
-      />
-      <div
-        style={{
-          fontSize: 96,
-          color: '#E8334A',
-          lineHeight: 1,
-          textShadow: '0 0 50px rgba(232,51,74,.5)',
-          zIndex: 1,
-        }}
-      >
-        ◆
-      </div>
-      {dots.map((deg, i) => {
-        const rad = (deg * Math.PI) / 180
-        return (
-          <div
-            key={i}
-            style={{
-              position: 'absolute',
-              width: i === 0 ? 9 : 6,
-              height: i === 0 ? 9 : 6,
-              borderRadius: '50%',
-              background: i === 0 ? '#E8334A' : '#5A1120',
-              top: `${50 + 43 * Math.sin(rad)}%`,
-              left: `${50 + 43 * Math.cos(rad)}%`,
-              transform: 'translate(-50%, -50%)',
-              boxShadow: i === 0 ? '0 0 10px #E8334A' : 'none',
-            }}
-          />
-        )
-      })}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: '50%',
-          border: '1px solid rgba(232,51,74,.2)',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          inset: 18,
-          borderRadius: '50%',
-          border: '1px dashed rgba(232,51,74,.1)',
-        }}
-      />
-    </div>
-  )
-}
-
-/* ═══════════════════════════════════════════
-   Boss Battle
-═══════════════════════════════════════════ */
-function BossBattleSection() {
-  return (
-    <GameSect
-      num="02"
-      title="보스전"
-      sub="거대한 적을 쓰러뜨려라"
-      desc="강력한 보스 몬스터에 맞서 여러 봇이 협력 또는 경쟁하며 싸우는 모드. 최대 피해를 입힌 봇이 승리를 가져갑니다."
-      features={[
-        '단계별 보스 패턴 — 높아지는 난이도',
-        '협력 / 경쟁 전략의 갈림길',
-        '처치 기여도 기반 점수 산정',
-      ]}
-      accent="#9B59F5"
-      faint="rgba(155,89,245,.12)"
-      border="rgba(155,89,245,.35)"
-      glow="radial-gradient(ellipse 55% 70% at 25% 50%, rgba(155,89,245,.1) 0%, transparent 70%)"
-      floats={[
-        { sym: '◉', animCls: 'lf1', style: { top: '8%',   left: '5%',  fontSize: 110, color: '#9B59F5', opacity: .07 } },
-        { sym: '▲', animCls: 'lf2', style: { bottom: '12%', left: '18%', fontSize: 70, color: '#9B59F5', opacity: .06 } },
-        { sym: '◆', animCls: 'lf3', style: { top: '35%',  left: '32%', fontSize: 45, color: '#F0EBFF', opacity: .04 } },
-        { sym: '✦', animCls: 'lf4', style: { bottom: '28%', left: '6%', fontSize: 55, color: '#9B59F5', opacity: .07 } },
-        { sym: '◈', animCls: 'lf5', style: { top: '55%',  left: '24%', fontSize: 65, color: '#F0EBFF', opacity: .03 } },
-        { sym: '◉', animCls: 'lf6', style: { top: '18%',  left: '44%', fontSize: 38, color: '#9B59F5', opacity: .04 } },
-      ]}
-      visual={<BossVisual />}
-      reverse
-      fadeInThreshold={0.5}
-      fadeOutThreshold={0.85}
-    />
-  )
-}
-
-function BossVisual() {
-  const dots = [0, 45, 90, 135, 180, 225, 270, 315]
   return (
     <div
       style={{
@@ -573,6 +467,112 @@ function BossVisual() {
           zIndex: 1,
         }}
       >
+        ◆
+      </div>
+      {dots.map((deg, i) => {
+        const rad = (deg * Math.PI) / 180
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              width: i === 0 ? 9 : 6,
+              height: i === 0 ? 9 : 6,
+              borderRadius: '50%',
+              background: i === 0 ? '#9B59F5' : '#2D1475',
+              top: `${50 + 43 * Math.sin(rad)}%`,
+              left: `${50 + 43 * Math.cos(rad)}%`,
+              transform: 'translate(-50%, -50%)',
+              boxShadow: i === 0 ? '0 0 10px #9B59F5' : 'none',
+            }}
+          />
+        )
+      })}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: '50%',
+          border: '1px solid rgba(155,89,245,.2)',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 18,
+          borderRadius: '50%',
+          border: '1px dashed rgba(155,89,245,.1)',
+        }}
+      />
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════
+   Boss Battle
+═══════════════════════════════════════════ */
+function BossBattleSection() {
+  return (
+    <GameSect
+      num="02"
+      title="보스전"
+      sub="거대한 적을 쓰러뜨려라"
+      desc="강력한 보스 몬스터에 맞서 여러 봇이 협력 또는 경쟁하며 싸우는 모드. 최대 피해를 입힌 봇이 승리를 가져갑니다."
+      features={[
+        '단계별 보스 패턴 — 높아지는 난이도',
+        '협력 / 경쟁 전략의 갈림길',
+        '처치 기여도 기반 점수 산정',
+      ]}
+      accent="#E8334A"
+      faint="rgba(232,51,74,.12)"
+      border="rgba(232,51,74,.35)"
+      glow="radial-gradient(ellipse 55% 70% at 25% 50%, rgba(232,51,74,.1) 0%, transparent 70%)"
+      floats={[
+        { sym: '◉', animCls: 'lf1', style: { top: '8%',   left: '5%',  fontSize: 110, color: '#E8334A', opacity: .07 } },
+        { sym: '▲', animCls: 'lf2', style: { bottom: '12%', left: '18%', fontSize: 70, color: '#E8334A', opacity: .06 } },
+        { sym: '◆', animCls: 'lf3', style: { top: '35%',  left: '32%', fontSize: 45, color: '#E8EAF0', opacity: .04 } },
+        { sym: '✦', animCls: 'lf4', style: { bottom: '28%', left: '6%', fontSize: 55, color: '#E8334A', opacity: .07 } },
+        { sym: '◈', animCls: 'lf5', style: { top: '55%',  left: '24%', fontSize: 65, color: '#E8EAF0', opacity: .03 } },
+        { sym: '◉', animCls: 'lf6', style: { top: '18%',  left: '44%', fontSize: 38, color: '#E8334A', opacity: .04 } },
+      ]}
+      visual={<BossVisual />}
+      reverse
+      fadeInThreshold={0.5}
+      fadeOutThreshold={0.85}
+    />
+  )
+}
+
+function BossVisual() {
+  const dots = [0, 45, 90, 135, 180, 225, 270, 315]
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: 280,
+        height: 280,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(232,51,74,.2) 0%, transparent 70%)',
+        }}
+      />
+      <div
+        style={{
+          fontSize: 96,
+          color: '#E8334A',
+          lineHeight: 1,
+          textShadow: '0 0 50px rgba(232,51,74,.5)',
+          zIndex: 1,
+        }}
+      >
         ◉
       </div>
       {dots.map((deg, i) => {
@@ -585,18 +585,18 @@ function BossVisual() {
               width: i % 2 === 0 ? 8 : 5,
               height: i % 2 === 0 ? 8 : 5,
               borderRadius: '50%',
-              background: i % 2 === 0 ? '#9B59F5' : '#3E0E9A',
+              background: i % 2 === 0 ? '#E8334A' : '#6B0E1A',
               top: `${50 + 43 * Math.sin(rad)}%`,
               left: `${50 + 43 * Math.cos(rad)}%`,
               transform: 'translate(-50%, -50%)',
-              boxShadow: i % 2 === 0 ? '0 0 8px #9B59F5' : 'none',
+              boxShadow: i % 2 === 0 ? '0 0 8px #E8334A' : 'none',
             }}
           />
         )
       })}
-      <div style={{ position: 'absolute', inset: 0,  borderRadius: '50%', border: '1px solid rgba(155,89,245,.2)' }} />
-      <div style={{ position: 'absolute', inset: 18, borderRadius: '50%', border: '1px dashed rgba(155,89,245,.1)' }} />
-      <div style={{ position: 'absolute', inset: 36, borderRadius: '50%', border: '1px solid rgba(155,89,245,.07)' }} />
+      <div style={{ position: 'absolute', inset: 0,  borderRadius: '50%', border: '1px solid rgba(232,51,74,.2)' }} />
+      <div style={{ position: 'absolute', inset: 18, borderRadius: '50%', border: '1px dashed rgba(232,51,74,.1)' }} />
+      <div style={{ position: 'absolute', inset: 36, borderRadius: '50%', border: '1px solid rgba(232,51,74,.07)' }} />
     </div>
   )
 }
@@ -623,9 +623,9 @@ function MockStocksSection() {
       floats={[
         { sym: '▲', animCls: 'lf1', style: { top: '8%',   right: '5%',  fontSize: 100, color: '#F5A624', opacity: .08 } },
         { sym: '◆', animCls: 'lf2', style: { bottom: '12%', right: '18%', fontSize: 65, color: '#F5A624', opacity: .06 } },
-        { sym: '✦', animCls: 'lf3', style: { top: '35%',  right: '32%', fontSize: 45, color: '#F0EBFF', opacity: .04 } },
+        { sym: '✦', animCls: 'lf3', style: { top: '35%',  right: '32%', fontSize: 45, color: '#E8EAF0', opacity: .04 } },
         { sym: '◈', animCls: 'lf4', style: { bottom: '28%', right: '6%', fontSize: 55, color: '#F5A624', opacity: .07 } },
-        { sym: '◉', animCls: 'lf5', style: { top: '55%',  right: '24%', fontSize: 60, color: '#F0EBFF', opacity: .03 } },
+        { sym: '◉', animCls: 'lf5', style: { top: '55%',  right: '24%', fontSize: 60, color: '#E8EAF0', opacity: .03 } },
         { sym: '▲', animCls: 'lf6', style: { top: '18%',  right: '44%', fontSize: 38, color: '#F5A624', opacity: .05 } },
       ]}
       visual={<StocksVisual />}
@@ -640,7 +640,7 @@ function StocksVisual() {
       style={{
         width: 300,
         padding: '16px 20px 12px',
-        background: 'rgba(20,12,36,.85)',
+        background: 'rgba(22,26,35,.85)',
         borderRadius: 14,
         border: '1px solid rgba(245,166,36,.2)',
         boxShadow: '0 0 40px rgba(245,166,36,.07)',
@@ -747,13 +747,13 @@ function BottomCTA({ ctaTo, loggedIn }: { ctaTo: string; loggedIn: boolean }) {
             fontSize: 'clamp(26px, 3.8vw, 46px)',
             fontWeight: 500,
             letterSpacing: '-0.02em',
-            color: '#F0EBFF',
+            color: '#E8EAF0',
             marginBottom: 14,
           }}
         >
           지금 바로 참전하세요
         </h2>
-        <p style={{ fontSize: 16, color: '#554C78', marginBottom: 36 }}>
+        <p style={{ fontSize: 16, color: '#5A6270', marginBottom: 36 }}>
           Python 봇 하나면 충분합니다.
         </p>
         <Link

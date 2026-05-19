@@ -1,6 +1,18 @@
 # Dependencies
 node_modules/
 
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# 학습 가중치 / 로컬 아티팩트 (GCS로 관리)
+backend/BattleRoyale/bots/trained_weights.json
+backend/BattleRoyale/bots/trained_weights.pt
+backend/BattleRoyale/bots/*.bak*
+backend/BattleRoyale/bots/quality_bots.json
+
 # Claude Code
 .claude/
 
