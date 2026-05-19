@@ -10,7 +10,6 @@ const PANEL_BG = '#161A23'
 const PANEL_BORDER = 'rgba(255,255,255,.06)'
 const MUTED = '#5A6270'
 const DISPLAY_FONT = '"JalnanGothic",system-ui,sans-serif'
-const AGGRO_FONT = '"SB Aggro",system-ui,sans-serif'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -93,7 +92,7 @@ const STATUS_COLOR: Record<GameInfo['status'], string> = {
 function StatItem({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{ textAlign: 'center' }}>
-      <span style={{ fontFamily: AGGRO_FONT, fontWeight: 300, color: MUTED, fontSize: 11, display: 'block', marginBottom: 4 }}>{label}</span>
+      <span style={{ fontWeight: 300, color: MUTED, fontSize: 11, display: 'block', marginBottom: 4 }}>{label}</span>
       <span style={{ fontFamily: DISPLAY_FONT, fontSize: 28, color: color ?? '#F0EBFF' }}>{value}</span>
     </div>
   )
@@ -146,17 +145,17 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
+          display: 'inline-flex', alignItems: 'center',
           padding: '3px 10px', borderRadius: 999,
           background: pillBg, color: pillColor,
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+          fontSize: 10, fontWeight: 500, letterSpacing: '0.1em',
         }}>
           {mode}
         </span>
         <span style={{ fontSize: 28, color: pillColor, lineHeight: 1 }}>{icon}</span>
       </div>
       <h3 style={{ fontFamily: DISPLAY_FONT, fontSize: 26, margin: '0 0 4px', color: '#F0EBFF' }}>{title}</h3>
-      <p style={{ fontFamily: AGGRO_FONT, fontWeight: 300, color: MUTED, fontSize: 12, margin: '0 0 20px' }}>{desc}</p>
+      <p style={{ fontWeight: 300, color: MUTED, fontSize: 12, margin: '0 0 20px' }}>{desc}</p>
       <button
         style={{
           width: '100%', padding: '10px 0', borderRadius: 8,
@@ -266,7 +265,6 @@ export default function MainPage() {
       minHeight: '100vh',
       background: '#0D0F14',
       color: '#E8EAF0',
-      fontFamily: '"Pretendard Variable","Pretendard",system-ui,sans-serif',
     }}>
       {/* ── Nav ── */}
       <nav style={{
@@ -295,9 +293,11 @@ export default function MainPage() {
             <span style={{ fontSize: 13, color: MUTED, display: 'flex', alignItems: 'center', gap: 6 }}>
               {displayName}
               <span style={{
-                fontSize: 10, background: 'rgba(155,89,245,.15)', color: '#C8A8FF',
+                padding: '1px 6px',
+                fontSize: 10, fontWeight: 500,
+                background: 'rgba(155,89,245,.15)', color: '#C8A8FF',
                 border: '1px solid rgba(155,89,245,.35)',
-                borderRadius: 4, padding: '1px 6px', letterSpacing: '0.05em',
+                borderRadius: 4, letterSpacing: '0.05em',
               }}>
                 {user.role}
               </span>
@@ -326,7 +326,7 @@ export default function MainPage() {
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '3px 12px', borderRadius: 999,
             background: 'rgba(155,89,245,.12)', border: '1px solid rgba(155,89,245,.3)', color: '#C8A8FF',
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', marginBottom: 20,
+            fontSize: 10, fontWeight: 500, letterSpacing: '0.1em', marginBottom: 20,
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9B59F5', boxShadow: '0 0 8px #9B59F5', display: 'inline-block' }} />
             WELCOME BACK
@@ -335,7 +335,7 @@ export default function MainPage() {
           <h1 style={{ fontFamily: DISPLAY_FONT, fontSize: 48, margin: '0 0 10px', lineHeight: 1.2 }}>
             {displayName} <span style={{ color: MUTED }}>님,</span>
           </h1>
-          <p style={{ fontFamily: AGGRO_FONT, fontWeight: 300, color: MUTED, fontSize: 15, margin: '0 0 32px' }}>오늘도 봇을 단련시킬 시간입니다.</p>
+          <p style={{ fontWeight: 300, color: MUTED, fontSize: 15, margin: '0 0 32px' }}>오늘도 봇을 단련시킬 시간입니다.</p>
 
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 32 }}>
             <StatItem label="현재 랭킹" value={rankValue}   color="#F5A624" />
@@ -426,9 +426,10 @@ export default function MainPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                         {pill && (
                           <span style={{
-                            display: 'inline-flex', padding: '2px 8px', borderRadius: 999,
+                            display: 'inline-flex', alignItems: 'center',
+                            padding: '2px 8px', borderRadius: 999,
                             background: pill.bg, color: pill.color,
-                            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', whiteSpace: 'nowrap',
+                            fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', whiteSpace: 'nowrap',
                           }}>
                             {modeLabel}
                           </span>
@@ -473,7 +474,7 @@ export default function MainPage() {
                         display: 'flex', alignItems: 'center', gap: 10, fontSize: 13,
                         background: isMe ? 'rgba(155,89,245,.1)' : undefined,
                         borderRadius: isMe ? 6 : undefined,
-                        padding: isMe ? '3px 6px' : '3px 6px',
+                        padding: '3px 6px',
                         margin: isMe ? '0 -6px' : undefined,
                       }}
                     >
@@ -484,7 +485,7 @@ export default function MainPage() {
                         {entry.display_name}
                         {isMe && <span style={{ fontSize: 10, color: MUTED, marginLeft: 4 }}>(나)</span>}
                       </span>
-                      <span style={{ color: MUTED, flexShrink: 0 }}>{entry.elo}</span>
+                      <span style={{ color: MUTED, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{entry.elo}</span>
                     </div>
                   )
                 })}
@@ -499,7 +500,7 @@ export default function MainPage() {
                         {myRanking.display_name}
                         <span style={{ fontSize: 10, color: MUTED, marginLeft: 4 }}>(나)</span>
                       </span>
-                      <span style={{ color: MUTED, flexShrink: 0 }}>{myRanking.elo}</span>
+                      <span style={{ color: MUTED, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{myRanking.elo}</span>
                     </div>
                   </>
                 )}

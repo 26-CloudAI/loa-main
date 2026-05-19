@@ -138,7 +138,7 @@ function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
         </div>
         <div className="flex flex-col gap-1">
           <span className="font-bold text-lg" style={{ color: '#F0EBFF' }}>{mode.title}</span>
-          <span className="text-sm leading-relaxed break-keep" style={{ color: '#9B8AB0' }}>{mode.description}</span>
+          <span className="text-sm leading-relaxed break-keep" style={{ color: '#8090A0' }}>{mode.description}</span>
         </div>
         {mode.available && (
           <span className="text-sm font-medium mt-auto" style={{ color: theme.accent }}>
