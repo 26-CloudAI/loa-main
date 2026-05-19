@@ -513,26 +513,24 @@ def create_app(
                     f"봇 {b.get('bot_id', '?')} 코드가 {max_size}B를 초과합니다.",
                 )
 
-        # 유저 봇을 DB에 저장/업데이트하여 bot_id 확보
+        # 유저 봇을 DB에 저장하여 bot_id 확보
+        _MODE_LABEL = {"battle-royale": "배틀로얄", "boss": "보스전"}
+        mode_label = _MODE_LABEL.get(mode, mode)
+        game_description = f"{mode_label} · {name}" if name else mode_label
+
         bot_repo_inst = _bot_repo()
         bot_name_to_db_id: dict[str, int] = {}
         for b in bots_data:
             bot_name = b["bot_id"]
-            is_public = bool(b.get("is_public", False))
-            existing = bot_repo_inst.get_by_user_and_name(db_user.id, bot_name)
-            if existing:
-                bot_repo_inst.update_code(existing.id, b["code"])
-                if is_public != existing.is_public:
-                    bot_repo_inst.set_public(existing.id, is_public)
-                bot_name_to_db_id[bot_name] = existing.id
-            else:
-                new_bot = bot_repo_inst.create(
-                    user_id=db_user.id,
-                    name=bot_name,
-                    code=b["code"],
-                    is_public=is_public,
-                )
-                bot_name_to_db_id[bot_name] = new_bot.id
+            is_public = bool(b.get("is_public", True))
+            new_bot = bot_repo_inst.create(
+                user_id=db_user.id,
+                name=bot_name,
+                code=b["code"],
+                is_public=is_public,
+                description=game_description,
+            )
+            bot_name_to_db_id[bot_name] = new_bot.id
 
         # 모드별 게임 설정 (보스전은 지역 config 오버라이드, 전역 설정 불변)
         game_cfg = boss_battle_config() if mode == "boss" else DEFAULT_CONFIG
@@ -743,6 +741,24 @@ def create_app(
 
         participants = _game_repo().get_participants(game_id)
         return game_result_from_record(record, participants)
+
+    @app.get("/api/games/{game_id}/replay")
+    async def get_game_replay(game_id: str, user: dict = Depends(verify_firebase_token)):
+        """게임 리플레이 전체 프레임을 반환."""
+        db_user = _current_db_user(user)
+        if not _game_repo().get_game_by_owner(game_id, db_user.id):
+            raise HTTPException(404, "게임을 찾을 수 없습니다.")
+        registry = _registry()
+        frames = await registry.state_store.get_replay_frames(game_id)
+        if not frames:
+            raise HTTPException(404, "리플레이 데이터가 없습니다.")
+        result = await registry.state_store.get_game_result(game_id)
+        return {
+            "game_id": game_id,
+            "total_frames": len(frames),
+            "frames": frames,
+            "result": result,
+        }
 
     @app.delete("/api/games/{game_id}")
     async def stop_game(game_id: str, user: dict = Depends(verify_firebase_token)):
@@ -988,12 +1004,48 @@ def create_app(
         return {"available": available}
 
     @app.get("/api/users/{user_id}/bots")
-    async def get_user_public_bots(user_id: int):
-        """특정 유저의 공개 봇 목록과 코드를 반환한다. (인증 불필요)"""
+    async def get_user_public_bots(user_id: int, request: Request):
+        """특정 유저의 봇 목록을 반환한다. 본인이면 비공개 코드도 반환."""
         user = _user_repo().get_by_id(user_id)
         if not user or not user.is_active:
             raise HTTPException(404, "유저를 찾을 수 없습니다.")
-        bots = _bot_repo().get_public_bots_by_user(user_id)
+
+        # 본인 여부 확인 (토큰이 있으면 검증, 없으면 타인으로 처리)
+        is_owner = False
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                decoded = _decode_auth_token(auth_header[7:])
+                requester = _firebase_user_svc().get_or_create_user(decoded)
+                is_owner = (requester.id == user_id)
+            except Exception:
+                pass
+
+        bots = _bot_repo().get_by_user(user_id, active_only=True)
+        _MODE_LABEL = {
+            "battle-royale": "배틀로얄",
+            "boss": "보스전",
+            "mock-stocks": "모의주식",
+        }
+        bot_list = []
+        for b in bots:
+            game_info = _game_repo().get_game_info_for_bot(b.id)
+            game_mode = _MODE_LABEL.get(game_info["mode"], game_info["mode"]) if game_info else None
+            game_name = game_info["name"] if game_info else None
+            show_code = b.is_public or is_owner
+            bot_list.append({
+                "id": b.id,
+                "name": b.name,
+                "game_mode": game_mode,
+                "game_name": game_name,
+                "code": b.code if show_code else None,
+                "is_public": b.is_public,
+                "version": b.version,
+                "wins": b.wins,
+                "losses": b.losses,
+                "games_played": b.games_played,
+                "updated_at": b.updated_at,
+            })
         return {
             "user": {
                 "user_id": user.id,
@@ -1004,21 +1056,7 @@ def create_app(
                 "losses": user.losses,
                 "games_played": user.games_played,
             },
-            "bots": [
-                {
-                    "id": b.id,
-                    "name": b.name,
-                    "description": b.description,
-                    "code": b.code,
-                    "version": b.version,
-                    "wins": b.wins,
-                    "losses": b.losses,
-                    "games_played": b.games_played,
-                    "win_rate": round(b.win_rate, 3),
-                    "updated_at": b.updated_at,
-                }
-                for b in bots
-            ],
+            "bots": bot_list,
         }
 
     return app

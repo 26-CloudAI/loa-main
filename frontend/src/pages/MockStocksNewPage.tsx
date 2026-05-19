@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import BotCodeInput from '../components/BotCodeInput'
 
 const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 const MAX_CODE_BYTES = 50 * 1024
@@ -126,6 +127,7 @@ export default function MockStocksNewPage() {
   const [minBots, setMinBots] = useState<number | ''>(4)
   const [tickInterval, setTickInterval] = useState(0.1)
   const [seed, setSeed] = useState('')
+  const [isPublic, setIsPublic] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [showRules, setShowRules] = useState(false)
@@ -192,7 +194,7 @@ export default function MockStocksNewPage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          bots: [{ bot_id: botId.trim() || 'my_bot', code }],
+          bots: [{ bot_id: botId.trim() || 'my_bot', code, is_public: isPublic }],
           tick_interval: tickInterval,
           fill_with_ai: fillWithAi,
           min_bots: minBots || 2,
@@ -267,7 +269,7 @@ export default function MockStocksNewPage() {
             />
           </section>
 
-          {/* 코드 에디터 */}
+          {/* 코드 입력 (직접입력 / 파일 업로드) */}
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-gray-300">봇 코드 (Python)</label>
@@ -276,22 +278,32 @@ export default function MockStocksNewPage() {
                 {codeOverLimit && ' — 초과'}
               </span>
             </div>
-            <textarea
+            <BotCodeInput
               value={code}
-              onChange={(e) => setCode(e.target.value)}
-              spellCheck={false}
-              rows={20}
-              className={`bg-gray-900 text-green-300 font-mono text-sm rounded-lg px-4 py-3 outline-none resize-y border scrollbar-custom ${
-                codeOverLimit
-                  ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                  : 'border-gray-700 focus:ring-2 focus:ring-green-500'
-              } w-full`}
+              onChange={setCode}
+              hasError={codeOverLimit}
+              accentColor="green"
             />
           </section>
 
           {/* 게임 옵션 */}
           <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
+
+            {/* 봇 코드 공개 여부 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-white">봇 코드 공개</p>
+                <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPublic((v) => !v)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-green-600' : 'bg-gray-700'}`}
+              >
+                <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
 
             <div className="flex items-center justify-between">
               <div>

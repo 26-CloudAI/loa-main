@@ -219,17 +219,29 @@ function GameCard({ game }: { game: GameInfo }) {
   const isStocks = game.mode === 'mock-stocks'
   const isFinished = game.status === 'finished'
 
-  function handleAction() {
+  function handleWatch() {
     if (isStocks) {
-      navigate(isFinished
-        ? `/games/${game.game_id}/mock-stocks/result`
-        : `/games/${game.game_id}/mock-stocks/watch`)
-      return
+      navigate(`/games/${game.game_id}/mock-stocks/watch`)
+    } else {
+      navigate(`/games/${game.game_id}/watch`)
     }
-    navigate(`/games/${game.game_id}/watch`)
   }
 
-  const actionLabel = isFinished ? '결과 보기' : '관전하기'
+  function handleResult() {
+    if (isStocks) {
+      navigate(`/games/${game.game_id}/mock-stocks/result`)
+    } else {
+      navigate(`/games/${game.game_id}/watch`)
+    }
+  }
+
+  function handleReplay() {
+    if (isStocks) {
+      navigate(`/games/${game.game_id}/mock-stocks/replay`)
+    } else {
+      navigate(`/games/${game.game_id}/replay`)
+    }
+  }
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
@@ -269,13 +281,32 @@ function GameCard({ game }: { game: GameInfo }) {
         </span>
       </div>
 
-      {/* 오른쪽: 관전 / 결과 보기 버튼 */}
-      <button
-        onClick={handleAction}
-        className="shrink-0 text-sm rounded-lg px-3 py-1.5 transition-colors bg-gray-600 hover:bg-gray-500 text-white"
-      >
-        {actionLabel}
-      </button>
+      {/* 오른쪽: 관전 / 결과 + 리플레이 버튼 */}
+      <div className="shrink-0 flex items-center gap-2">
+        {isFinished ? (
+          <>
+            <button
+              onClick={handleResult}
+              className="text-sm rounded-lg px-3 py-1.5 transition-colors bg-gray-600 hover:bg-gray-500 text-white"
+            >
+              결과 보기
+            </button>
+            <button
+              onClick={handleReplay}
+              className="text-sm rounded-lg px-3 py-1.5 transition-colors bg-indigo-700 hover:bg-indigo-600 text-white"
+            >
+              🎬 리플레이
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={handleWatch}
+            className="text-sm rounded-lg px-3 py-1.5 transition-colors bg-gray-600 hover:bg-gray-500 text-white"
+          >
+            관전하기
+          </button>
+        )}
+      </div>
     </div>
   )
 }

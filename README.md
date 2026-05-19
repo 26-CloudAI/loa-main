@@ -17,7 +17,7 @@
 
 [![배포 상태](https://img.shields.io/badge/Status-Live-success)](#)
 
-**서비스 바로가기:** https://ai-arena-b2b4b.web.app/login
+**서비스 바로가기:** https://ai-arena-b2b4b.web.app/
 
 ## ✨ 주요 기능 (Key Features)
 **[핵심 기능 1]:** 사용자가 자신이 제작한 AI Agents를 웹에 업로드하여 공유 및 평가할 수 있음

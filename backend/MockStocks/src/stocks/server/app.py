@@ -443,6 +443,39 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             ],
         }
 
+    @app.get("/api/games/{game_id}/replay")
+    async def get_game_replay(game_id: str, request: Request):
+        """게임 리플레이 전체 스냅샷을 반환."""
+        session = registry.get_game(game_id)
+        if not session:
+            raise HTTPException(404, "리플레이 데이터가 없습니다.")
+        frames = session.get_replay_frames()
+        if not frames:
+            raise HTTPException(404, "리플레이 프레임이 아직 없습니다.")
+        engine = session._engine
+        result_data = None
+        if engine and engine.game_result:
+            initial_cash = session._cfg.game.starting_cash
+            result_data = {
+                "final_tick": engine.game_result.final_tick,
+                "rankings": [
+                    {
+                        "rank": e["rank"],
+                        "bot_id": e["id"],
+                        "final_total_value": e["total_value"],
+                        "profit_rate": (e["total_value"] - initial_cash) / initial_cash * 100,
+                        "credit_score": e.get("credit_score", 0),
+                    }
+                    for e in engine.game_result.rankings
+                ],
+            }
+        return {
+            "game_id": game_id,
+            "total_frames": len(frames),
+            "frames": frames,
+            "result": result_data,
+        }
+
     @app.delete("/api/games/{game_id}", status_code=204)
     async def delete_game(game_id: str):
         session = registry.get_game(game_id)
