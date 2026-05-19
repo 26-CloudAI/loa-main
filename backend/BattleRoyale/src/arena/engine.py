@@ -241,7 +241,10 @@ class GameEngine:
             })
         rankings.sort(key=lambda r: r["final_score"], reverse=True)
         for i, r in enumerate(rankings):
-            r["rank"] = i + 1
+            if i > 0 and r["final_score"] == rankings[i - 1]["final_score"]:
+                r["rank"] = rankings[i - 1]["rank"]
+            else:
+                r["rank"] = i + 1
         return rankings
 
     # ──────────────────────────────────────────────

@@ -25,6 +25,7 @@ class GameRecord:
     seed: Optional[int]
     name: Optional[str] = None
     mode: str = "battle-royale"
+    boss_won: Optional[bool] = None  # None=보스전 아님, True=보스승, False=유저승
 
 
 @dataclass
@@ -34,6 +35,7 @@ class ParticipantRecord:
     bot_id: Optional[int]
     bot_name: str
     is_ai_filler: bool
+    is_boss_bot: bool
     final_rank: Optional[int]
     final_score: Optional[float]
     kills: int
@@ -130,25 +132,26 @@ class GameRepository:
         bot_name: str,
         bot_id: Optional[int] = None,
         is_ai_filler: bool = False,
+        is_boss_bot: bool = False,
     ) -> int:
         """참가자 추가. 생성된 participant ID를 반환."""
         if self._is_pg:
             cursor = self._execute(
                 """
-                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler, is_boss_bot)
+                VALUES (?, ?, ?, ?, ?)
                 RETURNING id
                 """,
-                (game_id, bot_id, bot_name, is_ai_filler),
+                (game_id, bot_id, bot_name, is_ai_filler, is_boss_bot),
             )
             participant_id = cursor.fetchone()["id"]
         else:
             cursor = self._execute(
                 """
-                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler, is_boss_bot)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (game_id, bot_id, bot_name, int(is_ai_filler)),
+                (game_id, bot_id, bot_name, int(is_ai_filler), int(is_boss_bot)),
             )
             participant_id = cursor.lastrowid
         self.conn.commit()
@@ -235,6 +238,14 @@ class GameRepository:
             "mode": row["mode"] if "mode" in keys else "battle-royale",
         }
 
+    def update_game_boss_result(self, game_id: str, boss_won: bool) -> None:
+        """보스전 결과를 기록한다. boss_won=True면 보스 승리, False면 유저팀 승리."""
+        self._execute(
+            "UPDATE games SET boss_won = ? WHERE id = ?",
+            (int(boss_won) if not self._is_pg else boss_won, game_id),
+        )
+        self.conn.commit()
+
     def cleanup_stale_games(self) -> int:
         """서버 재시작 시 미완료 게임을 error 상태로 변경. 변경된 수를 반환."""
         cursor = self._execute(
@@ -267,6 +278,7 @@ class GameRepository:
 
     def _row_to_game(self, row: sqlite3.Row) -> GameRecord:
         col_names = row.keys()
+        raw_boss_won = row["boss_won"] if "boss_won" in col_names else None
         return GameRecord(
             id=row["id"],
             owner_user_id=row["owner_user_id"],
@@ -281,15 +293,18 @@ class GameRepository:
             seed=row["seed"],
             name=row["name"] if "name" in col_names else None,
             mode=row["mode"] if "mode" in col_names else "battle-royale",
+            boss_won=bool(raw_boss_won) if raw_boss_won is not None else None,
         )
 
     def _row_to_participant(self, row: sqlite3.Row) -> ParticipantRecord:
+        col_names = row.keys()
         return ParticipantRecord(
             id=row["id"],
             game_id=row["game_id"],
             bot_id=row["bot_id"],
             bot_name=row["bot_name"],
             is_ai_filler=bool(row["is_ai_filler"]),
+            is_boss_bot=bool(row["is_boss_bot"]) if "is_boss_bot" in col_names else False,
             final_rank=row["final_rank"],
             final_score=row["final_score"],
             kills=row["kills"],
