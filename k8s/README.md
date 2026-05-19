@@ -15,6 +15,7 @@ k8s/
 │   ├── service-account.yaml       # game-server / bot-runner KSA
 │   ├── game-server-deployment.yaml
 │   ├── game-server-service.yaml
+│   ├── game-server-pdb.yaml       # 노드 drain 시 voluntary disruption 차단 (minAvailable: 1)
 │   ├── bot-runner-deployment.yaml
 │   ├── bot-runner-service.yaml
 │   ├── backend-config.yaml        # WebSocket timeout 3600s
@@ -41,6 +42,7 @@ k8s/
 | bot-runner egress 차단 | NetworkPolicy로 외부 인터넷 호출 완전 차단 |
 | gVisor 격리 | bot-runner에만 적용. 봇 코드의 syscall을 제한 |
 | BOSS_WEIGHTS_GCS_URI 미포함 | Phase 5 Cloud Build step에서 kubectl patch로 주입 |
+| Deployment image `:PLACEHOLDER` | git에는 placeholder만. 실제 배포는 Cloud Build 또는 `kubectl set image`로 구체 태그/digest 주입. `kubectl apply`만 단독 실행하면 의도적으로 ImagePullBackOff 발생 |
 
 ---
 
@@ -62,10 +64,13 @@ kubectl create secret generic arena-secrets \
   --from-literal=JWT_SECRET="$(openssl rand -hex 32)"
 
 # 3. 매니페스트 적용 (Kustomize 모드) — 초기 설정 및 네임스페이스/서비스 적용
+#    이 시점에는 Deployment image가 `:PLACEHOLDER`라서 Pod이 ImagePullBackOff에 머무는 것이 정상.
+#    바로 다음 4번에서 실제 태그/digest로 set image 해야 Pod이 뜬다.
 kubectl apply -k k8s/base/
 
-# 4. 실제 이미지 태그로 교체 (latest 또는 빌드한 특정 태그)
-IMAGE_TAG=latest   # 특정 태그를 쓰려면 여기를 변경
+# 4. 실제 이미지 태그/digest로 교체 (필수 — :PLACEHOLDER 를 절대 그대로 두지 말 것)
+#    재현 가능성을 위해 `:latest`보다 빌드된 SHA 태그 또는 @sha256:... digest 권장.
+IMAGE_TAG=<빌드한_구체_태그_또는_SHA>   # 예: 20260519-abc1234
 kubectl set image deployment/game-server \
   game-server=asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/server:${IMAGE_TAG} \
   -n arena

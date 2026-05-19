@@ -7,6 +7,7 @@ resources:
   - service-account.yaml
   - game-server-deployment.yaml
   - game-server-service.yaml
+  - game-server-pdb.yaml
   - bot-runner-deployment.yaml
   - bot-runner-service.yaml
   - backend-config.yaml
