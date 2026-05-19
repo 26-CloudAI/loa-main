@@ -17,7 +17,7 @@ import math
 import random
 from typing import Any
 
-from src.arena.bot_interface import BattleRoyale2DBot
+from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 
 
 def _norm(v: tuple[float, float]) -> tuple[float, float]:
