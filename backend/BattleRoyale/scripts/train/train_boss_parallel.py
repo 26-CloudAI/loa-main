@@ -50,9 +50,9 @@ from src.arena.bot_interface import BotInterface
 from src.arena.config import DEFAULT_CONFIG
 from src.arena.engine import GameEngine
 
-from bots.camper import CamperBot
-from bots.herbivore import HerbivoreBot
-from bots.mad_dog import MadDogBot
+from bots.battle_royale.camper import CamperBot
+from bots.battle_royale.herbivore import HerbivoreBot
+from bots.battle_royale.mad_dog import MadDogBot
 import gcs_weights
 
 logger = logging.getLogger("train_parallel")
@@ -82,7 +82,7 @@ COLDSTART_FACTORIES = [
 ]
 
 try:
-    from bots.sample_user_bots import SAMPLE_USER_BOTS
+    from bots.battle_royale.sample_user_bots import SAMPLE_USER_BOTS
 except ImportError:
     SAMPLE_USER_BOTS = []
 
@@ -336,7 +336,7 @@ def _worker(
     seed = rng.randint(0, 999_999)
 
     try:
-        from bots.rl_boss_bot_torch import RLBossBotTorch
+        from bots.boss.rl_boss_bot_torch import RLBossBotTorch
         boss = RLBossBotTorch(
             bot_id=BOSS_BOT_ID,
             seed=seed,

@@ -38,7 +38,7 @@ from src.arena.bot_interface import BotInterface
 from src.arena.types import Action
 
 # numpy 버전에서 공통 상수/유틸 임포트
-from bots.rl_boss_bot import (
+from bots.boss.rl_boss_bot import (
     ACTIONS, N_ACTIONS,
     IDX_STAY, IDX_MINE, IDX_SHIELD,
     IDX_MOVE_UP, IDX_MOVE_DOWN, IDX_MOVE_LEFT, IDX_MOVE_RIGHT,

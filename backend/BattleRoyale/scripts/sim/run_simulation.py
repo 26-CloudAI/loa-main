@@ -19,9 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.arena.config import DEFAULT_CONFIG
 from src.arena.engine import GameEngine
-from bots.herbivore import HerbivoreBot
-from bots.mad_dog import MadDogBot
-from bots.camper import CamperBot
+from bots.battle_royale.herbivore import HerbivoreBot
+from bots.battle_royale.mad_dog import MadDogBot
+from bots.battle_royale.camper import CamperBot
 
 
 def create_bots(num_bots: int, seed: int) -> list:

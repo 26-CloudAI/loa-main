@@ -28,7 +28,7 @@ from src.arena.config import DEFAULT_CONFIG
 from src.arena.engine import GameEngine
 from src.arena.types import Action
 
-from bots.rl_boss_bot import (
+from bots.boss.rl_boss_bot import (
     ACTIONS,
     ALPHA,
     BUFFER_SIZE,
@@ -55,9 +55,9 @@ from bots.rl_boss_bot import (
     RLBossBot,
     StateEncoder,
 )
-from bots.herbivore import HerbivoreBot
-from bots.mad_dog import MadDogBot
-from bots.camper import CamperBot
+from bots.battle_royale.herbivore import HerbivoreBot
+from bots.battle_royale.mad_dog import MadDogBot
+from bots.battle_royale.camper import CamperBot
 
 
 # ---------------------------------------------------------------------------

@@ -46,10 +46,10 @@ from src.arena.bot_interface import BotInterface  # noqa: E402
 from src.arena.config import DEFAULT_CONFIG  # noqa: E402
 from src.arena.engine import GameEngine  # noqa: E402
 
-from bots.camper import CamperBot  # noqa: E402
-from bots.herbivore import HerbivoreBot  # noqa: E402
-from bots.mad_dog import MadDogBot  # noqa: E402
-from bots.rl_boss_bot import RLBossBot  # noqa: E402
+from bots.battle_royale.camper import CamperBot  # noqa: E402
+from bots.battle_royale.herbivore import HerbivoreBot  # noqa: E402
+from bots.battle_royale.mad_dog import MadDogBot  # noqa: E402
+from bots.boss.rl_boss_bot import RLBossBot  # noqa: E402
 
 logger = logging.getLogger("train_boss_bot")
 
@@ -68,7 +68,7 @@ COLDSTART_FACTORIES = [
 
 # 샘플 유저봇 — DB 봇이 없을 때 콜드스타트보다 우선 사용
 try:
-    from bots.sample_user_bots import SAMPLE_USER_BOTS
+    from bots.battle_royale.sample_user_bots import SAMPLE_USER_BOTS
 except ImportError:
     SAMPLE_USER_BOTS = []
 

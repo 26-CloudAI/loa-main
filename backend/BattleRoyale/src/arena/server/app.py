@@ -141,9 +141,9 @@ class InProcessBot(BotInterface):
 
 def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface]:
     """빈 슬롯을 채우는 AI 봇 생성."""
-    from bots.herbivore import HerbivoreBot
-    from bots.mad_dog import MadDogBot
-    from bots.camper import CamperBot
+    from bots.battle_royale.herbivore import HerbivoreBot
+    from bots.battle_royale.mad_dog import MadDogBot
+    from bots.battle_royale.camper import CamperBot
 
     bot_classes = [HerbivoreBot, MadDogBot, CamperBot]
     labels = ["AI_초식", "AI_미친개", "AI_존버"]
@@ -184,11 +184,11 @@ def _create_boss_bot(
     existing_ids.add(bot_id)
 
     if difficulty == "하":
-        from bots.rule_boss_bot import RuleBossEasyBot
+        from bots.boss.rule_boss_bot import RuleBossEasyBot
         return RuleBossEasyBot(bot_id=bot_id, seed=42)
 
     if difficulty == "중":
-        from bots.rule_boss_bot import RuleBossMediumBot
+        from bots.boss.rule_boss_bot import RuleBossMediumBot
         return RuleBossMediumBot(bot_id=bot_id, seed=42)
 
     # 상 (기본값): RL 보스봇 + GCS 가중치 — 싱글톤 재사용
@@ -231,12 +231,12 @@ def _create_boss_bot(
                 )
 
         if use_torch:
-            from bots.rl_boss_bot_torch import RLBossBotTorch
+            from bots.boss.rl_boss_bot_torch import RLBossBotTorch
             bot = RLBossBotTorch(
                 bot_id=bot_id, seed=0, weights_path=weights_path, device="cpu"
             )
         else:
-            from bots.rl_boss_bot import RLBossBot
+            from bots.boss.rl_boss_bot import RLBossBot
             bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
 
         if rl_singleton_state is not None:
