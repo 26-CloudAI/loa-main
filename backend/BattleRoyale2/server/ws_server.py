@@ -170,7 +170,21 @@ def create_app() -> FastAPI:
 
         try:
             while True:
-                raw = await ws.receive_text()
+                frame = await ws.receive()
+                # 연결 종료 프레임 처리
+                if frame.get("type") == "websocket.disconnect":
+                    break
+                # text / bytes 둘 다 수용 (Godot WebSocketClient 는 기본 binary)
+                raw = frame.get("text")
+                if raw is None:
+                    raw_bytes = frame.get("bytes")
+                    if raw_bytes is None:
+                        continue
+                    try:
+                        raw = raw_bytes.decode("utf-8")
+                    except UnicodeDecodeError:
+                        logger.warning("non-utf8 bytes frame received, skipping")
+                        continue
                 try:
                     msg = json.loads(raw)
                 except json.JSONDecodeError:
