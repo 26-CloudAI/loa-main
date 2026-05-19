@@ -14,8 +14,8 @@ from __future__ import annotations
 import random
 from typing import Optional
 
-from src.arena.bot_interface import BotInterface
-from src.arena.types import Action
+from core.bot_interface import BotInterface
+from core.types import Action
 from bots.utils import ADJACENT_DIRS, MOVE_ACTIONS, CX as _CX, CY as _CY, move_toward
 
 

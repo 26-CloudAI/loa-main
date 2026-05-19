@@ -10,8 +10,8 @@ from __future__ import annotations
 import random
 from typing import Optional
 
-from src.arena.bot_interface import BotInterface
-from src.arena.types import Action, CellType, DIRECTION_DELTA, action_to_direction
+from core.bot_interface import BotInterface
+from core.types import Action, CellType, DIRECTION_DELTA, action_to_direction
 from bots.utils import CX, CY, ADJACENT_DIRS, MOVE_ACTIONS, move_toward, flee
 
 # ── 셀 타입 상수 (CellType enum 기준) ─────────────────────────────────────────

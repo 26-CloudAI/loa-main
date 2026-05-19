@@ -13,7 +13,7 @@ import logging
 import threading
 from typing import Optional
 
-from ...bot_interface import BotInterface
+from core.bot_interface import BotInterface
 
 logger = logging.getLogger(__name__)
 

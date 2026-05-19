@@ -23,10 +23,12 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+_BR_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_BR_ROOT))
+sys.path.insert(0, str(_BR_ROOT.parent))  # backend/ (core 검색용)
 
-from src.arena.config import DEFAULT_CONFIG
-from src.arena.engine import GameEngine
+from core.config import DEFAULT_CONFIG
+from core.engine import GameEngine
 from src.arena.sandbox import ContainerPool, SandboxConfig
 
 # ── 봇 코드 템플릿 ──

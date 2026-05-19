@@ -8,9 +8,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from src.arena.bot_interface import BotInterface
-from src.arena.config import GameConfig, MapConfig, BotConfig, ZoneConfig
-from src.arena.engine import GameEngine
+from core.bot_interface import BotInterface
+from core.config import GameConfig, MapConfig, BotConfig, ZoneConfig
+from core.engine import GameEngine
 
 
 class DummyBot(BotInterface):

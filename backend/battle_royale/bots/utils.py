@@ -2,7 +2,7 @@
 AI Arena - Shared bot utilities (8-directional movement support).
 """
 
-from src.arena.types import Action, CellType
+from core.types import Action, CellType
 
 # Vision center (5x5 grid)
 CX, CY = 2, 2

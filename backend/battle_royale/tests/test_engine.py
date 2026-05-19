@@ -19,11 +19,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import pytest
 
-from src.arena.config import GameConfig, MapConfig, BotConfig, ZoneConfig, ActionCost
-from src.arena.engine import GameEngine
-from src.arena.types import Action, GameOverReason, Position, Bot
-from src.arena.zone import ZoneManager
-from src.arena.grid import Grid
+from core.config import GameConfig, MapConfig, BotConfig, ZoneConfig, ActionCost
+from core.engine import GameEngine
+from core.types import Action, GameOverReason, Position, Bot
+from core.zone import ZoneManager
+from core.grid import Grid
 
 from conftest import DummyBot, ScriptedBot, make_small_config
 
@@ -218,7 +218,7 @@ class TestMining:
         engine = GameEngine([miner, DummyBot("b")], config=small_config, seed=42)
 
         # 봇 위치에 광물 강제 배치
-        from src.arena.types import Mineral
+        from core.types import Mineral
         pos = engine.bots["a"].position
         engine.grid._minerals[pos.as_tuple()] = Mineral(position=pos, rare=False)
 
@@ -252,7 +252,7 @@ class TestMining:
         engine.bots["a"].position = shared_pos
         engine.bots["b"].position = Position(5, 5)
 
-        from src.arena.types import Mineral
+        from core.types import Mineral
         engine.grid._minerals[(5, 5)] = Mineral(position=shared_pos, rare=False)
 
         engine.process_tick()
@@ -265,7 +265,7 @@ class TestMining:
         miner = DummyBot("a", action="MINE")
         engine = GameEngine([miner, DummyBot("b")], config=small_config, seed=42)
 
-        from src.arena.types import Mineral
+        from core.types import Mineral
         pos = engine.bots["a"].position
         engine.grid._minerals[pos.as_tuple()] = Mineral(position=pos, rare=True)
 

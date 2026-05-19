@@ -18,13 +18,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.arena.bot_interface import BotInterface
-from src.arena.config import GameConfig, MapConfig, BotConfig, ZoneConfig, ActionCost, CombatConfig, MineConfig
-from src.arena.engine import GameEngine
-from src.arena.types import Action, GameOverReason, Position, Mineral
-from src.arena.zone import ZoneManager
-from src.arena.vision import build_bot_state
-from src.arena.grid import Grid, generate_spawn_positions
+from core.bot_interface import BotInterface
+from core.config import GameConfig, MapConfig, BotConfig, ZoneConfig, ActionCost, CombatConfig, MineConfig
+from core.engine import GameEngine
+from core.types import Action, GameOverReason, Position, Mineral
+from core.zone import ZoneManager
+from core.vision import build_bot_state
+from core.grid import Grid, generate_spawn_positions
 from src.arena.db.schema import init_db
 from src.arena.db.user_repo import UserRepository
 from src.arena.db.bot_repo import BotRepository

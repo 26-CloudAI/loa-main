@@ -31,7 +31,7 @@ from src.arena.server.schemas import (
 )
 from src.arena.server.redis_manager import InMemoryStateStore, InMemoryPubSubBroker
 from src.arena.server.game_session import GameSession, GameRegistry
-from src.arena.bot_interface import BotInterface
+from core.bot_interface import BotInterface
 
 
 # ──────────────────────────────────────────────
@@ -263,7 +263,7 @@ class TestGameSession(unittest.TestCase):
         pubsub = InMemoryPubSubBroker()
         config = DEFAULT_SERVER_CONFIG
 
-        from src.arena.config import GameConfig, MapConfig, BotConfig, ZoneConfig
+        from core.config import GameConfig, MapConfig, BotConfig, ZoneConfig
         small_game = GameConfig(
             max_ticks=20,
             map=MapConfig(width=10, height=10, initial_mineral_count=5,

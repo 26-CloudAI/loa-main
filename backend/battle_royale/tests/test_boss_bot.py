@@ -24,9 +24,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import numpy as np
 import pytest
 
-from src.arena.config import DEFAULT_CONFIG
-from src.arena.engine import GameEngine
-from src.arena.types import Action
+from core.config import DEFAULT_CONFIG
+from core.engine import GameEngine
+from core.types import Action
 
 from bots.boss.rl_boss_bot import (
     ACTIONS,

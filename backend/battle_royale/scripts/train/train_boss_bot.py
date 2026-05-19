@@ -36,15 +36,16 @@ import traceback
 from pathlib import Path
 from typing import Optional
 
-# 프로젝트 루트 (BattleRoyale 디렉토리) 를 sys.path에 추가
+# battle_royale 루트(src/, bots/) + backend 루트(core/) 모두 sys.path에 추가
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
+sys.path.insert(0, str(_PROJECT_ROOT.parent))
 
 from src.arena import gcs_weights  # noqa: E402
 
-from src.arena.bot_interface import BotInterface  # noqa: E402
-from src.arena.config import DEFAULT_CONFIG  # noqa: E402
-from src.arena.engine import GameEngine  # noqa: E402
+from core.bot_interface import BotInterface  # noqa: E402
+from core.config import DEFAULT_CONFIG  # noqa: E402
+from core.engine import GameEngine  # noqa: E402
 
 from bots.battle_royale.camper import CamperBot  # noqa: E402
 from bots.battle_royale.herbivore import HerbivoreBot  # noqa: E402

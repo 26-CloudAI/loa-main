@@ -17,10 +17,10 @@ import uuid
 from typing import TYPE_CHECKING
 from typing import Optional
 
-from ..bot_interface import BotInterface
-from ..config import DEFAULT_CONFIG, GameConfig
-from ..engine import GameEngine
-from ..types import TickEvent
+from core.bot_interface import BotInterface
+from core.config import DEFAULT_CONFIG, GameConfig
+from core.engine import GameEngine
+from core.types import TickEvent
 from .config import ServerConfig
 from .redis_manager import PubSubBroker, StateStore
 from .schemas import (

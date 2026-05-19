@@ -14,11 +14,13 @@ import sys
 import time
 from pathlib import Path
 
-# 프로젝트 루트를 path에 추가
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+# battle_royale 루트(src/, bots/) + backend 루트(core/) 모두 sys.path에 추가
+_BR_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_BR_ROOT))
+sys.path.insert(0, str(_BR_ROOT.parent))
 
-from src.arena.config import DEFAULT_CONFIG
-from src.arena.engine import GameEngine
+from core.config import DEFAULT_CONFIG
+from core.engine import GameEngine
 from bots.battle_royale.herbivore import HerbivoreBot
 from bots.battle_royale.mad_dog import MadDogBot
 from bots.battle_royale.camper import CamperBot

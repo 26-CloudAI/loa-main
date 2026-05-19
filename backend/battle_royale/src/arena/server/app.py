@@ -37,8 +37,8 @@ except ImportError:
 # 프로젝트 경로
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from ..bot_interface import BotInterface
-from ..config import DEFAULT_CONFIG
+from core.bot_interface import BotInterface
+from core.config import DEFAULT_CONFIG
 from .boss import (
     BOSS_BOT_LOCK,
     BOSS_MAX_USER_BOTS,

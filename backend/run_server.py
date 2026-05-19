@@ -22,6 +22,13 @@ from pathlib import Path
 
 _base = Path(__file__).parent
 
+# core/ 패키지는 backend 루트에 평이하게 존재한다.
+# backend/ 를 sys.path에 추가해 `import core.<module>` 이 동작하도록 한다.
+# (개발/Docker 양쪽에서 동일.)
+_backend_dir = str(_base)
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
 if (_base / "battle_royale").exists():
     # ── 로컬 개발 ────────────────────────────────────────────────────────────
     # 로컬 구조:

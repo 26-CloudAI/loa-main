@@ -225,7 +225,7 @@ class TestWrapperTemplate(unittest.TestCase):
 
     def test_valid_actions_complete(self):
         """래퍼에 정의된 VALID_ACTIONS가 엔진의 Action enum과 일치."""
-        from src.arena.types import Action
+        from core.types import Action
         engine_actions = {a.value for a in Action}
 
         wrapper_path = Path(__file__).parent.parent / "src" / "arena" / "sandbox" / "wrapper_template.py"

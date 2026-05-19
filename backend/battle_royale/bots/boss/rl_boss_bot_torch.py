@@ -34,8 +34,8 @@ try:
 except ImportError:
     _TORCH_AVAILABLE = False
 
-from src.arena.bot_interface import BotInterface
-from src.arena.types import Action
+from core.bot_interface import BotInterface
+from core.types import Action
 
 # numpy 버전에서 공통 상수/유틸 임포트
 from bots.boss.rl_boss_bot import (

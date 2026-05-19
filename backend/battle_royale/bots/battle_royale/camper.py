@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import random
 
-from src.arena.bot_interface import BotInterface
-from src.arena.types import Action, CellType
+from core.bot_interface import BotInterface
+from core.types import Action, CellType
 from bots.utils import CX, CY, ADJACENT_DIRS, MOVE_ACTIONS, move_toward, flee
 
 _ENEMY = CellType.BOT_ENEMY

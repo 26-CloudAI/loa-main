@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
-from ..bot_interface import BotInterface
+from core.bot_interface import BotInterface
 from .config import SandboxConfig
 
 logger = logging.getLogger(__name__)

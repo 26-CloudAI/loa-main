@@ -31,8 +31,8 @@ from typing import Optional
 
 import numpy as np
 
-from src.arena.bot_interface import BotInterface
-from src.arena.types import Action
+from core.bot_interface import BotInterface
+from core.types import Action
 
 _DEFAULT_WEIGHTS_PATH = Path(__file__).parent / "trained_weights.json"
 

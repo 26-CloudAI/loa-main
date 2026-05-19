@@ -9,11 +9,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.arena.bot_interface import BotInterface
-from src.arena.config import GameConfig, MapConfig, BotConfig, ZoneConfig
-from src.arena.engine import GameEngine
-from src.arena.types import Action, GameOverReason, Position, Mineral
-from src.arena.zone import ZoneManager
+from core.bot_interface import BotInterface
+from core.config import GameConfig, MapConfig, BotConfig, ZoneConfig
+from core.engine import GameEngine
+from core.types import Action, GameOverReason, Position, Mineral
+from core.zone import ZoneManager
 
 
 # ──────────────────────────────────────────────

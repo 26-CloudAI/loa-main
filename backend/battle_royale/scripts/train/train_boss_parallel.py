@@ -45,10 +45,11 @@ from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
+sys.path.insert(0, str(_PROJECT_ROOT.parent))  # backend/ (core 검색용)
 
-from src.arena.bot_interface import BotInterface
-from src.arena.config import DEFAULT_CONFIG
-from src.arena.engine import GameEngine
+from core.bot_interface import BotInterface
+from core.config import DEFAULT_CONFIG
+from core.engine import GameEngine
 
 from bots.battle_royale.camper import CamperBot
 from bots.battle_royale.herbivore import HerbivoreBot

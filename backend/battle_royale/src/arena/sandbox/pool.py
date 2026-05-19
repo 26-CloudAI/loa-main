@@ -22,7 +22,7 @@ try:
 except ImportError:
     DOCKER_AVAILABLE = False
 
-from ..bot_interface import BotInterface
+from core.bot_interface import BotInterface
 from .config import DEFAULT_SANDBOX_CONFIG, SandboxConfig
 from .container_manager import ContainerManager
 from .docker_adapter import DockerBotAdapter

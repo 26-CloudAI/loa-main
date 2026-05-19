@@ -21,16 +21,18 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+_BR_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_BR_ROOT))
+sys.path.insert(0, str(_BR_ROOT.parent))  # backend/ (core 검색용)
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
-from src.arena.config import DEFAULT_CONFIG
-from src.arena.engine import GameEngine
-from src.arena.vision import build_leaderboard
+from core.config import DEFAULT_CONFIG
+from core.engine import GameEngine
+from core.vision import build_leaderboard
 from bots.battle_royale.herbivore import HerbivoreBot
 from bots.battle_royale.mad_dog import MadDogBot
 from bots.battle_royale.camper import CamperBot
