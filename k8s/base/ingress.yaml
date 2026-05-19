@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: arena-ingress
+  namespace: arena
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: "loa-arena-ingress-ip"  # Phase 4에서 예약
+    networking.gke.io/managed-certificates: "arena-cert"
+    kubernetes.io/ingress.class: "gce"
+spec:
+  rules:
+    - host: api.leagueofagents.net
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: game-server
+                port:
+                  number: 80

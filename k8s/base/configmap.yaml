@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arena-config
+  namespace: arena
+data:
+  USE_REDIS: "true"
+  REDIS_HOST: "10.197.54.43"
+  LOG_FORMAT: "json"
+  CORS_ORIGINS: "https://leagueofagents.net,https://www.leagueofagents.net,https://ai-arena-b2b4b.web.app,https://ai-arena-b2b4b.firebaseapp.com"
+  DB_TYPE: "postgresql"
+  DB_HOST: "10.114.0.3"
+  DB_NAME: "ai_arena"
+  DB_USER: "arena_user"
+  ENV: "production"
+  BOT_RUNNER_URL: "http://bot-runner.arena.svc.cluster.local:8001"
+  BOT_RUNNER_REQUIRED: "true"
+  BOT_RUNNER_TIMEOUT_SEC: "0.5"  # game-server → bot-runner HTTP 호출 타임아웃. BOT_ACTION_TIMEOUT_SEC(0.1) + 네트워크/HTTP 오버헤드 여유 포함
+  # BOSS_WEIGHTS_GCS_URI 는 여기에 쓰지 않는다.
+  # Phase 5 Cloud Build step에서 kubectl patch로 주입한다. (버킷명 git 노출 방지)

@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bot-runner-isolation
+  namespace: arena
+spec:
+  podSelector:
+    matchLabels:
+      app: bot-runner
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: game-server
+      ports:
+        - protocol: TCP
+          port: 8001
+  egress: []  # 외부 네트워크 호출 완전 차단 (봇 코드 데이터 유출 방지)
