@@ -40,7 +40,7 @@ from typing import Optional
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-import gcs_weights  # noqa: E402
+from src.arena import gcs_weights  # noqa: E402
 
 from src.arena.bot_interface import BotInterface  # noqa: E402
 from src.arena.config import DEFAULT_CONFIG  # noqa: E402

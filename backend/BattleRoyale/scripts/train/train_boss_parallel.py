@@ -53,7 +53,7 @@ from src.arena.engine import GameEngine
 from bots.battle_royale.camper import CamperBot
 from bots.battle_royale.herbivore import HerbivoreBot
 from bots.battle_royale.mad_dog import MadDogBot
-import gcs_weights
+from src.arena import gcs_weights
 
 logger = logging.getLogger("train_parallel")
 

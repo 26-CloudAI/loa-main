@@ -195,7 +195,7 @@ def _create_boss_bot(
     # 학습은 PyTorch(.pt) 포맷, 서빙은 PyTorch가 있으면 동일 포맷을 사용해
     # 학습 결과가 즉시 반영되도록 한다. PyTorch가 없으면 numpy 버전으로 폴백
     # (단, .pt 가중치는 로드되지 않으므로 무작위 초기화 상태로 동작한다).
-    import gcs_weights
+    from .. import gcs_weights
 
     # 동시 보스전 요청이 같은 인스턴스를 reset_for_episode하는 경쟁 상태를 방지.
     # 락 내부에서 싱글톤 조회/reset/생성/저장을 모두 직렬화한다.
@@ -307,7 +307,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # GCS에서 최신 보스봇 가중치 다운로드 (BOSS_WEIGHTS_GCS_URI 설정 시)
-        import gcs_weights
+        from .. import gcs_weights
         if gcs_weights.enabled():
             gcs_weights.download()
             logger.info("보스봇 가중치 GCS에서 로드 완료")

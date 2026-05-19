@@ -31,7 +31,7 @@ from pathlib import Path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-import gcs_weights
+from src.arena import gcs_weights
 from src.arena.db import init_db
 
 logging.basicConfig(

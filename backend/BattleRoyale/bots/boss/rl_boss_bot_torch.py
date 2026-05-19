@@ -524,7 +524,7 @@ class RLBossBotTorch(BotInterface):
 
         if self._episode_count % GCS_UPLOAD_INTERVAL == 0:
             try:
-                import gcs_weights
+                from src.arena import gcs_weights
                 if gcs_weights.enabled():
                     gcs_weights.upload(_DEFAULT_WEIGHTS_PATH)
             except Exception:
