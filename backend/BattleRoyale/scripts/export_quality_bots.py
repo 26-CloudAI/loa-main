@@ -124,11 +124,12 @@ def export() -> int:
 
     # rating 내림차순 정렬 → 상위 MAX_BOTS_EXPORT개
     quality_bots.sort(key=lambda x: x["rating"], reverse=True)
+    n_passed = len(quality_bots)
     quality_bots = quality_bots[:MAX_BOTS_EXPORT]
 
     logger.info(
-        "품질 봇 필터링 완료: 전체 %d개 중 %d개 선정 (상위 %d개 내보내기)",
-        len(rows), len(quality_bots) + (len(rows) - len(quality_bots)), len(quality_bots),
+        "품질 봇 필터링 완료: 전체 %d개 중 %d개 통과 → 상위 %d개 내보내기",
+        len(rows), n_passed, len(quality_bots),
     )
 
     if not quality_bots:

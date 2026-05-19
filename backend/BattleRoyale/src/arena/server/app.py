@@ -191,8 +191,10 @@ def _create_boss_bot(
         from bots.rule_boss_bot import RuleBossMediumBot
         return RuleBossMediumBot(bot_id=bot_id, seed=42)
 
-    # 상 (기본값): RLBossBot + GCS 가중치 — 싱글톤 재사용
-    from bots.rl_boss_bot import RLBossBot
+    # 상 (기본값): RL 보스봇 + GCS 가중치 — 싱글톤 재사용
+    # 학습은 PyTorch(.pt) 포맷, 서빙은 PyTorch가 있으면 동일 포맷을 사용해
+    # 학습 결과가 즉시 반영되도록 한다. PyTorch가 없으면 numpy 버전으로 폴백
+    # (단, .pt 가중치는 로드되지 않으므로 무작위 초기화 상태로 동작한다).
     import gcs_weights
 
     # 동시 보스전 요청이 같은 인스턴스를 reset_for_episode하는 경쟁 상태를 방지.
@@ -206,7 +208,7 @@ def _create_boss_bot(
                     return cached
                 except Exception:
                     logger.exception(
-                        "RLBossBot 싱글톤 reset 실패 — 새 인스턴스 생성"
+                        "RL 보스봇 싱글톤 reset 실패 — 새 인스턴스 생성"
                     )
 
         cache = gcs_weights.local_cache_path()
@@ -215,12 +217,33 @@ def _create_boss_bot(
             logger.info("보스봇 가중치 캐시 없음 — GCS 재다운로드 시도")
             gcs_weights.download()
         weights_path = cache if cache.exists() else None
-        bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
+
+        # PyTorch 사용 가능 + 가중치가 .pt면 Torch 봇을, 아니면 numpy 봇을 사용.
+        use_torch = False
+        if weights_path is not None and str(weights_path).endswith(".pt"):
+            try:
+                import torch  # noqa: F401
+                use_torch = True
+            except ImportError:
+                logger.warning(
+                    "PyTorch 가중치(.pt)가 다운로드됐지만 torch 미설치 — "
+                    "numpy 보스봇으로 폴백 (학습 가중치 반영 안 됨)"
+                )
+
+        if use_torch:
+            from bots.rl_boss_bot_torch import RLBossBotTorch
+            bot = RLBossBotTorch(
+                bot_id=bot_id, seed=0, weights_path=weights_path, device="cpu"
+            )
+        else:
+            from bots.rl_boss_bot import RLBossBot
+            bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
 
         if rl_singleton_state is not None:
             rl_singleton_state["rl_boss_bot"] = bot
             logger.info(
-                "RLBossBot 싱글톤 인스턴스 생성 — 이후 보스전에서 재사용"
+                "RL 보스봇 싱글톤 인스턴스 생성 (%s) — 이후 보스전에서 재사용",
+                type(bot).__name__,
             )
 
         return bot

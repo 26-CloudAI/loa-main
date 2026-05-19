@@ -19,7 +19,19 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 _GCS_URI: str = os.environ.get("BOSS_WEIGHTS_GCS_URI", "")
-_LOCAL_CACHE = Path("/tmp/boss_weights.json")
+
+
+def _default_cache_path() -> Path:
+    """GCS URI의 파일명을 그대로 사용해 /tmp 캐시 경로를 결정한다.
+    URI가 .pt면 .pt 캐시, .json이면 .json 캐시가 만들어진다.
+    URI 미설정 시 호환을 위해 기존 기본값 사용."""
+    if _GCS_URI:
+        name = _GCS_URI.rsplit("/", 1)[-1] or "boss_weights.bin"
+        return Path("/tmp") / name
+    return Path("/tmp/boss_weights.json")
+
+
+_LOCAL_CACHE = _default_cache_path()
 
 
 def enabled() -> bool:
