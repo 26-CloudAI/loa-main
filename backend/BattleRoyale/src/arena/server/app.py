@@ -635,16 +635,18 @@ def create_app(
                 break
             await asyncio.sleep(0.5)
 
-        if not real_participants:
-            return
-
-        # 보스전 결과 기록 (boss_won 컬럼 — mode='boss'일 때만)
+        # 보스전 결과 기록 — real_participants early-return 전에 처리해야 보스 승리도 기록됨
         if game_record and game_record.mode == "boss":
             boss_participants = [p for p in participants if p.is_boss_bot and p.final_rank]
-            if boss_participants:
+            user_ranked = [p for p in participants
+                           if not p.is_ai_filler and not p.is_boss_bot and p.final_rank]
+            if boss_participants and user_ranked:
                 boss_rank = boss_participants[0].final_rank
-                best_user_rank = min(p.final_rank for p in real_participants)
+                best_user_rank = min(p.final_rank for p in user_ranked)
                 _game_repo().update_game_boss_result(game_id, boss_won=(boss_rank < best_user_rank))
+
+        if not real_participants:
+            return
 
         bot_repo_inst = _bot_repo()
         user_repo = _user_repo()

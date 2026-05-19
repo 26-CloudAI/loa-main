@@ -553,7 +553,7 @@ BattleRoyale/
 | N_FEATURES | `rl_boss_bot.py` | 43 |
 | 보스전 max_ticks | `config.py:boss_battle_config` | 400 |
 | 보스전 최종 zone | `config.py:boss_battle_config` | ≈ 27×27 |
-| 유저봇 최대 수 | `app.py:_BOSS_MAX_USER_BOTS` | 3 |
+| 유저봇 최대 수 | `config.py:BOSS_MAX_USER_BOTS` | 3 |
 | 품질봇 최소 게임 수 | `scripts/export_quality_bots.py` | 10 |
 | 품질봇 최소 승률 | `scripts/export_quality_bots.py` | 35% |
 | 세션 최대 봇 수 | `train_boss_parallel.py` | 20 |
