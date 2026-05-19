@@ -14,7 +14,9 @@ BattleRoyale2/
 │   └── bot_interface.py            # BattleRoyale2DBot 추상 클래스
 ├── bots/
 │   ├── __init__.py
-│   └── sample_bot.py               # HerbivoreBot (코인 채집 + 적 회피)
+│   ├── herbivore.py                # HerbivoreBot — 코인 채집 + 적 회피 + 자기장 사전 회피
+│   ├── mad_dog.py                  # MadDogBot — 사거리 안 적 무조건 공격, 멀면 추격(dash)
+│   └── camper.py                   # CamperBot — 초반 클러스터 회피 파밍, 중후반(t>=80s) 또는 스펙 충족 시 교전
 └── server/
     └── ws_server.py                # FastAPI WebSocket 엔드포인트
 ```
@@ -80,5 +82,5 @@ class MyBot(BattleRoyale2DBot):
 ## 현재 한계 (v0.1)
 - 단일 매치 / 단일 연결만 지원
 - 인증·Redis·DB 적재 없음 (`BattleRoyale` 의 인프라 미사용)
-- 봇 종류: HerbivoreBot 1종 (mad_dog / camper 등 추가 예정)
+- 봇 종류: HerbivoreBot (초식봇), MadDogBot (미친개봇), CamperBot (존버봇). bot_id 별 매핑은 `ws_server.py BOT_CLASS_BY_ID` 참조.
 - choose_spawn 흐름은 클라이언트가 `MATCH_INFO` 를 명시 전송해야 동작

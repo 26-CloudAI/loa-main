@@ -104,6 +104,42 @@ class HerbivoreBot(BattleRoyale2DBot):
     def _can_visit_outside(self, eta: float) -> bool:
         return eta > self.URGENT_ETA_SEC
 
+    def _pick_safer_target(self, pos, enemy_pos, vision, tc, tr):
+        """적에게서 멀어지면서 자원에 가까워지는 타겟 좌표. 없으면 None.
+
+        - 후보: 시야 내 상자/코인/아이템 중 target_zone 안에 있는 것
+        - 적과의 거리가 봇의 현재 적-거리보다 더 먼 위치만
+        - 점수: 봇과의 거리(가까울수록 좋음) − (적과 더 먼 만큼) × 0.5
+        """
+        candidates: list[tuple[float, float]] = []
+        for c in vision.get("chests", []):
+            p = (float(c["pos"][0]), float(c["pos"][1]))
+            if self._in_target_zone(p, tc, tr):
+                candidates.append(p)
+        for n in vision.get("nodes", []):
+            p = (float(n["pos"][0]), float(n["pos"][1]))
+            if self._in_target_zone(p, tc, tr):
+                candidates.append(p)
+        for it in vision.get("items", []):
+            p = (float(it["pos"][0]), float(it["pos"][1]))
+            if self._in_target_zone(p, tc, tr):
+                candidates.append(p)
+        if not candidates:
+            return None
+        bot_to_enemy = _dist(pos, enemy_pos)
+        best = None
+        best_score = float("inf")
+        for p in candidates:
+            p_to_enemy = _dist(p, enemy_pos)
+            if p_to_enemy <= bot_to_enemy + 20.0:
+                continue   # 적과 더 가까워지는 타겟 제외
+            d_self = _dist(pos, p)
+            score = d_self - (p_to_enemy - bot_to_enemy) * 0.5
+            if score < best_score:
+                best_score = score
+                best = p
+        return best
+
     # ---------- 메인 의사결정 ----------
     def get_action(self, state: dict[str, Any]) -> dict[str, Any]:
         action = _zero_action()
@@ -142,13 +178,25 @@ class HerbivoreBot(BattleRoyale2DBot):
                     action["dash"] = True
                 return action
 
-        # 4. 너무 가까운 적 → 도망. 도망 방향이 target_zone 밖이면 측면 회피.
+        # 4. 너무 가까운 적 → 회피.
+        # 우선: 자원(상자/코인/아이템) 중 적과 더 멀고 봇과 가까운 곳으로 향함 (목표 기반 회피 = 코너 갇힘 방지)
+        # 폴백: 자원 없으면 기존 away/측면 로직
         enemies = vision.get("enemies", [])
         if enemies:
             nearest = min(enemies, key=lambda e: _dist(pos, tuple(e["pos"])))
-            d = _dist(pos, tuple(nearest["pos"]))
+            enemy_pos = tuple(nearest["pos"])
+            d = _dist(pos, enemy_pos)
             if d < self.FLEE_RANGE:
-                away = _norm((pos[0] - nearest["pos"][0], pos[1] - nearest["pos"][1]))
+                safe = self._pick_safer_target(pos, enemy_pos, vision, target_center, target_radius)
+                if safe is not None:
+                    aim = _norm((safe[0] - pos[0], safe[1] - pos[1]))
+                    action["move_dir"] = list(aim)
+                    action["aim_dir"] = list(aim)
+                    if dash_cd <= 0.0 and d < 90.0:
+                        action["dash"] = True
+                    return action
+                # 폴백 — 적 반대로, 자기장 밖이면 측면
+                away = _norm((pos[0] - enemy_pos[0], pos[1] - enemy_pos[1]))
                 flee_target = (pos[0] + away[0] * 120.0, pos[1] + away[1] * 120.0)
                 if target_center is not None and not self._in_target_zone(flee_target, target_center, target_radius):
                     perp_a = (-away[1], away[0])

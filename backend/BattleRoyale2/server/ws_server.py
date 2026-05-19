@@ -23,24 +23,36 @@ from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from BattleRoyale2.bots import HerbivoreBot
+from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot
 from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 
 logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = "0.1"
+
+# bot_id → 봇 클래스 매핑. ws_server 는 이 매핑으로 인스턴스 생성.
+BOT_CLASS_BY_ID: dict[str, type[BattleRoyale2DBot]] = {
+    "bot_a": HerbivoreBot,
+    "bot_b": MadDogBot,
+    "bot_c": CamperBot,
+}
+
 DEFAULT_BOT_FACTORY: list[tuple[str, str]] = [
     # (bot_id, display_name) — 매치 진입 시 이 목록대로 봇 인스턴스 생성
-    ("bot_a", "ALPHA"),
-    ("bot_b", "BRAVO"),
-    ("bot_c", "CHARLIE"),
+    ("bot_a", "초식봇"),
+    ("bot_b", "미친개봇"),
+    ("bot_c", "존버봇"),
 ]
 
 
 def _build_bots(spec: list[tuple[str, str]], seed: int | None = None) -> dict[str, BattleRoyale2DBot]:
-    """현재는 모두 HerbivoreBot. 추후 봇 종류 다양화."""
+    """bot_id 별로 BOT_CLASS_BY_ID 매핑에 따라 봇 인스턴스 생성. 매핑 없으면 HerbivoreBot 폴백."""
     rng_seed = seed if seed is not None else 0
-    return {bot_id: HerbivoreBot(bot_id, seed=rng_seed + i) for i, (bot_id, _) in enumerate(spec)}
+    bots: dict[str, BattleRoyale2DBot] = {}
+    for i, (bot_id, _name) in enumerate(spec):
+        cls = BOT_CLASS_BY_ID.get(bot_id, HerbivoreBot)
+        bots[bot_id] = cls(bot_id, seed=rng_seed + i)
+    return bots
 
 
 def _validate_action(action: Any) -> dict[str, Any]:
