@@ -14,5 +14,7 @@ sandbox = ["docker>=7.0"]
 dev = ["pytest>=7.4", "pytest-asyncio>=0.21"]
 
 [tool.pytest.ini_options]
-testpaths = ["BattleRoyale/tests"]
-pythonpath = ["BattleRoyale"]
+testpaths = ["battle_royale/tests"]
+# backend/: core/ 패키지 검색용
+# battle_royale/: src/, bots/ 검색용
+pythonpath = [".", "battle_royale"]
