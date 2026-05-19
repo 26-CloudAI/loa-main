@@ -7,6 +7,7 @@ import BotCodeInput from '../components/BotCodeInput'
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
 const MAX_CODE_BYTES = 50 * 1024
+const MAX_BOTS = 3
 
 const DEFAULT_CODE = `import random
 
@@ -151,24 +152,103 @@ function BossInfoBanner({ difficulty }: { difficulty: Difficulty }) {
   )
 }
 
+type BotEntry = { id: string; code: string }
+
+function BotCard({
+  index,
+  total,
+  bot,
+  onUpdate,
+  onRemove,
+}: {
+  index: number
+  total: number
+  bot: BotEntry
+  onUpdate: (field: keyof BotEntry, value: string) => void
+  onRemove: () => void
+}) {
+  const codeBytes = byteSize(bot.code)
+  const overLimit = codeBytes > MAX_CODE_BYTES
+
+  return (
+    <div className="border border-gray-700 rounded-xl overflow-hidden">
+      {/* 카드 헤더 */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-gray-800 border-b border-gray-700">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-red-400 bg-red-950/50 border border-red-800/60 rounded px-2 py-0.5">
+            봇 {index + 1}
+          </span>
+          <input
+            type="text"
+            value={bot.id}
+            onChange={(e) => onUpdate('id', e.target.value)}
+            placeholder={index === 0 ? 'challenger' : `challenger_${index + 1}`}
+            maxLength={32}
+            className="bg-transparent text-white text-sm outline-none placeholder-gray-500 w-40"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={`text-xs font-mono ${overLimit ? 'text-red-400' : 'text-gray-500'}`}>
+            {(codeBytes / 1024).toFixed(1)} KB / 50 KB
+          </span>
+          {total > 1 && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-gray-500 hover:text-red-400 transition-colors text-lg leading-none"
+              title="봇 제거"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 코드 에디터 */}
+      <div className="p-3 bg-gray-900">
+        <BotCodeInput
+          value={bot.code}
+          onChange={(v) => onUpdate('code', v)}
+          hasError={overLimit}
+          accentColor="red"
+        />
+        {overLimit && (
+          <p className="text-red-400 text-xs mt-1">코드가 50KB를 초과합니다. 줄여주세요.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function BossBattlePage() {
   const { token } = useAuth()
   const navigate = useNavigate()
 
   const [gameName, setGameName] = useState('')
-  const [botId, setBotId] = useState('')
-  const [code, setCode] = useState(DEFAULT_CODE)
+  const [bots, setBots] = useState<BotEntry[]>([{ id: '', code: DEFAULT_CODE }])
   const [tickInterval, setTickInterval] = useState(0.05)
   const [seed, setSeed] = useState('')
   const [difficulty, setDifficulty] = useState<Difficulty>('중')
-
   const [isPublic, setIsPublic] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const codeBytes = byteSize(code)
-  const codeOverLimit = codeBytes > MAX_CODE_BYTES
-  const canSubmit = !submitting && code.trim().length > 0 && !codeOverLimit
+  function addBot() {
+    if (bots.length < MAX_BOTS) {
+      setBots((prev) => [...prev, { id: '', code: DEFAULT_CODE }])
+    }
+  }
+
+  function removeBot(idx: number) {
+    setBots((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  function updateBot(idx: number, field: keyof BotEntry, value: string) {
+    setBots((prev) => prev.map((b, i) => (i === idx ? { ...b, [field]: value } : b)))
+  }
+
+  const anyOverLimit = bots.some((b) => byteSize(b.code) > MAX_CODE_BYTES)
+  const canSubmit = !submitting && bots.every((b) => b.code.trim().length > 0) && !anyOverLimit
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -184,7 +264,11 @@ export default function BossBattlePage() {
 
     try {
       const body: Record<string, unknown> = {
-        bots: [{ bot_id: botId.trim() || 'challenger', code, is_public: isPublic }],
+        bots: bots.map((b, i) => ({
+          bot_id: b.id.trim() || (i === 0 ? 'challenger' : `challenger_${i + 1}`),
+          code: b.code,
+          is_public: isPublic,
+        })),
         tick_interval: tickInterval,
         mode: 'boss',
         difficulty,
@@ -252,35 +336,39 @@ export default function BossBattlePage() {
             />
           </div>
 
-          {/* 봇 이름 */}
-          <Section title="내 봇 이름">
-            <input
-              type="text"
-              value={botId}
-              onChange={(e) => setBotId(e.target.value)}
-              placeholder="challenger"
-              maxLength={32}
-              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-600 w-64"
-            />
-          </Section>
-
-          {/* 코드 입력 (직접입력 / 파일 업로드) */}
-          <Section title="봇 코드 (Python)">
-            <div className="flex justify-end">
-              <span className={`text-xs font-mono ${codeOverLimit ? 'text-red-400' : 'text-gray-500'}`}>
-                {(codeBytes / 1024).toFixed(1)} KB / 50 KB{codeOverLimit && ' — 초과'}
-              </span>
+          {/* 봇 목록 */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-white text-sm">
+                내 봇
+                <span className="text-gray-500 font-normal ml-2">
+                  ({bots.length}/{MAX_BOTS}) — 팀으로 보스에 도전
+                </span>
+              </h3>
             </div>
-            <BotCodeInput
-              value={code}
-              onChange={setCode}
-              hasError={codeOverLimit}
-              accentColor="red"
-            />
-            {codeOverLimit && (
-              <p className="text-red-400 text-xs">코드가 50KB를 초과합니다. 줄여주세요.</p>
+
+            {bots.map((bot, idx) => (
+              <BotCard
+                key={idx}
+                index={idx}
+                total={bots.length}
+                bot={bot}
+                onUpdate={(field, value) => updateBot(idx, field, value)}
+                onRemove={() => removeBot(idx)}
+              />
+            ))}
+
+            {bots.length < MAX_BOTS && (
+              <button
+                type="button"
+                onClick={addBot}
+                className="flex items-center justify-center gap-2 border border-dashed border-gray-600 hover:border-red-600 rounded-xl py-3 text-sm text-gray-500 hover:text-red-400 transition-colors"
+              >
+                <span className="text-lg leading-none">+</span>
+                봇 추가 ({bots.length}/{MAX_BOTS})
+              </button>
             )}
-          </Section>
+          </div>
 
           {/* 게임 옵션 */}
           <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
@@ -351,7 +439,11 @@ export default function BossBattlePage() {
             disabled={!canSubmit}
             className="bg-red-700 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-3 transition-colors"
           >
-            {submitting ? '도전 중...' : '보스에게 도전!'}
+            {submitting
+              ? '도전 중...'
+              : bots.length > 1
+                ? `${bots.length}봇 팀으로 보스에 도전!`
+                : '보스에게 도전!'}
           </button>
 
         </form>

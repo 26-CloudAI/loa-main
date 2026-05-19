@@ -643,7 +643,8 @@ def create_app(
             if boss_participants and user_ranked:
                 boss_rank = boss_participants[0].final_rank
                 best_user_rank = min(p.final_rank for p in user_ranked)
-                _game_repo().update_game_boss_result(game_id, boss_won=(boss_rank < best_user_rank))
+                if boss_rank != best_user_rank:  # 동점(동일 rank)이면 draw — NULL 유지
+                    _game_repo().update_game_boss_result(game_id, boss_won=(boss_rank < best_user_rank))
 
         if not real_participants:
             return
