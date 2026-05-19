@@ -20,6 +20,7 @@ from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 # 룰 명세 동기 (Godot balance.gd 참조)
 MELEE_RANGE = 60.0
 RANGED_RANGE = 400.0
+EDGE_MARGIN = 100.0
 
 
 def _norm(v: tuple[float, float]) -> tuple[float, float]:
@@ -58,6 +59,8 @@ class MadDogBot(BattleRoyale2DBot):
         self._bot_id = bot_id
         self._rng = random.Random(seed)
         self._map_info: dict[str, Any] = {}
+        self._map_w = 3000.0
+        self._map_h = 3000.0
 
     @property
     def bot_id(self) -> str:
@@ -65,6 +68,9 @@ class MadDogBot(BattleRoyale2DBot):
 
     def choose_spawn(self, map_info: dict[str, Any]) -> tuple[float, float] | None:
         self._map_info = map_info
+        ms = map_info.get("map_size", [3000.0, 3000.0])
+        self._map_w = float(ms[0])
+        self._map_h = float(ms[1])
         # 미친개는 적이 많이 모일 곳에 가까이 스폰 — 희귀 코인 클러스터 우선
         candidates: list[tuple[float, float]] = []
         for c in map_info.get("rare_clusters", []):
@@ -93,6 +99,31 @@ class MadDogBot(BattleRoyale2DBot):
     def _attack_range(self, has_ranged: bool) -> float:
         return RANGED_RANGE if has_ranged else MELEE_RANGE
 
+    def _clamp_move(self, move_dir, pos):
+        """맵 경계 밖으로 향하는 성분 제거. 모두 0 되면 안쪽으로 강제."""
+        mx, my = float(move_dir[0]), float(move_dir[1])
+        px, py = pos
+        had_intent = (mx != 0.0 or my != 0.0)
+        if px < EDGE_MARGIN and mx < 0:
+            mx = 0.0
+        if px > self._map_w - EDGE_MARGIN and mx > 0:
+            mx = 0.0
+        if py < EDGE_MARGIN and my < 0:
+            my = 0.0
+        if py > self._map_h - EDGE_MARGIN and my > 0:
+            my = 0.0
+        if had_intent and mx == 0.0 and my == 0.0:
+            cx = self._map_w * 0.5 - px
+            cy = self._map_h * 0.5 - py
+            n = math.hypot(cx, cy)
+            if n > 1e-9:
+                mx, my = cx / n, cy / n
+        return [mx, my]
+
+    def _safe_return(self, action, pos):
+        action["move_dir"] = self._clamp_move(action["move_dir"], pos)
+        return action
+
     # ---------- 메인 의사결정 ----------
     def get_action(self, state: dict[str, Any]) -> dict[str, Any]:
         action = _zero_action()
@@ -118,7 +149,7 @@ class MadDogBot(BattleRoyale2DBot):
             action["aim_dir"] = list(d)
             if dash_cd <= 0.0:
                 action["dash"] = True
-            return action
+            return self._safe_return(action, pos)
 
         # 폴백 (target 정보 없을 때 현재 zone 기준)
         if zone.get("active", False) and zone.get("damage", 0.0) > 0.0:
@@ -130,7 +161,14 @@ class MadDogBot(BattleRoyale2DBot):
                 action["aim_dir"] = list(d)
                 if dash_cd <= 0.0:
                     action["dash"] = True
-                return action
+                return self._safe_return(action, pos)
+
+        # 2.5 상자 열기 진행 중이면 자리 고수 (피격 감수).
+        chest_progress = float(me.get("chest_progress", 0.0))
+        if 0.0 < chest_progress < 1.0:
+            action["move_dir"] = [0.0, 0.0]
+            action["pickup"] = True
+            return self._safe_return(action, pos)
 
         # 3~4. 적 탐색
         enemies = vision.get("enemies", [])
@@ -147,16 +185,26 @@ class MadDogBot(BattleRoyale2DBot):
                 action["aim_dir"] = list(aim)
                 action["move_dir"] = [0.0, 0.0]
                 action["attack"] = True
-                return action
+                return self._safe_return(action, pos)
 
             # 사거리 밖 → 추격
             action["aim_dir"] = list(aim)
             action["move_dir"] = list(aim)
             if ed >= self.CHASE_DASH_MIN_DIST and dash_cd <= 0.0:
                 action["dash"] = True
-            return action
+            return self._safe_return(action, pos)
 
-        # 5. 적 없음 → 자원 채집 (상자 > 코인). 다음 자기장 안 우선.
+        # 5. 적 없음 → 자원 채집 (드롭 아이템 > 상자 > 코인). 다음 자기장 안 우선.
+        items = vision.get("items", [])
+        if items:
+            in_safe = [i for i in items if self._in_target_zone(tuple(i["pos"]), tc, tr)]
+            pool_i = in_safe if in_safe else items
+            tgt = min(pool_i, key=lambda i: _dist(pos, tuple(i["pos"])))
+            aim = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
+            action["move_dir"] = list(aim)
+            action["aim_dir"] = list(aim)
+            return self._safe_return(action, pos)
+
         chests = vision.get("chests", [])
         if chests:
             in_safe = [c for c in chests if self._in_target_zone(tuple(c["pos"]), tc, tr)]
@@ -171,7 +219,7 @@ class MadDogBot(BattleRoyale2DBot):
                     action["pickup"] = True
                 else:
                     action["move_dir"] = list(aim)
-                return action
+                return self._safe_return(action, pos)
 
         nodes = vision.get("nodes", [])
         if nodes:
@@ -181,18 +229,18 @@ class MadDogBot(BattleRoyale2DBot):
             aim = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
             action["move_dir"] = list(aim)
             action["aim_dir"] = list(aim)
-            return action
+            return self._safe_return(action, pos)
 
         # 6. 폴백: target 중심으로 천천히
         if tc is not None:
             aim = _norm((tc[0] - pos[0], tc[1] - pos[1]))
             action["move_dir"] = [aim[0] * 0.5, aim[1] * 0.5]
             action["aim_dir"] = list(aim)
-            return action
+            return self._safe_return(action, pos)
         targets = self._map_info.get("chest_clusters", []) or self._map_info.get("rare_clusters", [])
         if targets:
             t = targets[0]
             aim = _norm((float(t[0]) - pos[0], float(t[1]) - pos[1]))
             action["move_dir"] = [aim[0] * 0.5, aim[1] * 0.5]
             action["aim_dir"] = list(aim)
-        return action
+        return self._safe_return(action, pos)

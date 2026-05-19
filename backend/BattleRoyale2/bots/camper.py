@@ -25,6 +25,7 @@ from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 
 MELEE_RANGE = 60.0
 RANGED_RANGE = 400.0
+EDGE_MARGIN = 100.0
 
 
 def _norm(v):
@@ -72,6 +73,8 @@ class CamperBot(BattleRoyale2DBot):
         self._rng = random.Random(seed)
         self._map_info: dict[str, Any] = {}
         self._clusters: list[tuple[float, float]] = []
+        self._map_w = 3000.0
+        self._map_h = 3000.0
 
     @property
     def bot_id(self) -> str:
@@ -91,6 +94,8 @@ class CamperBot(BattleRoyale2DBot):
         zone1_center = map_info.get("zone1_center")
         zone1_radius = float(map_info.get("zone1_radius", 0.0))
         mw, mh = float(map_size[0]), float(map_size[1])
+        self._map_w = mw
+        self._map_h = mh
         # 후보 점 N개 샘플링 → zone1 안 + 클러스터 멀리 인 점 중 가장 멀리 떨어진 곳
         best = None
         best_score = -1.0
@@ -138,6 +143,31 @@ class CamperBot(BattleRoyale2DBot):
 
     def _attack_range(self, has_ranged: bool) -> float:
         return RANGED_RANGE if has_ranged else MELEE_RANGE
+
+    def _clamp_move(self, move_dir, pos):
+        """맵 경계 밖으로 향하는 성분 제거. 모두 0 되면 안쪽으로 강제."""
+        mx, my = float(move_dir[0]), float(move_dir[1])
+        px, py = pos
+        had_intent = (mx != 0.0 or my != 0.0)
+        if px < EDGE_MARGIN and mx < 0:
+            mx = 0.0
+        if px > self._map_w - EDGE_MARGIN and mx > 0:
+            mx = 0.0
+        if py < EDGE_MARGIN and my < 0:
+            my = 0.0
+        if py > self._map_h - EDGE_MARGIN and my > 0:
+            my = 0.0
+        if had_intent and mx == 0.0 and my == 0.0:
+            cx = self._map_w * 0.5 - px
+            cy = self._map_h * 0.5 - py
+            n = math.hypot(cx, cy)
+            if n > 1e-9:
+                mx, my = cx / n, cy / n
+        return [mx, my]
+
+    def _safe_return(self, action, pos):
+        action["move_dir"] = self._clamp_move(action["move_dir"], pos)
+        return action
 
     def _pick_safer_target(self, pos, enemy_pos, vision, tc, tr, avoid_clusters: bool):
         """적에게서 멀어지면서 자원에 가까워지는 타겟. 캠핑 모드에선 클러스터 회피 추가."""
@@ -201,7 +231,7 @@ class CamperBot(BattleRoyale2DBot):
             action["aim_dir"] = list(d)
             if dash_cd <= 0.0:
                 action["dash"] = True
-            return action
+            return self._safe_return(action, pos)
         if zone.get("active", False) and zone.get("damage", 0.0) > 0.0:
             zc = tuple(zone.get("center", [0.0, 0.0]))
             zr = float(zone.get("radius", 0.0))
@@ -211,7 +241,14 @@ class CamperBot(BattleRoyale2DBot):
                 action["aim_dir"] = list(d)
                 if dash_cd <= 0.0:
                     action["dash"] = True
-                return action
+                return self._safe_return(action, pos)
+
+        # 2.5 상자 열기 진행 중이면 자리 고수 (피격 감수). 피격/도망 우선순위 무시.
+        chest_progress = float(me.get("chest_progress", 0.0))
+        if 0.0 < chest_progress < 1.0:
+            action["move_dir"] = [0.0, 0.0]
+            action["pickup"] = True
+            return self._safe_return(action, pos)
 
         engage = self._should_engage(sim_time, has_ranged, atk)
         enemies = vision.get("enemies", [])
@@ -236,15 +273,27 @@ class CamperBot(BattleRoyale2DBot):
                     action["aim_dir"] = list(aim)
                     if dash_cd <= 0.0 and d < 90.0:
                         action["dash"] = True
-                    return action
+                    return self._safe_return(action, pos)
                 away = _norm((pos[0] - enemy_pos[0], pos[1] - enemy_pos[1]))
                 action["move_dir"] = list(away)
                 action["aim_dir"] = list(away)
                 if dash_cd <= 0.0 and d < 90.0:
                     action["dash"] = True
-                return action
+                return self._safe_return(action, pos)
 
-        # 클러스터 밖, 다음 자기장 안 상자 우선
+        # 1순위: 드롭 아이템 (방금 깐 상자에서 나온 거 우선).
+        # 클러스터 필터 X — 자기 상자 옆에 떨어진 거라 위험 감수 가치 있음.
+        items = vision.get("items", [])
+        if items:
+            valid = [i for i in items if self._in_target_zone(tuple(i["pos"]), tc, tr)]
+            if valid:
+                tgt = min(valid, key=lambda i: _dist(pos, tuple(i["pos"])))
+                aim = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
+                action["move_dir"] = list(aim)
+                action["aim_dir"] = list(aim)
+                return self._safe_return(action, pos)
+
+        # 2순위: 클러스터 밖 상자 (스펙업 노림)
         chests = vision.get("chests", [])
         if chests:
             valid = [c for c in chests
@@ -254,38 +303,47 @@ class CamperBot(BattleRoyale2DBot):
                 tgt = min(valid, key=lambda c: _dist(pos, tuple(c["pos"])))
                 return self._approach_or_pickup(action, pos, tuple(tgt["pos"]))
 
-        # 다음으로 코인 (클러스터 밖, 자기장 안)
+        # 3순위: 클러스터 밖 코인 (생존용 점수)
         nodes = vision.get("nodes", [])
         if nodes:
             valid = [n for n in nodes
                      if not self._in_any_cluster(tuple(n["pos"]))
                      and self._in_target_zone(tuple(n["pos"]), tc, tr)
-                     and not n.get("rare", False)]   # 희귀는 보통 클러스터 = 피하지만 방어적으로 한 번 더
+                     and not n.get("rare", False)]
             if valid:
                 tgt = min(valid, key=lambda n: _dist(pos, tuple(n["pos"])))
                 aim = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
                 action["move_dir"] = list(aim)
                 action["aim_dir"] = list(aim)
-                return action
+                return self._safe_return(action, pos)
 
-        # 드롭 아이템 (클러스터 무관 — 상자 깐 사람 옆에 있는 자원이므로 위험 vs 보상은 일단 무시)
-        items = vision.get("items", [])
-        if items:
-            valid = [i for i in items if self._in_target_zone(tuple(i["pos"]), tc, tr)]
-            if valid:
-                tgt = min(valid, key=lambda i: _dist(pos, tuple(i["pos"])))
-                aim = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
-                action["move_dir"] = list(aim)
-                action["aim_dir"] = list(aim)
-                return action
-
-        # 폴백: target 중심으로 천천히 (클러스터 밖이면 그쪽 우선)
-        if tc is not None:
-            aim = _norm((tc[0] - pos[0], tc[1] - pos[1]))
-            action["move_dir"] = [aim[0] * 0.4, aim[1] * 0.4]
+        # 폴백: 다음 자기장 → 첫 자기장 → 클러스터에서 가장 먼 점 순으로 향함.
+        # 안전 페이즈(tc=None) 에서도 가만히 있지 않도록.
+        fallback = self._camp_patrol_target(pos)
+        if fallback is not None:
+            aim = _norm((fallback[0] - pos[0], fallback[1] - pos[1]))
+            action["move_dir"] = [aim[0] * 0.5, aim[1] * 0.5]
             action["aim_dir"] = list(aim)
-            return action
-        return action
+            return self._safe_return(action, pos)
+        return self._safe_return(action, pos)
+
+    def _camp_patrol_target(self, pos):
+        """안전 페이즈 / 자원 부재 시 캠퍼 봇이 향할 대체 목표.
+
+        우선순위:
+        1. 다음 자기장 target_center (있으면)
+        2. zone1_center (match_info)
+        3. 맵 중앙
+        """
+        # tc 는 호출자가 None 일 때만 진입하므로 1번은 건너뛰고 시작
+        z1 = self._map_info.get("zone1_center")
+        if z1 is not None:
+            try:
+                return (float(z1[0]), float(z1[1]))
+            except (TypeError, IndexError):
+                pass
+        # 폴백 — 맵 중앙
+        return (self._map_w * 0.5, self._map_h * 0.5)
 
     # ---------- 교전 모드 ----------
     def _engage_action(self, action, pos, vision, has_ranged, dash_cd, tc, tr):
@@ -302,16 +360,26 @@ class CamperBot(BattleRoyale2DBot):
                 action["aim_dir"] = list(aim)
                 action["move_dir"] = [0.0, 0.0]
                 action["attack"] = True
-                return action
+                return self._safe_return(action, pos)
 
             # 추격
             action["aim_dir"] = list(aim)
             action["move_dir"] = list(aim)
             if ed >= self.CHASE_DASH_MIN_DIST and dash_cd <= 0.0:
                 action["dash"] = True
-            return action
+            return self._safe_return(action, pos)
 
-        # 교전 모드라도 적 없으면 자원 채집 (스펙 추가)
+        # 적 없으면 자원 채집 — 드롭 아이템 우선 (방금 깐 상자 옆 아이템 등)
+        items = vision.get("items", [])
+        if items:
+            in_safe = [i for i in items if self._in_target_zone(tuple(i["pos"]), tc, tr)]
+            pool_i = in_safe if in_safe else items
+            tgt = min(pool_i, key=lambda i: _dist(pos, tuple(i["pos"])))
+            aim = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
+            action["move_dir"] = list(aim)
+            action["aim_dir"] = list(aim)
+            return self._safe_return(action, pos)
+
         chests = vision.get("chests", [])
         if chests:
             in_safe = [c for c in chests if self._in_target_zone(tuple(c["pos"]), tc, tr)]
@@ -328,13 +396,13 @@ class CamperBot(BattleRoyale2DBot):
             aim = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
             action["move_dir"] = list(aim)
             action["aim_dir"] = list(aim)
-            return action
+            return self._safe_return(action, pos)
 
         if tc is not None:
             aim = _norm((tc[0] - pos[0], tc[1] - pos[1]))
             action["move_dir"] = [aim[0] * 0.5, aim[1] * 0.5]
             action["aim_dir"] = list(aim)
-        return action
+        return self._safe_return(action, pos)
 
     def _approach_or_pickup(self, action, pos, target_pos):
         d = _dist(pos, target_pos)
@@ -345,4 +413,4 @@ class CamperBot(BattleRoyale2DBot):
             action["pickup"] = True
         else:
             action["move_dir"] = list(aim)
-        return action
+        return self._safe_return(action, pos)

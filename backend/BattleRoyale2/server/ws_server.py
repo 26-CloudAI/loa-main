@@ -38,10 +38,11 @@ BOT_CLASS_BY_ID: dict[str, type[BattleRoyale2DBot]] = {
 }
 
 DEFAULT_BOT_FACTORY: list[tuple[str, str]] = [
-    # (bot_id, display_name) — 매치 진입 시 이 목록대로 봇 인스턴스 생성
-    ("bot_a", "초식봇"),
-    ("bot_b", "미친개봇"),
-    ("bot_c", "존버봇"),
+    # (bot_id, display_name) — 매치 진입 시 이 목록대로 봇 인스턴스 생성.
+    # 추후 프론트엔드에서 N 마리 지정 시 같은 종류는 인덱스만 늘려서 운영 ("초식봇 2", ...).
+    ("bot_a", "초식봇 1"),
+    ("bot_b", "미친개봇 1"),
+    ("bot_c", "존버봇 1"),
 ]
 
 

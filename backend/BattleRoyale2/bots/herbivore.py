@@ -45,6 +45,9 @@ def _zero_action() -> dict[str, Any]:
     }
 
 
+EDGE_MARGIN = 100.0
+
+
 class HerbivoreBot(BattleRoyale2DBot):
     """초식 봇 — 자원 채집과 생존 우선. 자기장 target 정보를 활용해 미리 안전 지점으로 이동."""
 
@@ -60,6 +63,8 @@ class HerbivoreBot(BattleRoyale2DBot):
         self._bot_id = bot_id
         self._rng = random.Random(seed)
         self._map_info: dict[str, Any] = {}
+        self._map_w = 3000.0
+        self._map_h = 3000.0
 
     @property
     def bot_id(self) -> str:
@@ -67,6 +72,9 @@ class HerbivoreBot(BattleRoyale2DBot):
 
     def choose_spawn(self, map_info: dict[str, Any]) -> tuple[float, float] | None:
         self._map_info = map_info
+        ms = map_info.get("map_size", [3000.0, 3000.0])
+        self._map_w = float(ms[0])
+        self._map_h = float(ms[1])
         candidates: list[tuple[float, float]] = []
         for cluster in map_info.get("rare_clusters", []):
             candidates.append((float(cluster[0]), float(cluster[1])))
@@ -103,6 +111,31 @@ class HerbivoreBot(BattleRoyale2DBot):
 
     def _can_visit_outside(self, eta: float) -> bool:
         return eta > self.URGENT_ETA_SEC
+
+    def _clamp_move(self, move_dir, pos):
+        """맵 경계 밖으로 향하는 성분 제거. 모두 0 되면 안쪽으로 강제."""
+        mx, my = float(move_dir[0]), float(move_dir[1])
+        px, py = pos
+        had_intent = (mx != 0.0 or my != 0.0)
+        if px < EDGE_MARGIN and mx < 0:
+            mx = 0.0
+        if px > self._map_w - EDGE_MARGIN and mx > 0:
+            mx = 0.0
+        if py < EDGE_MARGIN and my < 0:
+            my = 0.0
+        if py > self._map_h - EDGE_MARGIN and my > 0:
+            my = 0.0
+        if had_intent and mx == 0.0 and my == 0.0:
+            cx = self._map_w * 0.5 - px
+            cy = self._map_h * 0.5 - py
+            n = math.hypot(cx, cy)
+            if n > 1e-9:
+                mx, my = cx / n, cy / n
+        return [mx, my]
+
+    def _safe_return(self, action, pos):
+        action["move_dir"] = self._clamp_move(action["move_dir"], pos)
+        return action
 
     def _pick_safer_target(self, pos, enemy_pos, vision, tc, tr):
         """적에게서 멀어지면서 자원에 가까워지는 타겟 좌표. 없으면 None.
@@ -164,7 +197,7 @@ class HerbivoreBot(BattleRoyale2DBot):
             action["aim_dir"] = list(dir_to)
             if dash_cd <= 0.0:
                 action["dash"] = True
-            return action
+            return self._safe_return(action, pos)
 
         # 3. 폴백: target 정보 없을 때 현재 자기장 밖이면 현재 center 로
         if zone.get("active", False) and zone.get("damage", 0.0) > 0.0:
@@ -176,7 +209,14 @@ class HerbivoreBot(BattleRoyale2DBot):
                 action["aim_dir"] = list(dir_to)
                 if dash_cd <= 0.0:
                     action["dash"] = True
-                return action
+                return self._safe_return(action, pos)
+
+        # 3.5 상자 열기 진행 중이면 자리 고수 (피격 감수). chest_progress > 0 인 동안엔 이동/도망 안 함.
+        chest_progress = float(me.get("chest_progress", 0.0))
+        if 0.0 < chest_progress < 1.0:
+            action["move_dir"] = [0.0, 0.0]
+            action["pickup"] = True
+            return self._safe_return(action, pos)
 
         # 4. 너무 가까운 적 → 회피.
         # 우선: 자원(상자/코인/아이템) 중 적과 더 멀고 봇과 가까운 곳으로 향함 (목표 기반 회피 = 코너 갇힘 방지)
@@ -194,7 +234,7 @@ class HerbivoreBot(BattleRoyale2DBot):
                     action["aim_dir"] = list(aim)
                     if dash_cd <= 0.0 and d < 90.0:
                         action["dash"] = True
-                    return action
+                    return self._safe_return(action, pos)
                 # 폴백 — 적 반대로, 자기장 밖이면 측면
                 away = _norm((pos[0] - enemy_pos[0], pos[1] - enemy_pos[1]))
                 flee_target = (pos[0] + away[0] * 120.0, pos[1] + away[1] * 120.0)
@@ -208,9 +248,26 @@ class HerbivoreBot(BattleRoyale2DBot):
                 action["aim_dir"] = list(away)
                 if dash_cd <= 0.0 and d < 90.0:
                     action["dash"] = True
-                return action
+                return self._safe_return(action, pos)
 
-        # 5. 코인 — 다음 자기장 안 우선. 시간 여유면 밖도 허용.
+        # 5. 드롭 아이템 — 자기 상자 옆에 떨어진 거 우선
+        items = vision.get("items", [])
+        if items:
+            in_safe = [i for i in items if self._in_target_zone(tuple(i["pos"]), target_center, target_radius)]
+            if in_safe:
+                pool_i = in_safe
+            elif self._can_visit_outside(target_eta):
+                pool_i = items
+            else:
+                pool_i = []
+            if pool_i:
+                tgt = min(pool_i, key=lambda i: _dist(pos, tuple(i["pos"])))
+                dir_to = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
+                action["move_dir"] = list(dir_to)
+                action["aim_dir"] = list(dir_to)
+                return self._safe_return(action, pos)
+
+        # 6. 코인 — 다음 자기장 안 우선. 시간 여유면 밖도 허용.
         nodes = vision.get("nodes", [])
         if nodes:
             in_safe = [n for n in nodes if self._in_target_zone(tuple(n["pos"]), target_center, target_radius)]
@@ -225,7 +282,7 @@ class HerbivoreBot(BattleRoyale2DBot):
                 dir_to = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
                 action["move_dir"] = list(dir_to)
                 action["aim_dir"] = list(dir_to)
-                return action
+                return self._safe_return(action, pos)
 
         # 6. 상자 — 다음 자기장 안 우선, 인접 시 pickup
         chests = vision.get("chests", [])
@@ -247,35 +304,18 @@ class HerbivoreBot(BattleRoyale2DBot):
                     action["pickup"] = True
                 else:
                     action["move_dir"] = list(dir_to)
-                return action
-
-        # 7. 드롭 아이템 — 다음 자기장 안 우선
-        items = vision.get("items", [])
-        if items:
-            in_safe = [i for i in items if self._in_target_zone(tuple(i["pos"]), target_center, target_radius)]
-            if in_safe:
-                pool = in_safe
-            elif self._can_visit_outside(target_eta):
-                pool = items
-            else:
-                pool = []
-            if pool:
-                tgt = min(pool, key=lambda i: _dist(pos, tuple(i["pos"])))
-                dir_to = _norm((tgt["pos"][0] - pos[0], tgt["pos"][1] - pos[1]))
-                action["move_dir"] = list(dir_to)
-                action["aim_dir"] = list(dir_to)
-                return action
+                return self._safe_return(action, pos)
 
         # 8. 폴백: target 정보 있으면 그 중심으로 천천히, 없으면 매치 시작 클러스터로
         if target_center is not None:
             dir_to = _norm((target_center[0] - pos[0], target_center[1] - pos[1]))
             action["move_dir"] = [dir_to[0] * 0.5, dir_to[1] * 0.5]
             action["aim_dir"] = list(dir_to)
-            return action
+            return self._safe_return(action, pos)
         targets = self._map_info.get("chest_clusters", []) or self._map_info.get("rare_clusters", [])
         if targets:
             tgt = targets[0]
             dir_to = _norm((float(tgt[0]) - pos[0], float(tgt[1]) - pos[1]))
             action["move_dir"] = [dir_to[0] * 0.5, dir_to[1] * 0.5]
             action["aim_dir"] = list(dir_to)
-        return action
+        return self._safe_return(action, pos)
