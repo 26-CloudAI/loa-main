@@ -12,13 +12,23 @@ _creds_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
 if _creds_json:
     # GCP Cloud Run: Secret Manager에서 JSON 문자열로 주입
     cred = credentials.Certificate(json.loads(_creds_json))
+    firebase_admin.initialize_app(cred)
 else:
-    # 로컬: 파일 경로 사용
+    # 로컬: 파일 경로 사용 (없으면 GCP VM의 ADC로 fallback)
     _default_path = Path(__file__).parents[4] / "secrets" / "serviceAccountKey.json"
     _creds_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", str(_default_path))
-    cred = credentials.Certificate(_creds_path)
-
-firebase_admin.initialize_app(cred)
+    if os.path.exists(_creds_path):
+        cred = credentials.Certificate(_creds_path)
+        firebase_admin.initialize_app(cred)
+    else:
+        # GCP VM 등에서 ADC(Application Default Credentials)로 초기화.
+        # Firebase ID 토큰 검증은 공개 키로 수행되므로 service account key 없이도 작동.
+        # FIREBASE_PROJECT_ID 환경변수로 projectId를 명시할 수 있음.
+        _project_id = os.environ.get("FIREBASE_PROJECT_ID") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if _project_id:
+            firebase_admin.initialize_app(options={"projectId": _project_id})
+        else:
+            firebase_admin.initialize_app()
 
 security = HTTPBearer()
 
