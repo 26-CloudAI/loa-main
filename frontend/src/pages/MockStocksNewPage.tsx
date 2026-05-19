@@ -231,7 +231,7 @@ export default function MockStocksNewPage() {
         <button
           type="button"
           onClick={() => setShowRules(true)}
-          className="ml-auto text-xs font-medium text-green-400 hover:text-green-300 border border-green-500/40 hover:border-green-400 rounded-lg px-3 py-1.5 transition-colors"
+          className="ml-auto text-xs font-medium text-[#F5A624] hover:text-[#FFC76A] border border-[#F5A624]/40 hover:border-[#F5A624] rounded-lg px-3 py-1.5 transition-colors"
         >
           📋 룰 확인
         </button>
@@ -250,7 +250,7 @@ export default function MockStocksNewPage() {
               onChange={(e) => setGameName(e.target.value)}
               placeholder="새 모의주식 1"
               maxLength={50}
-              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-600 w-80 max-w-full"
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#F5A624] placeholder-gray-600 w-80 max-w-full"
             />
           </section>
 
@@ -265,7 +265,7 @@ export default function MockStocksNewPage() {
               onChange={(e) => setBotId(e.target.value)}
               placeholder="my_bot"
               maxLength={32}
-              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-600 w-64"
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#F5A624] placeholder-gray-600 w-64"
             />
           </section>
 
@@ -299,7 +299,7 @@ export default function MockStocksNewPage() {
               <button
                 type="button"
                 onClick={() => setIsPublic((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-green-600' : 'bg-gray-700'}`}
+                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-[#F5A624]' : 'bg-gray-700'}`}
               >
                 <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
@@ -313,7 +313,7 @@ export default function MockStocksNewPage() {
               <button
                 type="button"
                 onClick={() => setFillWithAi((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${fillWithAi ? 'bg-green-600' : 'bg-gray-700'}`}
+                className={`relative w-11 h-6 rounded-full transition-colors ${fillWithAi ? 'bg-[#F5A624]' : 'bg-gray-700'}`}
               >
                 <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${fillWithAi ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
@@ -335,7 +335,7 @@ export default function MockStocksNewPage() {
                   setMinBots(Math.min(20, Number(raw)))
                 }}
                 onBlur={() => setMinBots((v) => (v === '' || v < 2 ? 2 : v))}
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-green-500 w-16 text-center"
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#F5A624] w-16 text-center"
               />
             </div>
 
@@ -345,7 +345,7 @@ export default function MockStocksNewPage() {
                   <p className="text-sm text-white">틱 간격 (속도)</p>
                   <p className="text-xs text-gray-500">값이 작을수록 빠름</p>
                 </div>
-                <span className="text-sm text-green-400 font-mono">{tickInterval.toFixed(2)}s</span>
+                <span className="text-sm font-mono" style={{ color: '#F5A624' }}>{tickInterval.toFixed(2)}s</span>
               </div>
               <input
                 type="range"
@@ -354,7 +354,7 @@ export default function MockStocksNewPage() {
                 step={0.01}
                 value={tickInterval}
                 onChange={(e) => setTickInterval(parseFloat(e.target.value))}
-                className="w-full accent-green-500"
+                className="w-full accent-[#F5A624]"
               />
               <div className="flex justify-between text-xs text-gray-600">
                 <span>0.01s (빠름)</span>
@@ -374,7 +374,7 @@ export default function MockStocksNewPage() {
                 value={seed}
                 onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="랜덤"
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-green-500 w-20 text-center placeholder-gray-400"
+                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#F5A624] w-20 text-center placeholder-gray-400"
               />
             </div>
           </section>
@@ -386,7 +386,7 @@ export default function MockStocksNewPage() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-3 transition-colors"
+            className="bg-[#F5A624] hover:bg-[#E09415] disabled:opacity-50 disabled:cursor-not-allowed text-black text-sm font-medium rounded-lg py-3 transition-colors"
           >
             {submitting ? '게임 생성 중...' : !newsReady ? '뉴스 생성 중...' : '게임 시작'}
           </button>

@@ -140,7 +140,7 @@ function DifficultySelector({
 function BossInfoBanner({ difficulty }: { difficulty: Difficulty }) {
   const info = DIFFICULTY_INFO[difficulty]
   return (
-    <div className="bg-red-950/40 border border-red-800/60 rounded-xl px-5 py-4 flex gap-4 items-start">
+    <div className="rounded-xl px-5 py-4 flex gap-4 items-start" style={{ background: 'rgba(232,51,74,.1)', border: '1px solid rgba(232,51,74,.35)' }}>
       <span className="text-3xl shrink-0">👾</span>
       <div className="flex flex-col gap-1">
         <p className={`font-bold ${info.color}`}>
@@ -383,7 +383,7 @@ export default function BossBattlePage() {
               <button
                 type="button"
                 onClick={() => setIsPublic((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-red-600' : 'bg-gray-700'}`}
+                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-[#E8334A]' : 'bg-gray-700'}`}
               >
                 <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
@@ -395,7 +395,7 @@ export default function BossBattlePage() {
                   <p className="text-sm text-white">틱 간격 (속도)</p>
                   <p className="text-xs text-gray-500">값이 작을수록 빠름</p>
                 </div>
-                <span className="text-sm text-red-400 font-mono">{tickInterval.toFixed(2)}s</span>
+                <span className="text-sm font-mono" style={{ color: '#E8334A' }}>{tickInterval.toFixed(2)}s</span>
               </div>
               <input
                 type="range"
@@ -404,7 +404,7 @@ export default function BossBattlePage() {
                 step={0.01}
                 value={tickInterval}
                 onChange={(e) => setTickInterval(parseFloat(e.target.value))}
-                className="w-full accent-red-500"
+                className="w-full accent-[#E8334A]"
               />
               <div className="flex justify-between text-xs text-gray-600">
                 <span>0.01s (빠름)</span>
@@ -437,7 +437,7 @@ export default function BossBattlePage() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="bg-red-700 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-3 transition-colors"
+            className="bg-[#E8334A] hover:bg-[#D42B42] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg py-3 transition-colors"
           >
             {submitting
               ? '도전 중...'
