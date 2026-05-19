@@ -270,7 +270,9 @@ class StateEncoder:
             nearest_enemy_energy = min(nearest["energy"] / 250.0, 1.0)
 
         # ── rank 정규화 ─────────────────────────────────────────────────
-        my_id = my.get("id", "")
+        # state["my_bot"] 키는 "bot_id" — "id"로 조회하면 항상 ""가 되어
+        # 리더보드 매칭이 실패하는 버그를 수정한다.
+        my_id = my.get("bot_id", my.get("id", ""))
         rank_norm = 1.0
         for entry in leaderboard:
             if entry.get("id") == my_id or entry.get("bot_id") == my_id:

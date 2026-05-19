@@ -192,25 +192,29 @@ class TestStateEncoder:
         assert phi[13] == pytest.approx(-1.0)
 
     def test_mineral_in_adj_flag_set(self):
+        # 스칼라 레이아웃(25개 vision 이후): energy[25] score[26] tick[27]
+        # zone_margins[28-31] dist_center[32] enemy_adj[33] enemy_vis[34]
+        # enemy_energy[35] mineral_adj[36] mineral_rare_adj[37]
+        # mineral_vis[38] danger_zone[39] rank[40] kills[41] bias[42]
         grid = _make_empty_grid()
         grid[2][3] = "mineral"
         phi = self.enc.encode(_make_state(grid=grid))
-        assert phi[32] == pytest.approx(1.0)  # mineral_in_adj
+        assert phi[36] == pytest.approx(1.0)  # mineral_in_adj
 
     def test_rare_mineral_flags(self):
         grid = _make_empty_grid()
         grid[1][2] = "mineral_rare"
         phi = self.enc.encode(_make_state(grid=grid))
-        assert phi[33] == pytest.approx(1.0)  # mineral_rare_in_adj
-        assert phi[32] == pytest.approx(1.0)  # mineral_in_adj
-        assert phi[34] == pytest.approx(1.0)  # mineral_in_vision
+        assert phi[37] == pytest.approx(1.0)  # mineral_rare_in_adj
+        assert phi[36] == pytest.approx(1.0)  # mineral_in_adj (rare도 포함)
+        assert phi[38] == pytest.approx(1.0)  # mineral_in_vision
 
     def test_enemy_in_vision_flag(self):
         grid = _make_empty_grid()
         grid[0][0] = "bot_enemy"
         phi = self.enc.encode(_make_state(grid=grid))
-        assert phi[31] == pytest.approx(1.0)  # enemy_in_vision
-        assert phi[30] == pytest.approx(0.0)  # enemy_in_adj
+        assert phi[34] == pytest.approx(1.0)  # enemy_in_vision
+        assert phi[33] == pytest.approx(0.0)  # enemy_in_adj (비인접)
 
     def test_energy_norm_clamped_to_1(self):
         phi = self.enc.encode(_make_state(energy=9999))
@@ -218,23 +222,24 @@ class TestStateEncoder:
 
     def test_bias_always_one(self):
         phi = self.enc.encode(_make_state())
-        assert phi[37] == pytest.approx(1.0)
+        assert phi[42] == pytest.approx(1.0)  # bias (마지막 피처)
 
     def test_in_zone_flag_set_when_out_of_safe_area(self):
         phi = self.enc.encode(_make_state(pos_x=5, pos_y=50, zone_boundary=10))
-        assert phi[35] == pytest.approx(1.0)
+        assert phi[39] == pytest.approx(1.0)  # danger_zone
 
     def test_in_zone_flag_clear_when_safe(self):
         phi = self.enc.encode(_make_state(pos_x=50, pos_y=50, zone_boundary=10))
-        assert phi[35] == pytest.approx(0.0)
+        assert phi[39] == pytest.approx(0.0)
 
     def test_leaderboard_rank_norm(self):
+        # StateEncoder는 my_bot["bot_id"]로 리더보드를 조회한다.
         state = _make_state(
             bot_id="boss",
             leaderboard=[{"id": "boss", "rank": 5}],
         )
         phi = self.enc.encode(state)
-        assert phi[36] == pytest.approx(0.5)  # 5 / 10
+        assert phi[40] == pytest.approx(0.5)  # rank_norm = 5 / 10
 
 
 # ---------------------------------------------------------------------------
