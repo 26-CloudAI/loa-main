@@ -151,12 +151,12 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
       />
 
       {/* Floating symbols */}
-      <FloatEl animCls="lf1" style={{ top: '14%', left: '8%',   fontSize: 90, color: '#E8334A', opacity: .06 }}>◆</FloatEl>
-      <FloatEl animCls="lf2" style={{ top: '18%', right: '10%', fontSize: 65, color: '#9B59F5', opacity: .06 }}>◉</FloatEl>
-      <FloatEl animCls="lf3" style={{ bottom: '22%', left: '12%', fontSize: 50, color: '#F5A624', opacity: .06 }}>▲</FloatEl>
-      <FloatEl animCls="lf4" style={{ bottom: '18%', right: '9%', fontSize: 75, color: '#E8334A', opacity: .05 }}>◈</FloatEl>
-      <FloatEl animCls="lf5" style={{ top: '42%', left: '4%',   fontSize: 40, color: '#9B59F5', opacity: .04 }}>✦</FloatEl>
-      <FloatEl animCls="lf6" style={{ top: '38%', right: '5%',  fontSize: 44, color: '#F5A624', opacity: .05 }}>◆</FloatEl>
+      <FloatEl animCls="lf1" style={{ top: '14%', left: '8%',   fontSize: 90, color: '#E8334A', opacity: .18 }}>◆</FloatEl>
+      <FloatEl animCls="lf2" style={{ top: '18%', right: '10%', fontSize: 65, color: '#9B59F5', opacity: .18 }}>◉</FloatEl>
+      <FloatEl animCls="lf3" style={{ bottom: '22%', left: '12%', fontSize: 50, color: '#F5A624', opacity: .18 }}>▲</FloatEl>
+      <FloatEl animCls="lf4" style={{ bottom: '18%', right: '9%', fontSize: 75, color: '#E8334A', opacity: .15 }}>◈</FloatEl>
+      <FloatEl animCls="lf5" style={{ top: '42%', left: '4%',   fontSize: 40, color: '#9B59F5', opacity: .13 }}>✦</FloatEl>
+      <FloatEl animCls="lf6" style={{ top: '38%', right: '5%',  fontSize: 44, color: '#F5A624', opacity: .15 }}>◆</FloatEl>
 
       <div className="relative z-10" style={{ maxWidth: 680, marginTop: -60 }}>
         {/* Live badge */}
