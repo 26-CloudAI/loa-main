@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir "numpy>=2.0" google-cloud-storage
 
 COPY BattleRoyale/src/ ./src/
 COPY BattleRoyale/bots/ ./bots/
-COPY BattleRoyale/train_boss_bot.py ./
+COPY BattleRoyale/scripts/train/train_boss_bot.py ./scripts/train/
 COPY BattleRoyale/gcs_weights.py ./
 
 # trained_weights.json은 GCS에서 받아오므로 이미지에 굽지 않음
@@ -15,6 +15,6 @@ COPY BattleRoyale/gcs_weights.py ./
 
 ENV PYTHONUNBUFFERED=1
 
-ENTRYPOINT ["python", "train_boss_bot.py"]
+ENTRYPOINT ["python", "scripts/train/train_boss_bot.py"]
 # 기본값: 500 에피소드. Cloud Run Job에서 --episodes 등 override 가능
 CMD ["--episodes", "500"]
