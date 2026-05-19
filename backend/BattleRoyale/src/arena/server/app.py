@@ -17,18 +17,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
-
-# RLBossBot 싱글톤 보호용 락. _create_boss_bot은 FastAPI 워커 스레드 풀에서
-# 동시에 호출될 수 있으며, reset_for_episode 도중에 다른 요청이 같은 인스턴스를
-# 사용하면 _prev_state 등이 오염된다. 락으로 직렬화한다.
-_BOSS_BOT_LOCK = threading.Lock()
 
 # FastAPI import를 안전하게 처리
 try:
@@ -44,7 +38,14 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from ..bot_interface import BotInterface
-from ..config import BOSS_MAX_USER_BOTS, DEFAULT_CONFIG, boss_battle_config
+from ..config import DEFAULT_CONFIG
+from .boss import (
+    BOSS_BOT_LOCK,
+    BOSS_MAX_USER_BOTS,
+    boss_battle_config,
+    create_boss_bot,
+    record_boss_result,
+)
 from . import settings as _settings
 from .config import DEFAULT_SERVER_CONFIG, ServerConfig
 from .game_session import GameRegistry, GameSession
@@ -164,89 +165,6 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
 
     return fillers
 
-
-def _create_boss_bot(
-    existing_ids: set[str],
-    difficulty: str = "상",
-    rl_singleton_state: Optional[dict] = None,
-) -> BotInterface:
-    """
-    보스전용 봇 생성. 난이도에 따라 봇 종류가 다름.
-      하 → RuleBossEasyBot  (룰베이스, 채굴·생존 중심)
-      중 → RuleBossMediumBot (룰베이스, 채굴+전투 균형)
-      상 → RLBossBot         (강화학습, GCS 가중치 사용)
-
-    rl_singleton_state: 주어지면 "rl_boss_bot" 키에 RLBossBot 인스턴스를
-    캐싱하여 보스전마다 동일 인스턴스를 재사용한다. 리플레이 버퍼/가중치/
-    epsilon이 게임 사이에 유지되어 프로덕션 학습이 가능해진다.
-    """
-    bot_id = "AI_보스"
-    existing_ids.add(bot_id)
-
-    if difficulty == "하":
-        from bots.boss.rule_boss_bot import RuleBossEasyBot
-        return RuleBossEasyBot(bot_id=bot_id, seed=42)
-
-    if difficulty == "중":
-        from bots.boss.rule_boss_bot import RuleBossMediumBot
-        return RuleBossMediumBot(bot_id=bot_id, seed=42)
-
-    # 상 (기본값): RL 보스봇 + GCS 가중치 — 싱글톤 재사용
-    # 학습은 PyTorch(.pt) 포맷, 서빙은 PyTorch가 있으면 동일 포맷을 사용해
-    # 학습 결과가 즉시 반영되도록 한다. PyTorch가 없으면 numpy 버전으로 폴백
-    # (단, .pt 가중치는 로드되지 않으므로 무작위 초기화 상태로 동작한다).
-    from .. import gcs_weights
-
-    # 동시 보스전 요청이 같은 인스턴스를 reset_for_episode하는 경쟁 상태를 방지.
-    # 락 내부에서 싱글톤 조회/reset/생성/저장을 모두 직렬화한다.
-    with _BOSS_BOT_LOCK:
-        if rl_singleton_state is not None:
-            cached = rl_singleton_state.get("rl_boss_bot")
-            if cached is not None:
-                try:
-                    cached.reset_for_episode()
-                    return cached
-                except Exception:
-                    logger.exception(
-                        "RL 보스봇 싱글톤 reset 실패 — 새 인스턴스 생성"
-                    )
-
-        cache = gcs_weights.local_cache_path()
-        # 캐시가 없고 GCS가 활성화된 경우 서버 시작 시 다운로드 실패를 재시도
-        if not cache.exists() and gcs_weights.enabled():
-            logger.info("보스봇 가중치 캐시 없음 — GCS 재다운로드 시도")
-            gcs_weights.download()
-        weights_path = cache if cache.exists() else None
-
-        # PyTorch 사용 가능 + 가중치가 .pt면 Torch 봇을, 아니면 numpy 봇을 사용.
-        use_torch = False
-        if weights_path is not None and str(weights_path).endswith(".pt"):
-            try:
-                import torch  # noqa: F401
-                use_torch = True
-            except ImportError:
-                logger.warning(
-                    "PyTorch 가중치(.pt)가 다운로드됐지만 torch 미설치 — "
-                    "numpy 보스봇으로 폴백 (학습 가중치 반영 안 됨)"
-                )
-
-        if use_torch:
-            from bots.boss.rl_boss_bot_torch import RLBossBotTorch
-            bot = RLBossBotTorch(
-                bot_id=bot_id, seed=0, weights_path=weights_path, device="cpu"
-            )
-        else:
-            from bots.boss.rl_boss_bot import RLBossBot
-            bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
-
-        if rl_singleton_state is not None:
-            rl_singleton_state["rl_boss_bot"] = bot
-            logger.info(
-                "RL 보스봇 싱글톤 인스턴스 생성 (%s) — 이후 보스전에서 재사용",
-                type(bot).__name__,
-            )
-
-        return bot
 
 # ──────────────────────────────────────────────
 #  Pydantic 스키마 (데이터 검증용) -> 클라이언트가 보낸 JSON울 파이썬 객체로 변환
@@ -391,7 +309,7 @@ def create_app(
                         if gen is None or gen == _last_generation[0]:
                             continue
                         gcs_weights.download()
-                        with _BOSS_BOT_LOCK:
+                        with BOSS_BOT_LOCK:
                             if state.get("rl_boss_bot") is not None:
                                 state["rl_boss_bot"] = None
                                 logger.info(
@@ -642,7 +560,7 @@ def create_app(
                     400,
                     f"보스전은 봇 1~{BOSS_MAX_USER_BOTS}개를 등록할 수 있습니다.",
                 )
-            boss_bot = _create_boss_bot(
+            boss_bot = create_boss_bot(
                 existing_ids,
                 difficulty=difficulty,
                 rl_singleton_state=state,
@@ -721,26 +639,12 @@ def create_app(
             await asyncio.sleep(0.5)
 
         # 보스전 결과 기록 — real_participants early-return 전에 처리해야 보스 승리도 기록됨
-        if game_record and game_record.mode == "boss":
-            boss_participants = [
-                p for p in participants if p.is_boss_bot and p.final_rank
-            ]
-            user_ranked = [
-                p for p in participants
-                if not p.is_ai_filler and not p.is_boss_bot and p.final_rank
-            ]
-            if boss_participants and user_ranked:
-                boss_rank = boss_participants[0].final_rank
-                best_user_rank = min(p.final_rank for p in user_ranked)
-                if boss_rank != best_user_rank:  # 동점(동일 rank)이면 draw — NULL 유지
-                    try:
-                        _game_repo().update_game_boss_result(
-                            game_id, boss_won=(boss_rank < best_user_rank)
-                        )
-                    except Exception:
-                        logger.exception(
-                            "보스전 결과 기록 실패 game=%s", game_id
-                        )
+        record_boss_result(
+            game_id=game_id,
+            game_record=game_record,
+            participants=participants,
+            game_repo=_game_repo(),
+        )
 
         if not real_participants:
             return
