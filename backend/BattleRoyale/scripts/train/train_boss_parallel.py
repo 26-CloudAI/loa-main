@@ -43,7 +43,7 @@ from datetime import datetime, timezone, timedelta
 from multiprocessing import Process, Queue
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parent
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 from src.arena.bot_interface import BotInterface

@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 # 프로젝트 루트를 path에 추가
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.arena.config import DEFAULT_CONFIG
 from src.arena.engine import GameEngine

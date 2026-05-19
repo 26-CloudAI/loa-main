@@ -36,8 +36,8 @@ import traceback
 from pathlib import Path
 from typing import Optional
 
-# 프로젝트 루트 (= 이 파일이 있는 BattleRoyale 디렉토리) 를 sys.path에 추가
-_PROJECT_ROOT = Path(__file__).resolve().parent
+# 프로젝트 루트 (BattleRoyale 디렉토리) 를 sys.path에 추가
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 import gcs_weights  # noqa: E402

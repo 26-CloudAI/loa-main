@@ -21,7 +21,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -46,9 +46,9 @@ OPPONENTS = [
     (MadDogBot,    "미친개"),
     (CamperBot,    "존버"),
 ]
-WEIGHTS_PATH  = Path(__file__).parent / "bots" / "trained_weights.json"
+WEIGHTS_PATH  = Path(__file__).resolve().parent.parent.parent / "bots" / "trained_weights.json"
 SAVE_INTERVAL = 10  # N 에피소드마다 자동 저장
-VIEWER_HTML = Path(__file__).parent / "train_boss_bot_viewer.html"
+VIEWER_HTML = Path(__file__).resolve().parent.parent / "tools" / "train_boss_bot_viewer.html"
 
 # ---------------------------------------------------------------------------
 # 앱
