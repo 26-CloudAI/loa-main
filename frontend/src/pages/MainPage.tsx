@@ -291,9 +291,10 @@ export default function MainPage() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <button onClick={() => navigate('/rankings')} style={navBtn}>리더보드</button>
-          {user && (
-            <span style={{ fontSize: 13, color: MUTED, display: 'flex', alignItems: 'center', gap: 6 }}>
-              {displayName}
+          <button onClick={() => navigate('/games/list')} style={navBtn}>게임 목록</button>
+          <button onClick={() => navigate('/mypage')} style={{ ...navBtn, display: 'flex', alignItems: 'center', gap: 6, color: '#F0EBFF' }}>
+            {displayName}
+            {user && (
               <span style={{
                 fontSize: 10, background: 'rgba(155,89,245,.15)', color: '#C8A8FF',
                 border: '1px solid rgba(155,89,245,.35)',
@@ -301,8 +302,9 @@ export default function MainPage() {
               }}>
                 {user.role}
               </span>
-            </span>
-          )}
+            )}
+            ▾
+          </button>
           <button onClick={handleLogout} style={navBtn}>로그아웃</button>
         </div>
       </nav>

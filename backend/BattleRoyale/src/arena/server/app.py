@@ -1105,6 +1105,24 @@ def create_app(
             "elo": db_user.elo,
         }
 
+    @app.patch("/api/me")
+    async def update_my_profile(
+        body: dict,
+        user: dict = Depends(verify_firebase_token),
+    ):
+        """닉네임(display_name) 변경."""
+        firebase_uid = user.get("uid") or user.get("user_id", "")
+        db_user = _user_repo().get_by_firebase_uid(firebase_uid)
+        if not db_user:
+            raise HTTPException(404, "등록되지 않은 유저입니다.")
+        display_name = body.get("display_name", "").strip()
+        if not display_name:
+            raise HTTPException(400, "닉네임을 입력해주세요.")
+        if len(display_name) > 20:
+            raise HTTPException(400, "닉네임은 20자 이하로 입력해주세요.")
+        _user_repo().update_display_name(db_user.id, display_name)
+        return {"message": "닉네임이 변경되었습니다.", "display_name": display_name}
+
     @app.get("/api/users/check-username")
     async def check_username(username: str):
         """username 사용 가능 여부를 반환한다. (인증 불필요)"""
@@ -1152,6 +1170,7 @@ def create_app(
                 "wins": b.wins,
                 "losses": b.losses,
                 "games_played": b.games_played,
+                "created_at": b.created_at,
                 "updated_at": b.updated_at,
             })
         return {
