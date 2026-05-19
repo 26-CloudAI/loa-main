@@ -33,6 +33,7 @@ from bots.rl_boss_bot import (
     ALPHA,
     BUFFER_SIZE,
     ENERGY_CRITICAL,
+    ENERGY_MINE_COST,
     GAMMA,
     IDX_ATTACK_DOWN,
     IDX_ATTACK_LEFT,
@@ -192,29 +193,25 @@ class TestStateEncoder:
         assert phi[13] == pytest.approx(-1.0)
 
     def test_mineral_in_adj_flag_set(self):
-        # 스칼라 레이아웃(25개 vision 이후): energy[25] score[26] tick[27]
-        # zone_margins[28-31] dist_center[32] enemy_adj[33] enemy_vis[34]
-        # enemy_energy[35] mineral_adj[36] mineral_rare_adj[37]
-        # mineral_vis[38] danger_zone[39] rank[40] kills[41] bias[42]
         grid = _make_empty_grid()
         grid[2][3] = "mineral"
         phi = self.enc.encode(_make_state(grid=grid))
-        assert phi[36] == pytest.approx(1.0)  # mineral_in_adj
+        assert phi[32] == pytest.approx(1.0)  # mineral_in_adj
 
     def test_rare_mineral_flags(self):
         grid = _make_empty_grid()
         grid[1][2] = "mineral_rare"
         phi = self.enc.encode(_make_state(grid=grid))
-        assert phi[37] == pytest.approx(1.0)  # mineral_rare_in_adj
-        assert phi[36] == pytest.approx(1.0)  # mineral_in_adj (rare도 포함)
-        assert phi[38] == pytest.approx(1.0)  # mineral_in_vision
+        assert phi[33] == pytest.approx(1.0)  # mineral_rare_in_adj
+        assert phi[32] == pytest.approx(1.0)  # mineral_in_adj
+        assert phi[34] == pytest.approx(1.0)  # mineral_in_vision
 
     def test_enemy_in_vision_flag(self):
         grid = _make_empty_grid()
         grid[0][0] = "bot_enemy"
         phi = self.enc.encode(_make_state(grid=grid))
-        assert phi[34] == pytest.approx(1.0)  # enemy_in_vision
-        assert phi[33] == pytest.approx(0.0)  # enemy_in_adj (비인접)
+        assert phi[31] == pytest.approx(1.0)  # enemy_in_vision
+        assert phi[30] == pytest.approx(0.0)  # enemy_in_adj
 
     def test_energy_norm_clamped_to_1(self):
         phi = self.enc.encode(_make_state(energy=9999))
@@ -222,24 +219,23 @@ class TestStateEncoder:
 
     def test_bias_always_one(self):
         phi = self.enc.encode(_make_state())
-        assert phi[42] == pytest.approx(1.0)  # bias (마지막 피처)
+        assert phi[37] == pytest.approx(1.0)
 
     def test_in_zone_flag_set_when_out_of_safe_area(self):
         phi = self.enc.encode(_make_state(pos_x=5, pos_y=50, zone_boundary=10))
-        assert phi[39] == pytest.approx(1.0)  # danger_zone
+        assert phi[35] == pytest.approx(1.0)
 
     def test_in_zone_flag_clear_when_safe(self):
         phi = self.enc.encode(_make_state(pos_x=50, pos_y=50, zone_boundary=10))
-        assert phi[39] == pytest.approx(0.0)
+        assert phi[35] == pytest.approx(0.0)
 
     def test_leaderboard_rank_norm(self):
-        # StateEncoder는 my_bot["bot_id"]로 리더보드를 조회한다.
         state = _make_state(
             bot_id="boss",
             leaderboard=[{"id": "boss", "rank": 5}],
         )
         phi = self.enc.encode(state)
-        assert phi[40] == pytest.approx(0.5)  # rank_norm = 5 / 10
+        assert phi[36] == pytest.approx(0.5)  # 5 / 10
 
 
 # ---------------------------------------------------------------------------
@@ -260,15 +256,19 @@ class TestDQNetwork:
         q = net.forward(phi)
         assert np.allclose(q, net.b2)
 
-    def test_update_batch_changes_weights(self):
+    def test_update_single_changes_weights(self):
         net = DQNetwork(seed=0)
-        B = 4
-        phis = np.ones((B, N_FEATURES), dtype=np.float32)
-        actions = np.array([IDX_MINE] * B, dtype=np.int32)
-        targets = np.ones(B, dtype=np.float32)
+        phi = np.ones(N_FEATURES, dtype=np.float32)
         w2_before = net.W2.copy()
-        net.update_batch(phis, actions, targets, ALPHA)
+        net.update_single(phi, IDX_MINE, td_target=1.0, alpha=ALPHA)
         assert not np.allclose(net.W2, w2_before)
+
+    def test_update_single_returns_td_error(self):
+        net = DQNetwork(seed=0)
+        phi = np.zeros(N_FEATURES, dtype=np.float32)
+        # Q=b2[IDX_MINE]=0, target=1 → delta=1
+        delta = net.update_single(phi, IDX_MINE, td_target=1.0, alpha=ALPHA)
+        assert delta == pytest.approx(1.0, abs=1e-5)
 
     def test_update_batch_returns_loss(self):
         net = DQNetwork(seed=0)
@@ -418,11 +418,11 @@ class TestRLBossBotIntegration:
             action = boss.get_action(_make_state(tick=tick))
             assert action in [a.value for a in Action]
 
-    def test_energy_critical_no_target_falls_back_to_stay(self):
-        """ENERGY_CRITICAL 이하 + 인접 적/광물·시야 광물·기억 모두 없으면 STAY."""
+    def test_shield_when_energy_critical(self):
+        """ENERGY_CRITICAL 이하 + 인접 광물/적 없음 → 실드 하드코딩."""
         boss = _make_boss(epsilon=0.0)
         action = boss.get_action(_make_state(energy=ENERGY_CRITICAL))
-        assert action == Action.STAY.value
+        assert action == Action.SHIELD.value
 
     def test_zone_escape_toward_center(self):
         """자기장 안이면 중앙 방향으로 이동."""

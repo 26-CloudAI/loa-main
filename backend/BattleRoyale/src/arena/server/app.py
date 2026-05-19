@@ -17,18 +17,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
-
-# RLBossBot 싱글톤 보호용 락. _create_boss_bot은 FastAPI 워커 스레드 풀에서
-# 동시에 호출될 수 있으며, reset_for_episode 도중에 다른 요청이 같은 인스턴스를
-# 사용하면 _prev_state 등이 오염된다. 락으로 직렬화한다.
-_BOSS_BOT_LOCK = threading.Lock()
 
 # FastAPI import를 안전하게 처리
 try:
@@ -44,7 +38,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from ..bot_interface import BotInterface
-from ..config import BOSS_MAX_USER_BOTS, DEFAULT_CONFIG, boss_battle_config
+from ..config import DEFAULT_CONFIG
 from . import settings as _settings
 from .config import DEFAULT_SERVER_CONFIG, ServerConfig
 from .game_session import GameRegistry, GameSession
@@ -76,32 +70,6 @@ logger = logging.getLogger(__name__)
 #  콜드스타트 봇 팩토리 (인프로세스용)
 # ──────────────────────────────────────────────
 
-# 유저 코드 실행 시 노출할 builtins 화이트리스트(블랙리스트 기반).
-# 완전한 샌드박스는 아니지만 open/exec/eval/__import__/input 등을 제거해
-# 우발적 파일 IO·동적 import·대화형 차단을 한다. 진정한 격리는 Docker/seccomp가
-# 필요하지만 현재 인프라에서는 이 제한이 최소한의 방어선이다.
-_FORBIDDEN_BUILTINS = frozenset({
-    "open", "exec", "eval", "compile", "__import__",
-    "input", "breakpoint", "memoryview",
-    "globals", "vars",
-})
-
-
-def _restricted_builtins() -> dict:
-    import builtins as _b
-    safe = {}
-    for name in dir(_b):
-        if name.startswith("_"):
-            continue
-        if name in _FORBIDDEN_BUILTINS:
-            continue
-        safe[name] = getattr(_b, name)
-    return safe
-
-
-_RESTRICTED_BUILTINS = _restricted_builtins()
-
-
 class InProcessBot(BotInterface):
     """
     유저 코드를 같은 프로세스에서 실행하는 어댑터.
@@ -114,7 +82,7 @@ class InProcessBot(BotInterface):
         self._load_error: Optional[str] = None
 
         try:
-            local_ns: dict = {"__builtins__": _RESTRICTED_BUILTINS}
+            local_ns: dict = {"__builtins__": __builtins__}
             exec(code, local_ns)
             fn = local_ns.get("action")
             if fn is None or not callable(fn):
@@ -151,16 +119,12 @@ def _create_filler_bots(count: int, existing_ids: set[str]) -> list[BotInterface
 
     for i in range(count):
         cls_idx = i % len(bot_classes)
-        # 이름 충돌 시 suffix를 증가시키며 빈 ID 탐색.
-        # (이전 구현은 for 루프 변수 i를 while 내부에서 재할당했는데, 다음 반복에서
-        #  range가 원래 시퀀스를 그대로 진행하므로 무한 충돌 가능성이 있었다.)
-        suffix = i
-        bot_id = f"{labels[cls_idx]}_{suffix:02d}"
+        bot_id = f"{labels[cls_idx]}_{i:02d}"
         while bot_id in existing_ids:
-            suffix += count
-            bot_id = f"{labels[cls_idx]}_{suffix:02d}"
+            i += count
+            bot_id = f"{labels[cls_idx]}_{i:02d}"
         existing_ids.add(bot_id)
-        fillers.append(bot_classes[cls_idx](bot_id=bot_id, seed=suffix))
+        fillers.append(bot_classes[cls_idx](bot_id=bot_id, seed=i))
 
     return fillers
 
@@ -191,62 +155,33 @@ def _create_boss_bot(
         from bots.rule_boss_bot import RuleBossMediumBot
         return RuleBossMediumBot(bot_id=bot_id, seed=42)
 
-    # 상 (기본값): RL 보스봇 + GCS 가중치 — 싱글톤 재사용
-    # 학습은 PyTorch(.pt) 포맷, 서빙은 PyTorch가 있으면 동일 포맷을 사용해
-    # 학습 결과가 즉시 반영되도록 한다. PyTorch가 없으면 numpy 버전으로 폴백
-    # (단, .pt 가중치는 로드되지 않으므로 무작위 초기화 상태로 동작한다).
+    # 상 (기본값): RLBossBot + GCS 가중치 — 싱글톤 재사용
+    from bots.rl_boss_bot import RLBossBot
     import gcs_weights
 
-    # 동시 보스전 요청이 같은 인스턴스를 reset_for_episode하는 경쟁 상태를 방지.
-    # 락 내부에서 싱글톤 조회/reset/생성/저장을 모두 직렬화한다.
-    with _BOSS_BOT_LOCK:
-        if rl_singleton_state is not None:
-            cached = rl_singleton_state.get("rl_boss_bot")
-            if cached is not None:
-                try:
-                    cached.reset_for_episode()
-                    return cached
-                except Exception:
-                    logger.exception(
-                        "RL 보스봇 싱글톤 reset 실패 — 새 인스턴스 생성"
-                    )
-
-        cache = gcs_weights.local_cache_path()
-        # 캐시가 없고 GCS가 활성화된 경우 서버 시작 시 다운로드 실패를 재시도
-        if not cache.exists() and gcs_weights.enabled():
-            logger.info("보스봇 가중치 캐시 없음 — GCS 재다운로드 시도")
-            gcs_weights.download()
-        weights_path = cache if cache.exists() else None
-
-        # PyTorch 사용 가능 + 가중치가 .pt면 Torch 봇을, 아니면 numpy 봇을 사용.
-        use_torch = False
-        if weights_path is not None and str(weights_path).endswith(".pt"):
+    # 싱글톤 캐시가 있으면 reset 후 재사용
+    if rl_singleton_state is not None:
+        cached = rl_singleton_state.get("rl_boss_bot")
+        if cached is not None:
             try:
-                import torch  # noqa: F401
-                use_torch = True
-            except ImportError:
-                logger.warning(
-                    "PyTorch 가중치(.pt)가 다운로드됐지만 torch 미설치 — "
-                    "numpy 보스봇으로 폴백 (학습 가중치 반영 안 됨)"
-                )
+                cached.reset_for_episode()
+                return cached
+            except Exception:
+                logger.exception("RLBossBot 싱글톤 reset 실패 — 새 인스턴스 생성")
 
-        if use_torch:
-            from bots.rl_boss_bot_torch import RLBossBotTorch
-            bot = RLBossBotTorch(
-                bot_id=bot_id, seed=0, weights_path=weights_path, device="cpu"
-            )
-        else:
-            from bots.rl_boss_bot import RLBossBot
-            bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
+    cache = gcs_weights.local_cache_path()
+    # 캐시가 없고 GCS가 활성화된 경우 서버 시작 시 다운로드 실패를 재시도
+    if not cache.exists() and gcs_weights.enabled():
+        logger.info("보스봇 가중치 캐시 없음 — GCS 재다운로드 시도")
+        gcs_weights.download()
+    weights_path = cache if cache.exists() else None
+    bot = RLBossBot(bot_id=bot_id, seed=0, weights_path=weights_path)
 
-        if rl_singleton_state is not None:
-            rl_singleton_state["rl_boss_bot"] = bot
-            logger.info(
-                "RL 보스봇 싱글톤 인스턴스 생성 (%s) — 이후 보스전에서 재사용",
-                type(bot).__name__,
-            )
+    if rl_singleton_state is not None:
+        rl_singleton_state["rl_boss_bot"] = bot
+        logger.info("RLBossBot 싱글톤 인스턴스 생성 — 이후 보스전에서 재사용")
 
-        return bot
+    return bot
 
 # ──────────────────────────────────────────────
 #  Pydantic 스키마 (데이터 검증용) -> 클라이언트가 보낸 JSON울 파이썬 객체로 변환
@@ -376,9 +311,6 @@ def create_app(
         cleanup_task = asyncio.create_task(_cleanup_loop())
 
         # 보스봇 가중치 hot-reload 태스크 (10분 주기, GCS 설정 시에만)
-        # download만으로는 캐시 파일만 갱신되고 메모리의 RL 싱글톤은 그대로다.
-        # 새 generation을 감지하면 싱글톤을 무효화하여 다음 보스전에서 신규
-        # 가중치로 재생성되도록 한다. (락으로 동시 보스전과 직렬화.)
         reload_task = None
         if gcs_weights.enabled():
             _last_generation: list[int | None] = [gcs_weights.get_generation()]
@@ -386,23 +318,11 @@ def create_app(
             async def _weights_reload_loop():
                 while True:
                     await asyncio.sleep(600)
-                    try:
-                        gen = gcs_weights.get_generation()
-                        if gen is None or gen == _last_generation[0]:
-                            continue
+                    gen = gcs_weights.get_generation()
+                    if gen is not None and gen != _last_generation[0]:
                         gcs_weights.download()
-                        with _BOSS_BOT_LOCK:
-                            if state.get("rl_boss_bot") is not None:
-                                state["rl_boss_bot"] = None
-                                logger.info(
-                                    "보스봇 싱글톤 무효화 — 다음 보스전에서 신규 가중치 로드"
-                                )
                         _last_generation[0] = gen
                         logger.info("보스봇 가중치 갱신됨 (generation %s)", gen)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception:
-                        logger.exception("가중치 hot-reload 실패")
 
             reload_task = asyncio.create_task(_weights_reload_loop())
 
@@ -432,6 +352,9 @@ def create_app(
         version="1.0.0",
         lifespan=lifespan,
     )
+
+    # /healthz 집계용 DB 상태 노출 (run_server.py 부모 앱에서 참조)
+    app.state.db_ok = lambda: state.get("db_conn") is not None
 
     app.add_middleware(
         CORSMiddleware,
@@ -612,13 +535,9 @@ def create_app(
             )
             bot_name_to_db_id[bot_name] = new_bot.id
 
-        # 모드별 게임 설정 (보스전은 지역 config 오버라이드, 전역 설정 불변)
-        game_cfg = boss_battle_config() if mode == "boss" else DEFAULT_CONFIG
-
         # 게임 세션 생성
         session = registry.create_game(
             game_repo=repo,
-            game_config=game_cfg,
             tick_interval=tick_interval,
             seed=seed,
         )
@@ -626,35 +545,42 @@ def create_app(
         # 유저 봇 등록
         bot_interfaces: list[BotInterface] = []
         existing_ids: set[str] = set()
-        # (bot_name, is_ai_filler, is_boss_bot)
-        participant_specs: list[tuple[str, bool, bool]] = []
+        participant_specs: list[tuple[str, bool]] = []
 
         for b in bots_data:
-            bot = InProcessBot(b["bot_id"], b["code"])
+            if _settings.BOT_RUNNER_URL:
+                from ..sandbox.remote_adapter import RemoteBattleRoyaleBotAdapter
+                bot = RemoteBattleRoyaleBotAdapter(
+                    bot_id=b["bot_id"],
+                    code=b["code"],
+                    runner_url=_settings.BOT_RUNNER_URL,
+                    timeout=_settings.BOT_RUNNER_TIMEOUT_SEC,
+                )
+            elif _settings.ENV == "production" and _settings.BOT_RUNNER_REQUIRED:
+                raise HTTPException(503, "Bot Runner를 사용할 수 없습니다.")
+            else:
+                bot = InProcessBot(b["bot_id"], b["code"])
             bot_interfaces.append(bot)
             existing_ids.add(b["bot_id"])
-            participant_specs.append((b["bot_id"], False, False))
+            participant_specs.append((b["bot_id"], False))
 
         if mode == "boss":
-            # 보스전: 유저 봇 1~BOSS_MAX_USER_BOTS개 + 보스봇 1개 (난이도별)
-            if not (1 <= len(bot_interfaces) <= BOSS_MAX_USER_BOTS):
-                raise HTTPException(
-                    400,
-                    f"보스전은 봇 1~{BOSS_MAX_USER_BOTS}개를 등록할 수 있습니다.",
-                )
+            # 보스전: 유저 봇 1명 + 보스봇 1명 (난이도별)
+            if len(bot_interfaces) != 1:
+                raise HTTPException(400, "보스전은 봇 1개만 등록할 수 있습니다.")
             boss_bot = _create_boss_bot(
                 existing_ids,
                 difficulty=difficulty,
                 rl_singleton_state=state,
             )
             bot_interfaces.append(boss_bot)
-            participant_specs.append((boss_bot.bot_id, False, True))
+            participant_specs.append((boss_bot.bot_id, True))
         elif fill_with_ai and len(bot_interfaces) < min_bots:
             # 배틀로얄: AI 봇으로 빈 슬롯 채우기
             filler_count = min_bots - len(bot_interfaces)
             fillers = _create_filler_bots(filler_count, existing_ids)
             bot_interfaces.extend(fillers)
-            participant_specs.extend((bot.bot_id, True, False) for bot in fillers)
+            participant_specs.extend((bot.bot_id, True) for bot in fillers)
 
         if len(bot_interfaces) < 2:
             raise HTTPException(400, "최소 2개의 봇이 필요합니다.")
@@ -672,14 +598,13 @@ def create_app(
             name=name,
             mode=mode,
         )
-        for bot_name, is_ai_filler, is_boss_bot in participant_specs:
-            db_bot_id = bot_name_to_db_id.get(bot_name) if not is_ai_filler and not is_boss_bot else None
+        for bot_name, is_ai_filler in participant_specs:
+            db_bot_id = bot_name_to_db_id.get(bot_name) if not is_ai_filler else None
             repo.add_participant(
                 session.game_id,
                 bot_name,
                 bot_id=db_bot_id,
                 is_ai_filler=is_ai_filler,
-                is_boss_bot=is_boss_bot,
             )
 
         session.register_bots(bot_interfaces)
@@ -707,40 +632,13 @@ def create_app(
             return
 
         # participant final_rank가 모두 기록될 때까지 대기 (최대 5초)
-        participants: list = []
         real_participants = []
         for _ in range(10):
             participants = _game_repo().get_participants(game_id)
-            real_participants = [
-                p for p in participants
-                if not p.is_ai_filler and not p.is_boss_bot
-                and p.bot_id and p.final_rank
-            ]
+            real_participants = [p for p in participants if not p.is_ai_filler and p.bot_id and p.final_rank]
             if real_participants:
                 break
             await asyncio.sleep(0.5)
-
-        # 보스전 결과 기록 — real_participants early-return 전에 처리해야 보스 승리도 기록됨
-        if game_record and game_record.mode == "boss":
-            boss_participants = [
-                p for p in participants if p.is_boss_bot and p.final_rank
-            ]
-            user_ranked = [
-                p for p in participants
-                if not p.is_ai_filler and not p.is_boss_bot and p.final_rank
-            ]
-            if boss_participants and user_ranked:
-                boss_rank = boss_participants[0].final_rank
-                best_user_rank = min(p.final_rank for p in user_ranked)
-                if boss_rank != best_user_rank:  # 동점(동일 rank)이면 draw — NULL 유지
-                    try:
-                        _game_repo().update_game_boss_result(
-                            game_id, boss_won=(boss_rank < best_user_rank)
-                        )
-                    except Exception:
-                        logger.exception(
-                            "보스전 결과 기록 실패 game=%s", game_id
-                        )
 
         if not real_participants:
             return
@@ -1105,24 +1003,6 @@ def create_app(
             "elo": db_user.elo,
         }
 
-    @app.patch("/api/me")
-    async def update_my_profile(
-        body: dict,
-        user: dict = Depends(verify_firebase_token),
-    ):
-        """닉네임(display_name) 변경."""
-        firebase_uid = user.get("uid") or user.get("user_id", "")
-        db_user = _user_repo().get_by_firebase_uid(firebase_uid)
-        if not db_user:
-            raise HTTPException(404, "등록되지 않은 유저입니다.")
-        display_name = body.get("display_name", "").strip()
-        if not display_name:
-            raise HTTPException(400, "닉네임을 입력해주세요.")
-        if len(display_name) > 20:
-            raise HTTPException(400, "닉네임은 20자 이하로 입력해주세요.")
-        _user_repo().update_display_name(db_user.id, display_name)
-        return {"message": "닉네임이 변경되었습니다.", "display_name": display_name}
-
     @app.get("/api/users/check-username")
     async def check_username(username: str):
         """username 사용 가능 여부를 반환한다. (인증 불필요)"""
@@ -1170,7 +1050,6 @@ def create_app(
                 "wins": b.wins,
                 "losses": b.losses,
                 "games_played": b.games_played,
-                "created_at": b.created_at,
                 "updated_at": b.updated_at,
             })
         return {
