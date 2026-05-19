@@ -34,6 +34,7 @@ class ParticipantRecord:
     bot_id: Optional[int]
     bot_name: str
     is_ai_filler: bool
+    is_boss_bot: bool
     final_rank: Optional[int]
     final_score: Optional[float]
     kills: int
@@ -130,25 +131,26 @@ class GameRepository:
         bot_name: str,
         bot_id: Optional[int] = None,
         is_ai_filler: bool = False,
+        is_boss_bot: bool = False,
     ) -> int:
         """참가자 추가. 생성된 participant ID를 반환."""
         if self._is_pg:
             cursor = self._execute(
                 """
-                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler, is_boss_bot)
+                VALUES (?, ?, ?, ?, ?)
                 RETURNING id
                 """,
-                (game_id, bot_id, bot_name, is_ai_filler),
+                (game_id, bot_id, bot_name, is_ai_filler, is_boss_bot),
             )
             participant_id = cursor.fetchone()["id"]
         else:
             cursor = self._execute(
                 """
-                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO game_participants (game_id, bot_id, bot_name, is_ai_filler, is_boss_bot)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (game_id, bot_id, bot_name, int(is_ai_filler)),
+                (game_id, bot_id, bot_name, int(is_ai_filler), int(is_boss_bot)),
             )
             participant_id = cursor.lastrowid
         self.conn.commit()
@@ -284,12 +286,14 @@ class GameRepository:
         )
 
     def _row_to_participant(self, row: sqlite3.Row) -> ParticipantRecord:
+        col_names = row.keys()
         return ParticipantRecord(
             id=row["id"],
             game_id=row["game_id"],
             bot_id=row["bot_id"],
             bot_name=row["bot_name"],
             is_ai_filler=bool(row["is_ai_filler"]),
+            is_boss_bot=bool(row["is_boss_bot"]) if "is_boss_bot" in col_names else False,
             final_rank=row["final_rank"],
             final_score=row["final_score"],
             kills=row["kills"],

@@ -19,7 +19,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # ── SQLite DDL ─────────────────────────────────
 SCHEMA_SQL_SQLITE = """
@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS game_participants (
     bot_id              INTEGER,
     bot_name            TEXT    NOT NULL,
     is_ai_filler        INTEGER NOT NULL DEFAULT 0,
+    is_boss_bot         INTEGER NOT NULL DEFAULT 0,
     final_rank          INTEGER,
     final_score         REAL,
     kills               INTEGER NOT NULL DEFAULT 0,
@@ -247,6 +248,7 @@ CREATE TABLE IF NOT EXISTS game_participants (
     bot_id              BIGINT,
     bot_name            TEXT             NOT NULL,
     is_ai_filler        BOOLEAN          NOT NULL DEFAULT FALSE,
+    is_boss_bot         BOOLEAN          NOT NULL DEFAULT FALSE,
     final_rank          INTEGER,
     final_score         DOUBLE PRECISION,
     kills               INTEGER          NOT NULL DEFAULT 0,
@@ -483,6 +485,14 @@ def _migrate_sqlite(conn: sqlite3.Connection) -> None:
     if "is_public" not in bot_cols:
         conn.execute("ALTER TABLE bots ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0")
 
+    gp_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(game_participants)").fetchall()
+    }
+    if "is_boss_bot" not in gp_cols:
+        conn.execute(
+            "ALTER TABLE game_participants ADD COLUMN is_boss_bot INTEGER NOT NULL DEFAULT 0"
+        )
+
     # 유니크 인덱스 → 일반 인덱스로 변경 (같은 이름 봇 중복 허용)
     indexes = {row[1] for row in conn.execute("PRAGMA index_list(bots)").fetchall()}
     if "idx_bots_user_name" in indexes:
@@ -543,6 +553,14 @@ def _migrate_postgresql(cur) -> None:
     )
     if cur.fetchone() is None:
         cur.execute("ALTER TABLE bots ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT FALSE")
+
+    cur.execute(
+        "SELECT 1 FROM information_schema.columns WHERE table_name='game_participants' AND column_name='is_boss_bot'"
+    )
+    if cur.fetchone() is None:
+        cur.execute(
+            "ALTER TABLE game_participants ADD COLUMN is_boss_bot BOOLEAN NOT NULL DEFAULT FALSE"
+        )
 
     # 유니크 인덱스 → 일반 인덱스로 변경
     cur.execute(

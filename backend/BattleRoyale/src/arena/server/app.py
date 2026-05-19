@@ -546,13 +546,14 @@ def create_app(
         # 유저 봇 등록
         bot_interfaces: list[BotInterface] = []
         existing_ids: set[str] = set()
-        participant_specs: list[tuple[str, bool]] = []
+        # (bot_name, is_ai_filler, is_boss_bot)
+        participant_specs: list[tuple[str, bool, bool]] = []
 
         for b in bots_data:
             bot = InProcessBot(b["bot_id"], b["code"])
             bot_interfaces.append(bot)
             existing_ids.add(b["bot_id"])
-            participant_specs.append((b["bot_id"], False))
+            participant_specs.append((b["bot_id"], False, False))
 
         _BOSS_MAX_USER_BOTS = 3  # 보스전 유저 봇 최대 수
         if mode == "boss":
@@ -568,13 +569,13 @@ def create_app(
                 rl_singleton_state=state,
             )
             bot_interfaces.append(boss_bot)
-            participant_specs.append((boss_bot.bot_id, True))
+            participant_specs.append((boss_bot.bot_id, False, True))
         elif fill_with_ai and len(bot_interfaces) < min_bots:
             # 배틀로얄: AI 봇으로 빈 슬롯 채우기
             filler_count = min_bots - len(bot_interfaces)
             fillers = _create_filler_bots(filler_count, existing_ids)
             bot_interfaces.extend(fillers)
-            participant_specs.extend((bot.bot_id, True) for bot in fillers)
+            participant_specs.extend((bot.bot_id, True, False) for bot in fillers)
 
         if len(bot_interfaces) < 2:
             raise HTTPException(400, "최소 2개의 봇이 필요합니다.")
@@ -592,13 +593,14 @@ def create_app(
             name=name,
             mode=mode,
         )
-        for bot_name, is_ai_filler in participant_specs:
-            db_bot_id = bot_name_to_db_id.get(bot_name) if not is_ai_filler else None
+        for bot_name, is_ai_filler, is_boss_bot in participant_specs:
+            db_bot_id = bot_name_to_db_id.get(bot_name) if not is_ai_filler and not is_boss_bot else None
             repo.add_participant(
                 session.game_id,
                 bot_name,
                 bot_id=db_bot_id,
                 is_ai_filler=is_ai_filler,
+                is_boss_bot=is_boss_bot,
             )
 
         session.register_bots(bot_interfaces)
@@ -629,7 +631,7 @@ def create_app(
         real_participants = []
         for _ in range(10):
             participants = _game_repo().get_participants(game_id)
-            real_participants = [p for p in participants if not p.is_ai_filler and p.bot_id and p.final_rank]
+            real_participants = [p for p in participants if not p.is_ai_filler and not p.is_boss_bot and p.bot_id and p.final_rank]
             if real_participants:
                 break
             await asyncio.sleep(0.5)
