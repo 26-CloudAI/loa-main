@@ -19,7 +19,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # ── SQLite DDL ─────────────────────────────────
 SCHEMA_SQL_SQLITE = """
@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS games (
     config_json     TEXT,
     name            TEXT,
     mode            TEXT    NOT NULL DEFAULT 'battle-royale',
+    boss_won        INTEGER,
     FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (winner_bot_id) REFERENCES bots(id) ON DELETE SET NULL
 );
@@ -237,6 +238,7 @@ CREATE TABLE IF NOT EXISTS games (
     config_json     JSONB,
     name            TEXT,
     mode            TEXT        NOT NULL DEFAULT 'battle-royale',
+    boss_won        BOOLEAN,
     FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (winner_bot_id) REFERENCES bots(id) ON DELETE SET NULL
 );
@@ -478,6 +480,8 @@ def _migrate_sqlite(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE games ADD COLUMN name TEXT")
     if "mode" not in game_cols:
         conn.execute("ALTER TABLE games ADD COLUMN mode TEXT NOT NULL DEFAULT 'battle-royale'")
+    if "boss_won" not in game_cols:
+        conn.execute("ALTER TABLE games ADD COLUMN boss_won INTEGER")
 
     bot_cols = {
         row[1] for row in conn.execute("PRAGMA table_info(bots)").fetchall()
@@ -540,6 +544,7 @@ def _migrate_postgresql(cur) -> None:
     for col, definition in [
         ("name", "TEXT"),
         ("mode", "TEXT NOT NULL DEFAULT 'battle-royale'"),
+        ("boss_won", "BOOLEAN"),
     ]:
         cur.execute(
             "SELECT 1 FROM information_schema.columns WHERE table_name='games' AND column_name=%s",

@@ -25,6 +25,7 @@ class GameRecord:
     seed: Optional[int]
     name: Optional[str] = None
     mode: str = "battle-royale"
+    boss_won: Optional[bool] = None  # None=보스전 아님, True=보스승, False=유저승
 
 
 @dataclass
@@ -237,6 +238,14 @@ class GameRepository:
             "mode": row["mode"] if "mode" in keys else "battle-royale",
         }
 
+    def update_game_boss_result(self, game_id: str, boss_won: bool) -> None:
+        """보스전 결과를 기록한다. boss_won=True면 보스 승리, False면 유저팀 승리."""
+        self._execute(
+            "UPDATE games SET boss_won = ? WHERE id = ?",
+            (int(boss_won) if not self._is_pg else boss_won, game_id),
+        )
+        self.conn.commit()
+
     def cleanup_stale_games(self) -> int:
         """서버 재시작 시 미완료 게임을 error 상태로 변경. 변경된 수를 반환."""
         cursor = self._execute(
@@ -269,6 +278,7 @@ class GameRepository:
 
     def _row_to_game(self, row: sqlite3.Row) -> GameRecord:
         col_names = row.keys()
+        raw_boss_won = row["boss_won"] if "boss_won" in col_names else None
         return GameRecord(
             id=row["id"],
             owner_user_id=row["owner_user_id"],
@@ -283,6 +293,7 @@ class GameRepository:
             seed=row["seed"],
             name=row["name"] if "name" in col_names else None,
             mode=row["mode"] if "mode" in col_names else "battle-royale",
+            boss_won=bool(raw_boss_won) if raw_boss_won is not None else None,
         )
 
     def _row_to_participant(self, row: sqlite3.Row) -> ParticipantRecord:

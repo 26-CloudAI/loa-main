@@ -98,6 +98,9 @@ class GameConfig:
 # 기본 설정 싱글턴
 DEFAULT_CONFIG = GameConfig()
 
+# 보스전 유저봇 최대 수 — 여기만 바꾸면 app.py·BOSS_BOT.md 모두 반영
+BOSS_MAX_USER_BOTS: int = 3
+
 
 def boss_battle_config() -> GameConfig:
     """

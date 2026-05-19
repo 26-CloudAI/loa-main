@@ -38,7 +38,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from ..bot_interface import BotInterface
-from ..config import DEFAULT_CONFIG, boss_battle_config
+from ..config import BOSS_MAX_USER_BOTS, DEFAULT_CONFIG, boss_battle_config
 from . import settings as _settings
 from .config import DEFAULT_SERVER_CONFIG, ServerConfig
 from .game_session import GameRegistry, GameSession
@@ -555,13 +555,12 @@ def create_app(
             existing_ids.add(b["bot_id"])
             participant_specs.append((b["bot_id"], False, False))
 
-        _BOSS_MAX_USER_BOTS = 3  # 보스전 유저 봇 최대 수
         if mode == "boss":
-            # 보스전: 유저 봇 1~3개 + 보스봇 1개 (난이도별)
-            if not (1 <= len(bot_interfaces) <= _BOSS_MAX_USER_BOTS):
+            # 보스전: 유저 봇 1~BOSS_MAX_USER_BOTS개 + 보스봇 1개 (난이도별)
+            if not (1 <= len(bot_interfaces) <= BOSS_MAX_USER_BOTS):
                 raise HTTPException(
                     400,
-                    f"보스전은 봇 1~{_BOSS_MAX_USER_BOTS}개를 등록할 수 있습니다.",
+                    f"보스전은 봇 1~{BOSS_MAX_USER_BOTS}개를 등록할 수 있습니다.",
                 )
             boss_bot = _create_boss_bot(
                 existing_ids,
@@ -638,6 +637,14 @@ def create_app(
 
         if not real_participants:
             return
+
+        # 보스전 결과 기록 (boss_won 컬럼 — mode='boss'일 때만)
+        if game_record and game_record.mode == "boss":
+            boss_participants = [p for p in participants if p.is_boss_bot and p.final_rank]
+            if boss_participants:
+                boss_rank = boss_participants[0].final_rank
+                best_user_rank = min(p.final_rank for p in real_participants)
+                _game_repo().update_game_boss_result(game_id, boss_won=(boss_rank < best_user_rank))
 
         bot_repo_inst = _bot_repo()
         user_repo = _user_repo()
