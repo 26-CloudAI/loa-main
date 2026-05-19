@@ -6,10 +6,11 @@ import { MOCK, MOCK_GAMES } from '../dev/mock'
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 const STOCKS_API_BASE = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 
-const PANEL_BG = '#221638'
+const PANEL_BG = '#161A23'
 const PANEL_BORDER = 'rgba(255,255,255,.06)'
-const MUTED = '#726890'
+const MUTED = '#5A6270'
 const DISPLAY_FONT = '"JalnanGothic",system-ui,sans-serif'
+const AGGRO_FONT = '"SB Aggro",system-ui,sans-serif'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ const STATUS_COLOR: Record<GameInfo['status'], string> = {
 function StatItem({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{ textAlign: 'center' }}>
-      <span style={{ color: MUTED, fontSize: 11, display: 'block', marginBottom: 4 }}>{label}</span>
+      <span style={{ fontFamily: AGGRO_FONT, fontWeight: 300, color: MUTED, fontSize: 11, display: 'block', marginBottom: 4 }}>{label}</span>
       <span style={{ fontFamily: DISPLAY_FONT, fontSize: 28, color: color ?? '#F0EBFF' }}>{value}</span>
     </div>
   )
@@ -155,7 +156,7 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
         <span style={{ fontSize: 28, color: pillColor, lineHeight: 1 }}>{icon}</span>
       </div>
       <h3 style={{ fontFamily: DISPLAY_FONT, fontSize: 26, margin: '0 0 4px', color: '#F0EBFF' }}>{title}</h3>
-      <p style={{ color: MUTED, fontSize: 12, margin: '0 0 20px' }}>{desc}</p>
+      <p style={{ fontFamily: AGGRO_FONT, fontWeight: 300, color: MUTED, fontSize: 12, margin: '0 0 20px' }}>{desc}</p>
       <button
         style={{
           width: '100%', padding: '10px 0', borderRadius: 8,
@@ -263,13 +264,13 @@ export default function MainPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#1A1030',
-      color: '#F0EBFF',
+      background: '#0D0F14',
+      color: '#E8EAF0',
       fontFamily: '"Pretendard Variable","Pretendard",system-ui,sans-serif',
     }}>
       {/* ── Nav ── */}
       <nav style={{
-        background: 'rgba(26,16,48,.88)',
+        background: 'rgba(13,15,20,.92)',
         backdropFilter: 'blur(14px)',
         height: 56,
         padding: '0 28px',
@@ -294,7 +295,7 @@ export default function MainPage() {
             <span style={{ fontSize: 13, color: MUTED, display: 'flex', alignItems: 'center', gap: 6 }}>
               {displayName}
               <span style={{
-                fontSize: 10, background: 'rgba(155,89,245,.2)', color: '#C8A8FF',
+                fontSize: 10, background: 'rgba(155,89,245,.15)', color: '#C8A8FF',
                 border: '1px solid rgba(155,89,245,.35)',
                 borderRadius: 4, padding: '1px 6px', letterSpacing: '0.05em',
               }}>
@@ -334,7 +335,7 @@ export default function MainPage() {
           <h1 style={{ fontFamily: DISPLAY_FONT, fontSize: 48, margin: '0 0 10px', lineHeight: 1.2 }}>
             {displayName} <span style={{ color: MUTED }}>님,</span>
           </h1>
-          <p style={{ color: MUTED, fontSize: 15, margin: '0 0 32px' }}>오늘도 봇을 단련시킬 시간입니다.</p>
+          <p style={{ fontFamily: AGGRO_FONT, fontWeight: 300, color: MUTED, fontSize: 15, margin: '0 0 32px' }}>오늘도 봇을 단련시킬 시간입니다.</p>
 
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 32 }}>
             <StatItem label="현재 랭킹" value={rankValue}   color="#F5A624" />
@@ -355,16 +356,16 @@ export default function MainPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 20 }}>
           <ModeCard
             mode="GAME MODE 01" icon="◆" title="배틀로얄" desc="최후의 1인이 되어라"
-            borderColor="rgba(232,51,74,.25)" glowColor="rgba(232,51,74,.15)"
-            btnBg="#E8334A" btnColor="#fff"
-            pillBg="rgba(232,51,74,.15)" pillColor="#F05E70"
+            borderColor="rgba(155,89,245,.25)" glowColor="rgba(155,89,245,.15)"
+            btnBg="#9B59F5" btnColor="#fff"
+            pillBg="rgba(155,89,245,.15)" pillColor="#C8A8FF"
             onClick={() => navigate('/games/new/battle-royale')}
           />
           <ModeCard
             mode="GAME MODE 02" icon="◉" title="보스전" desc="거대한 적을 쓰러뜨려라"
-            borderColor="rgba(155,89,245,.25)" glowColor="rgba(155,89,245,.15)"
-            btnBg="#9B59F5" btnColor="#fff"
-            pillBg="rgba(155,89,245,.15)" pillColor="#C8A8FF"
+            borderColor="rgba(232,51,74,.25)" glowColor="rgba(232,51,74,.15)"
+            btnBg="#E8334A" btnColor="#fff"
+            pillBg="rgba(232,51,74,.15)" pillColor="#F05E70"
             onClick={() => navigate('/games/new/boss-battle')}
           />
           <ModeCard
