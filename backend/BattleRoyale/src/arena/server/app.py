@@ -1036,6 +1036,7 @@ def create_app(
                 "wins": b.wins,
                 "losses": b.losses,
                 "games_played": b.games_played,
+                "created_at": b.created_at,
                 "updated_at": b.updated_at,
             })
         return {

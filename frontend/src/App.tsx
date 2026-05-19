@@ -15,6 +15,7 @@ import BattleRoyaleReplayPage from './pages/BattleRoyaleReplayPage'
 import MockStocksReplayPage from './pages/MockStocksReplayPage'
 import RankingPage from './pages/RankingPage'
 import UserBotDetailPage from './pages/UserBotDetailPage'
+import MyPage from './pages/MyPage'
 
 function LoadingScreen() {
   return (
@@ -97,6 +98,7 @@ function AppRoutes() {
       <Route path="/games/:game_id/mock-stocks/replay" element={<MockStocksReplayPage />} />
       <Route path="/rankings" element={<RankingPage />} />
       <Route path="/users/:user_id/bots" element={<UserBotDetailPage />} />
+      <Route path="/mypage" element={<MyPage />} />
       {/* 기본 진입점 */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

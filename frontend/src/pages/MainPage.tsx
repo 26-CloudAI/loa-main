@@ -129,7 +129,7 @@ export default function MainPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <button onClick={() => navigate('/rankings')} style={navBtn}>리더보드</button>
           <button onClick={() => navigate('/games/list')} style={navBtn}>게임 목록</button>
-          <button onClick={handleLogout} style={{ ...navBtn, color: '#F0EBFF' }}>
+          <button onClick={() => navigate('/mypage')} style={{ ...navBtn, color: '#F0EBFF' }}>
             {displayName} ▾
           </button>
         </div>
