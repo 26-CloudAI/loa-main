@@ -30,10 +30,10 @@ interface GameInfo {
   rankings?: RankingEntry[]
 }
 
-const MODE_BADGE: Record<string, { label: string; style: { background: string; color: string; border: string } }> = {
-  'battle-royale': { label: '배틀로얄', style: { background: 'rgba(232,51,74,.15)',  color: '#F05E70', border: '1px solid rgba(232,51,74,.4)'  } },
-  'boss':          { label: '보스전',   style: { background: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: '1px solid rgba(155,89,245,.4)' } },
-  'mock-stocks':   { label: '모의주식', style: { background: 'rgba(245,166,36,.15)', color: '#FFC76A', border: '1px solid rgba(245,166,36,.4)' } },
+const MODE_BADGE: Record<string, { label: string; className: string }> = {
+  'battle-royale': { label: '배틀로얄', className: 'bg-indigo-600/30 text-indigo-300 border border-indigo-600/50' },
+  'boss':          { label: '보스전',   className: 'bg-red-700/30 text-red-300 border border-red-700/50' },
+  'mock-stocks':   { label: '모의주식', className: 'bg-emerald-600/30 text-emerald-300 border border-emerald-600/50' },
 }
 
 const STATUS_LABEL: Record<GameInfo['status'], string> = {
@@ -256,7 +256,7 @@ function GameCard({ game }: { game: GameInfo }) {
       <div className="flex items-center shrink-0">
         <div className="w-20 flex items-center justify-center">
           {modeBadge && (
-            <span className="text-xs leading-none rounded-full px-2 py-1 font-medium" style={modeBadge.style}>
+            <span className={`text-xs leading-none rounded-full px-2 py-1 font-medium ${modeBadge.className}`}>
               {modeBadge.label}
             </span>
           )}

@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-/* ── Fonts ──────────────────────────────────────────────────────────────────── */
-
 @font-face {
   font-family: "JalnanGothic";
   src: url("./assets/fonts/JalnanGothicTTF.ttf") format("truetype");
@@ -31,72 +29,51 @@
   font-display: swap;
 }
 
-/* ── Design tokens ──────────────────────────────────────────────────────────── */
-
 @theme {
-  /* Body font */
-  --font-sans:    "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  /* Display font (JalnanGothic) — use with font-display utility class */
-  --font-display: "JalnanGothic", system-ui, sans-serif;
-  --font-mono:    "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
-  --font-aggro:   "SB Aggro", system-ui, sans-serif;
-
-  /* White → cool off-white */
-  --color-white: #E8EAF0;
-
-  /* Gray scale → Neutral dark slate */
-  --color-gray-950: #080A0F;
-  --color-gray-900: #0D0F14;
-  --color-gray-800: #161A23;
-  --color-gray-700: #1F2430;
-  --color-gray-600: #2A3040;
-  --color-gray-500: #5A6270;
-  --color-gray-400: #8090A0;
-  --color-gray-300: #AAB8C8;
-  --color-gray-200: #C8D4E0;
-  --color-gray-100: #E0E8F0;
-  --color-gray-50:  #EFF4F8;
-
-  /* Indigo → Violet */
-  --color-indigo-900: #2D1475;
-  --color-indigo-800: #42209E;
-  --color-indigo-700: #7743D0;
-  --color-indigo-600: #9B59F5;
-  --color-indigo-500: #A96BF7;
-  --color-indigo-400: #C8A8FF;
-  --color-indigo-300: #D9C4FF;
-  --color-indigo-200: #E8D8FF;
-  --color-indigo-100: #F3ECFF;
+  --font-sans: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+  --font-aggro: "SB Aggro", system-ui, sans-serif;
 }
 
-/* ── Global base ─────────────────────────────────────────────────────────────── */
-
-body {
-  font-family: var(--font-sans);
-  color: #E8EAF0;
-  background: #0D0F14;
-}
 
 button:not(:disabled) {
   cursor: pointer;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────────────────────── */
-
+/* Global scrollbar */
 html {
   scrollbar-width: thin;
-  scrollbar-color: #1F2430 transparent;
+  scrollbar-color: #374151 transparent;
 }
-html::-webkit-scrollbar        { width: 4px; }
-html::-webkit-scrollbar-track  { background: transparent; }
-html::-webkit-scrollbar-thumb  { background-color: #1F2430; border-radius: 9999px; }
-html::-webkit-scrollbar-thumb:hover { background-color: #2A3040; }
+html::-webkit-scrollbar {
+  width: 4px;
+}
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+html::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  border-radius: 9999px;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background-color: #4b5563;
+}
 
+/* Custom scrollbar */
 .scrollbar-custom {
   scrollbar-width: thin;
-  scrollbar-color: #1F2430 transparent;
+  scrollbar-color: #374151 transparent;
 }
-.scrollbar-custom::-webkit-scrollbar        { width: 4px; }
-.scrollbar-custom::-webkit-scrollbar-track  { background: transparent; }
-.scrollbar-custom::-webkit-scrollbar-thumb  { background-color: #1F2430; border-radius: 9999px; }
-.scrollbar-custom::-webkit-scrollbar-thumb:hover { background-color: #2A3040; }
+.scrollbar-custom::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-custom::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-custom::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  border-radius: 9999px;
+}
+.scrollbar-custom::-webkit-scrollbar-thumb:hover {
+  background-color: #4b5563;
+}

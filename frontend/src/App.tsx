@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import AuthPage from './pages/AuthPage'
-import MainPage from './pages/MainPage'
 import GamesPage from './pages/GamesPage'
 import GameSelectPage from './pages/GameSelectPage'
 import GameNewPage from './pages/GameNewPage'
@@ -15,7 +14,6 @@ import BattleRoyaleReplayPage from './pages/BattleRoyaleReplayPage'
 import MockStocksReplayPage from './pages/MockStocksReplayPage'
 import RankingPage from './pages/RankingPage'
 import UserBotDetailPage from './pages/UserBotDetailPage'
-import MyPage from './pages/MyPage'
 
 function LoadingScreen() {
   return (
@@ -85,8 +83,7 @@ function AppRoutes() {
         path="/login"
         element={token ? <Navigate to="/games" replace /> : <AuthPage />}
       />
-      <Route path="/games" element={<MainPage />} />
-      <Route path="/games/list" element={<GamesPage />} />
+      <Route path="/games" element={<GamesPage />} />
       <Route path="/games/new" element={<GameSelectPage />} />
       <Route path="/games/new/battle-royale" element={<GameNewPage />} />
       <Route path="/games/new/boss-battle" element={<BossBattlePage />} />
@@ -98,7 +95,6 @@ function AppRoutes() {
       <Route path="/games/:game_id/mock-stocks/replay" element={<MockStocksReplayPage />} />
       <Route path="/rankings" element={<RankingPage />} />
       <Route path="/users/:user_id/bots" element={<UserBotDetailPage />} />
-      <Route path="/mypage" element={<MyPage />} />
       {/* 기본 진입점 */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
