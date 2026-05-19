@@ -5,9 +5,9 @@ WORKDIR /app
 # 학습에 필요한 패키지만 설치 (서버 의존성 제외)
 RUN pip install --no-cache-dir "numpy>=2.0" google-cloud-storage
 
-COPY BattleRoyale/src/ ./src/
-COPY BattleRoyale/bots/ ./bots/
-COPY BattleRoyale/scripts/train/train_boss_bot.py ./scripts/train/
+COPY battle_royale/src/ ./src/
+COPY battle_royale/bots/ ./bots/
+COPY battle_royale/scripts/train/train_boss_bot.py ./scripts/train/
 
 # trained_weights.json은 GCS에서 받아오므로 이미지에 굽지 않음
 # (빌드 컨텍스트에 있어도 COPY 하지 않음)

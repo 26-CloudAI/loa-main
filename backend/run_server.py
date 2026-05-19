@@ -1,8 +1,8 @@
 """
 League of Agents — 통합 서버 엔트리포인트
 
-BattleRoyale: /battleroyale  (예: /battleroyale/api/games, /battleroyale/ws/games/...)
-MockStocks:   /stocks        (예: /stocks/api/games, /stocks/ws/games/...)
+battle_royale: /battleroyale  (예: /battleroyale/api/games, /battleroyale/ws/games/...)
+mock_stocks:   /stocks         (예: /stocks/api/games, /stocks/ws/games/...)
 
 사용법:
     python run_server.py
@@ -22,27 +22,27 @@ from pathlib import Path
 
 _base = Path(__file__).parent
 
-if (_base / "BattleRoyale").exists():
+if (_base / "battle_royale").exists():
     # ── 로컬 개발 ────────────────────────────────────────────────────────────
     # 로컬 구조:
-    #   BattleRoyale/src/arena/   →  src.arena.*
-    #   MockStocks/src/stocks/    →  src.stocks.*
-    #   BattleRoyale/bots/        →  bots.camper / bots.herbivore / bots.mad_dog
-    #   MockStocks/bots/          →  bots.long_term / bots.short_trader
+    #   battle_royale/src/arena/  →  src.arena.*
+    #   mock_stocks/src/stocks/   →  src.stocks.*
+    #   battle_royale/bots/       →  bots.battle_royale.* / bots.boss.* / bots.utils
+    #   mock_stocks/bots/         →  bots.long_term / bots.short_trader
     #
     # 가상 `src` 패키지: __path__를 두 디렉토리로 설정해 서브패키지를 양쪽에서 검색
     _src_pkg = types.ModuleType("src")
     _src_pkg.__path__ = [
-        str(_base / "BattleRoyale" / "src"),
-        str(_base / "MockStocks" / "src"),
+        str(_base / "battle_royale" / "src"),
+        str(_base / "mock_stocks" / "src"),
     ]
     _src_pkg.__package__ = "src"
     sys.modules["src"] = _src_pkg
 
     _bots_pkg = types.ModuleType("bots")
     _bots_pkg.__path__ = [
-        str(_base / "BattleRoyale" / "bots"),
-        str(_base / "MockStocks" / "bots"),
+        str(_base / "battle_royale" / "bots"),
+        str(_base / "mock_stocks" / "bots"),
     ]
     _bots_pkg.__package__ = "bots"
     sys.modules["bots"] = _bots_pkg

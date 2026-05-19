@@ -45,12 +45,12 @@ secrets/*
 !secrets/*.example.py
 
 # ── 학습 가중치 (GCS로 관리) ──────────────────────
-backend/BattleRoyale/bots/trained_weights.json
-backend/BattleRoyale/bots/trained_weights.pt
-backend/BattleRoyale/bots/boss/trained_weights.json
-backend/BattleRoyale/bots/boss/trained_weights.pt
-backend/BattleRoyale/bots/*.bak*
-backend/BattleRoyale/bots/quality_bots.json
+backend/battle_royale/bots/trained_weights.json
+backend/battle_royale/bots/trained_weights.pt
+backend/battle_royale/bots/boss/trained_weights.json
+backend/battle_royale/bots/boss/trained_weights.pt
+backend/battle_royale/bots/*.bak*
+backend/battle_royale/bots/quality_bots.json
 
 # ── 로그 ─────────────────────────────────────────
 logs/

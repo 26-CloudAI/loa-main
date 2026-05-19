@@ -14,5 +14,5 @@ sandbox = ["docker>=7.0"]
 dev = ["pytest>=7.4", "pytest-asyncio>=0.21"]
 
 [tool.pytest.ini_options]
-testpaths = ["BattleRoyale/tests"]
-pythonpath = ["BattleRoyale"]
+testpaths = ["battle_royale/tests"]
+pythonpath = ["battle_royale"]
