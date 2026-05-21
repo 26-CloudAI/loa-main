@@ -135,7 +135,7 @@ steps:
 #      --role="roles/storage.objectViewer"
 #
 # 4. 초기 가중치 업로드 (로컬 trained_weights.json → GCS)
-#    gsutil cp backend/BattleRoyale/bots/trained_weights.json \
+#    gsutil cp backend/battle_royale/bots/trained_weights.json \
 #      gs://${PROJECT_ID}-boss-weights/trained_weights.json
 #
 # 5. Cloud Scheduler 등록 (매일 새벽 3시 asia-northeast3)
