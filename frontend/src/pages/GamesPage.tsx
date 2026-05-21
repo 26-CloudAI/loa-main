@@ -141,7 +141,7 @@ export default function GamesPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* 헤더 */}
-      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center justify-between">
+      <header className="sticky top-0 z-20 h-14 px-6 flex items-center justify-between" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button onClick={() => navigate('/games')} className="font-bold text-lg hover:text-gray-300 transition-colors">League of Agents</button>
         <div className="flex items-center gap-4">
           <button

@@ -54,7 +54,7 @@ export default function MockStocksResultPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* 헤더 */}
-      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-4">
+      <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
           onClick={() => navigate('/games')}
           className="text-gray-400 hover:text-white transition-colors text-sm"

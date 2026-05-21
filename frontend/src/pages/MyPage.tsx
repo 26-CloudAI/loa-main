@@ -180,7 +180,7 @@ export default function MyPage() {
 
       {/* ── Nav ── */}
       <nav style={{
-        background: 'rgba(26,16,48,.88)', backdropFilter: 'blur(14px)',
+        background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
         height: 56, padding: '0 28px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
