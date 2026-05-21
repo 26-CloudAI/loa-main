@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { MOCK, MOCK_GAMES } from '../dev/mock'
@@ -50,6 +50,12 @@ const STATUS_COLOR: Record<GameInfo['status'], string> = {
   running: 'bg-green-500/20 text-green-300',
   finished: 'bg-gray-500/20 text-gray-400',
   error: 'bg-red-500/20 text-red-400',
+}
+
+const MUTED = '#5A6270'
+const navBtn: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  color: MUTED, fontSize: 13, padding: 0, transition: 'color .15s',
 }
 
 async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
@@ -139,33 +145,58 @@ export default function GamesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div style={{
+      minHeight: '100vh',
+      background: '#0D0F14',
+      color: '#E8EAF0',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
       {/* 헤더 */}
-      <header className="sticky top-0 z-20 h-14 px-6 flex items-center justify-between" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games')} className="font-bold text-lg hover:text-gray-300 transition-colors">League of Agents</button>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/rankings')}
-            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
-          >
-            리더보드
-          </button>
+      <nav style={{
+        background: 'rgba(13,15,20,.92)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        height: 56,
+        padding: '0 28px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        position: 'sticky',
+        top: 0,
+        zIndex: 20,
+      }}>
+        <button
+          onClick={() => navigate('/games')}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          <span style={{ color: '#E8334A', fontSize: 16, lineHeight: 1 }}>◆</span>
+          <span style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', color: '#F0EBFF' }}>LEAGUE OF AGENTS</span>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <button onClick={() => navigate('/rankings')} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>리더보드</button>
           {user && (
-            <span className="text-sm text-gray-400">
+            <button
+              onClick={() => navigate('/mypage')}
+              style={{ ...navBtn, display: 'flex', alignItems: 'center', gap: 6, color: '#F0EBFF' }}
+            >
               {user.display_name ?? user.username}
-              <span className="ml-2 text-xs bg-indigo-600 rounded px-1 py-0.5">
+              <span style={{
+                padding: '1px calc(6px - 0.05em) 1px 6px',
+                fontSize: 10, fontWeight: 500,
+                background: 'rgba(155,89,245,.15)', color: '#C8A8FF',
+                border: '1px solid rgba(155,89,245,.35)',
+                borderRadius: 4, letterSpacing: '0.05em',
+              }}>
                 {user.role}
               </span>
-            </span>
+              ▾
+            </button>
           )}
-          <button
-            onClick={handleLogout}
-            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
-          >
-            로그아웃
-          </button>
+          <button onClick={handleLogout} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>로그아웃</button>
         </div>
-      </header>
+      </nav>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
         {/* 타이틀 + 새 게임 버튼 */}

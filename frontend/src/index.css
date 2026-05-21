@@ -80,7 +80,7 @@
 /* ── Global base ─────────────────────────────────────────────────────────────── */
 
 body {
-  font-family: var(--font-sans);
+  font-family: "SB Aggro", system-ui, sans-serif;
   color: #E8EAF0;
   background: #0D0F14;
 }
