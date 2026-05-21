@@ -31,8 +31,8 @@ interface GameInfo {
 }
 
 const MODE_BADGE: Record<string, { label: string; style: { background: string; color: string; border: string } }> = {
-  'battle-royale': { label: '배틀로얄', style: { background: 'rgba(232,51,74,.15)',  color: '#F05E70', border: '1px solid rgba(232,51,74,.4)'  } },
-  'boss':          { label: '보스전',   style: { background: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: '1px solid rgba(155,89,245,.4)' } },
+  'battle-royale': { label: '배틀로얄', style: { background: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: '1px solid rgba(155,89,245,.4)' } },
+  'boss':          { label: '보스전',   style: { background: 'rgba(232,51,74,.15)',  color: '#F05E70', border: '1px solid rgba(232,51,74,.4)'  } },
   'mock-stocks':   { label: '모의주식', style: { background: 'rgba(245,166,36,.15)', color: '#FFC76A', border: '1px solid rgba(245,166,36,.4)' } },
 }
 
@@ -201,7 +201,7 @@ export default function GamesPage() {
       <main className="max-w-4xl mx-auto px-6 py-8">
         {/* 타이틀 + 새 게임 버튼 */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">게임 목록</h2>
+          <h2 className="text-xl font-medium">게임 목록</h2>
           <button
             onClick={() => navigate('/games/new')}
             className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
@@ -287,7 +287,7 @@ function GameCard({ game }: { game: GameInfo }) {
       <div className="flex items-center shrink-0">
         <div className="w-20 flex items-center justify-center">
           {modeBadge && (
-            <span className="text-xs leading-none rounded-full px-2 py-1 font-medium" style={modeBadge.style}>
+            <span className="text-xs leading-none rounded-full px-2 font-medium" style={{ ...modeBadge.style, paddingTop: '2px', paddingBottom: '4px' }}>
               {modeBadge.label}
             </span>
           )}
@@ -318,21 +318,24 @@ function GameCard({ game }: { game: GameInfo }) {
           <>
             <button
               onClick={handleResult}
-              className="text-sm rounded-lg px-3 py-1.5 transition-colors bg-gray-600 hover:bg-gray-500 text-white"
+              className="text-sm rounded-lg px-3 transition-colors bg-gray-600 hover:bg-gray-500 text-white"
+              style={{ paddingTop: '4px', paddingBottom: '6px' }}
             >
               결과 보기
             </button>
             <button
               onClick={handleReplay}
-              className="text-sm rounded-lg px-3 py-1.5 transition-colors bg-indigo-700 hover:bg-indigo-600 text-white"
+              className="flex items-center gap-1 text-sm rounded-lg transition-colors bg-indigo-700 hover:bg-indigo-600 text-white"
+              style={{ paddingTop: '4px', paddingBottom: '6px', paddingLeft: '8px', paddingRight: '12px' }}
             >
-              🎬 리플레이
+              <span>🎬</span><span>리플레이</span>
             </button>
           </>
         ) : (
           <button
             onClick={handleWatch}
-            className="text-sm rounded-lg px-3 py-1.5 transition-colors bg-gray-600 hover:bg-gray-500 text-white"
+            className="text-sm rounded-lg px-3 transition-colors bg-gray-600 hover:bg-gray-500 text-white"
+            style={{ paddingTop: '4px', paddingBottom: '6px' }}
           >
             관전하기
           </button>

@@ -27,10 +27,10 @@ const MODES: GameMode[] = [
     available: true,
     route: '/games/new/battle-royale',
     theme: {
-      border:   'rgba(232,51,74,.35)',
-      glow:     'rgba(232,51,74,.12)',
-      accent:   '#F05E70',
-      accentBg: 'rgba(232,51,74,.15)',
+      border:   'rgba(155,89,245,.35)',
+      glow:     'rgba(155,89,245,.12)',
+      accent:   '#C8A8FF',
+      accentBg: 'rgba(155,89,245,.15)',
     },
   },
   {
@@ -41,10 +41,10 @@ const MODES: GameMode[] = [
     available: true,
     route: '/games/new/boss-battle',
     theme: {
-      border:   'rgba(155,89,245,.35)',
-      glow:     'rgba(155,89,245,.12)',
-      accent:   '#C8A8FF',
-      accentBg: 'rgba(155,89,245,.15)',
+      border:   'rgba(232,51,74,.35)',
+      glow:     'rgba(232,51,74,.12)',
+      accent:   '#F05E70',
+      accentBg: 'rgba(232,51,74,.15)',
     },
   },
   {
