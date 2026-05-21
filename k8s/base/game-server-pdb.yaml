@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: game-server-pdb
+  namespace: arena
+spec:
+  # game-server replicas: 1 고정 상태. 노드 drain/Autopilot 자동 업그레이드 시
+  # voluntary disruption을 차단해 진행 중인 게임 세션 손실을 막는다.
+  # Redis 세션 외부화 후 replicas 2+ 전환 시 minAvailable 또는 maxUnavailable 재조정 필요.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: game-server

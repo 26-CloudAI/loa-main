@@ -1,0 +1,13 @@
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: game-server-backend-config
+  namespace: arena
+spec:
+  timeoutSec: 3600  # WebSocket 관전 연결 유지용 (기본 30초면 관전 중 끊김)
+  connectionDraining:
+    drainingTimeoutSec: 60
+  healthCheck:
+    type: HTTP
+    requestPath: /healthz
+    port: 8080

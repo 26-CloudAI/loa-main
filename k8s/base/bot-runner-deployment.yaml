@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-runner
+  namespace: arena
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bot-runner
+  template:
+    metadata:
+      labels:
+        app: bot-runner
+    spec:
+      runtimeClassName: gvisor  # 유저 봇 코드 syscall 격리
+      automountServiceAccountToken: false  # GCP 리소스 접근 토큰 마운트 차단
+      serviceAccountName: bot-runner
+      containers:
+        - name: bot-runner
+          # 절대 그대로 적용하지 말 것 — Cloud Build 또는 `kubectl set image`로 실제 태그/digest 주입 필수.
+          # 직접 `kubectl apply`하면 ImagePullBackOff로 명백히 실패하도록 placeholder 사용.
+          image: asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/bot-runner:PLACEHOLDER
+          ports:
+            - containerPort: 8001
+          env:
+            - name: BOT_ACTION_TIMEOUT_SEC
+              value: "0.1"
+            - name: BOT_MAX_CODE_BYTES
+              value: "51200"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /livez  # 프로세스 생존만 확인 — 일시적 부하로 인한 readiness 실패가 Pod 재시작으로 이어지지 않게 분리
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory  # tmpfs: 봇이 /tmp에 쓰는 임시 파일을 메모리로 격리
+            sizeLimit: 64Mi  # 디스크 가득 채우기 공격 방지
