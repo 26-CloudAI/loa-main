@@ -59,7 +59,7 @@ export default function LandingPage() {
   return (
     <div
       className="min-h-screen overflow-x-hidden"
-      style={{ background: '#0D0F14', color: '#E8EAF0', fontFamily: '"JalnanGothic", system-ui, sans-serif' }}
+      style={{ background: '#0D0F14', color: '#E8EAF0', fontFamily: '"SB Aggro", system-ui, sans-serif' }}
     >
       <Nav token={token} ctaTo={ctaTo} />
       <HeroSection ctaTo={ctaTo} />
@@ -95,20 +95,6 @@ function Nav({ token, ctaTo }: { token: string | null; ctaTo: string }) {
       </Link>
 
       <nav style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-        <Link
-          to="/rankings"
-          style={{ color: '#5A6270', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
-        >
-          리더보드
-        </Link>
-        {token && (
-          <Link
-            to="/games"
-            style={{ color: '#5A6270', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
-          >
-            게임 목록
-          </Link>
-        )}
         <Link
           to={ctaTo}
           style={{
