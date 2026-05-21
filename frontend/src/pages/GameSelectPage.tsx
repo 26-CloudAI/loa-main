@@ -27,10 +27,10 @@ const MODES: GameMode[] = [
     available: true,
     route: '/games/new/battle-royale',
     theme: {
-      border:   'rgba(232,51,74,.35)',
-      glow:     'rgba(232,51,74,.12)',
-      accent:   '#F05E70',
-      accentBg: 'rgba(232,51,74,.15)',
+      border:   'rgba(155,89,245,.35)',
+      glow:     'rgba(155,89,245,.12)',
+      accent:   '#C8A8FF',
+      accentBg: 'rgba(155,89,245,.15)',
     },
   },
   {
@@ -41,10 +41,10 @@ const MODES: GameMode[] = [
     available: true,
     route: '/games/new/boss-battle',
     theme: {
-      border:   'rgba(155,89,245,.35)',
-      glow:     'rgba(155,89,245,.12)',
-      accent:   '#C8A8FF',
-      accentBg: 'rgba(155,89,245,.15)',
+      border:   'rgba(232,51,74,.35)',
+      glow:     'rgba(232,51,74,.12)',
+      accent:   '#F05E70',
+      accentBg: 'rgba(232,51,74,.15)',
     },
   },
   {
@@ -68,7 +68,7 @@ export default function GameSelectPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-3 shrink-0">
+      <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
           onClick={() => navigate('/games')}
           className="text-gray-400 hover:text-white text-sm transition-colors"
@@ -138,7 +138,7 @@ function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
         </div>
         <div className="flex flex-col gap-1">
           <span className="font-bold text-lg" style={{ color: '#F0EBFF' }}>{mode.title}</span>
-          <span className="text-sm leading-relaxed break-keep" style={{ color: '#9B8AB0' }}>{mode.description}</span>
+          <span className="text-sm leading-relaxed break-keep" style={{ color: '#8090A0' }}>{mode.description}</span>
         </div>
         {mode.available && (
           <span className="text-sm font-medium mt-auto" style={{ color: theme.accent }}>

@@ -360,7 +360,7 @@ export default function MockStocksWatchPage() {
     <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
 
       {/* ── 헤더 ── */}
-      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-4 shrink-0">
+      <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button onClick={() => navigate('/games/new')} className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 나가기
         </button>
