@@ -359,6 +359,9 @@ def create_app(
         allow_headers=["*"],
     )
 
+    # Bot Runner readiness 용 DB 상태 노출 (run_server.py /healthz 에서 사용)
+    app.state.db_ok = lambda: state.get("db_conn") is not None
+
     if _settings.ENV != "production":
         app.include_router(mock_auth_router)
 
@@ -548,7 +551,18 @@ def create_app(
         participant_specs: list[tuple[str, bool, bool]] = []
 
         for b in bots_data:
-            bot = InProcessBot(b["bot_id"], b["code"])
+            if _settings.BOT_RUNNER_URL:
+                from ..sandbox.remote_adapter import RemoteBattleRoyaleBotAdapter
+                bot = RemoteBattleRoyaleBotAdapter(
+                    bot_id=b["bot_id"],
+                    code=b["code"],
+                    runner_url=_settings.BOT_RUNNER_URL,
+                    timeout=_settings.BOT_RUNNER_TIMEOUT_SEC,
+                )
+            elif _settings.ENV == "production" and _settings.BOT_RUNNER_REQUIRED:
+                raise HTTPException(503, "Bot Runner is required but BOT_RUNNER_URL is not configured")
+            else:
+                bot = InProcessBot(b["bot_id"], b["code"])
             bot_interfaces.append(bot)
             existing_ids.add(b["bot_id"])
             participant_specs.append((b["bot_id"], False, False))

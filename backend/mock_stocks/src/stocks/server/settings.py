@@ -19,3 +19,8 @@ DB_PASSWORD: str = os.environ.get("DB_PASSWORD", "")
 DB_CONNECT_TIMEOUT: int = int(os.environ.get("DB_CONNECT_TIMEOUT", "10"))
 DB_STATEMENT_TIMEOUT_MS: int = int(os.environ.get("DB_STATEMENT_TIMEOUT_MS", "30000"))
 DB_LOCK_TIMEOUT_MS: int = int(os.environ.get("DB_LOCK_TIMEOUT_MS", "5000"))
+
+# ── Bot Runner ──────────────────────────────────
+BOT_RUNNER_URL: str = os.environ.get("BOT_RUNNER_URL", "")
+BOT_RUNNER_TIMEOUT_SEC: float = float(os.environ.get("BOT_RUNNER_TIMEOUT_SEC", "0.5"))
+BOT_RUNNER_REQUIRED: bool = os.environ.get("BOT_RUNNER_REQUIRED", "false").lower() in ("true", "1", "yes")

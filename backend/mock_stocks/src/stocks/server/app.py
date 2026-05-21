@@ -33,6 +33,7 @@ from ..config import Config, DEFAULT_CONFIG
 from ..db.schema import init_db
 from ..db.game_repo import StockGameRepository
 from ..market import Market
+from . import settings as _settings
 from .game_session import GameRegistry
 from .ws_manager import SpectatorManager
 
@@ -186,6 +187,9 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
 
     registry = GameRegistry(spectator_manager)
 
+    # Bot Runner readiness 용 DB 상태 노출 (run_server.py /healthz 에서 사용)
+    app.state.db_ok = lambda: registry._repo is not None
+
     # ── 뉴스 풀 ───────────────────────────────────────────────────────────────
     # 서버가 미리 만들어두는 뉴스 배치. 유저가 /prepare 호출 시 즉시 꺼내줌.
     NEWS_POOL_TARGET = 2                 # 항상 유지할 배치 수
@@ -330,7 +334,18 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         for b in body.bots:
             if len(b.code) > 50 * 1024:
                 raise HTTPException(400, "코드가 너무 큽니다 (최대 50KB).")
-            bot = InProcessBot(b.bot_id, b.code)
+            if _settings.BOT_RUNNER_URL:
+                from ..sandbox.remote_adapter import RemoteStockBotAdapter
+                bot = RemoteStockBotAdapter(
+                    bot_id=b.bot_id,
+                    code=b.code,
+                    runner_url=_settings.BOT_RUNNER_URL,
+                    timeout=_settings.BOT_RUNNER_TIMEOUT_SEC,
+                )
+            elif _settings.BOT_RUNNER_REQUIRED:
+                raise HTTPException(503, "Bot Runner is required but BOT_RUNNER_URL is not configured")
+            else:
+                bot = InProcessBot(b.bot_id, b.code)
             user_bots.append(bot)
 
         filler_bots: list[BotInterface] = []
