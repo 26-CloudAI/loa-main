@@ -9,7 +9,7 @@ const STOCKS_API_BASE = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhos
 const PANEL_BG = '#161A23'
 const PANEL_BORDER = 'rgba(255,255,255,.06)'
 const MUTED = '#5A6270'
-const DISPLAY_FONT = '"JalnanGothic",system-ui,sans-serif'
+const FONT = '"SB Aggro",system-ui,sans-serif'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -65,10 +65,10 @@ const MODE_LABEL: Record<string, string> = {
   'mock-stocks': '모의주식',
 }
 
-const MODE_PILL: Record<string, { bg: string; color: string }> = {
-  'battle-royale': { bg: 'rgba(232,51,74,.15)',  color: '#F05E70' },
-  'boss':          { bg: 'rgba(155,89,245,.15)', color: '#C8A8FF' },
-  'mock-stocks':   { bg: 'rgba(245,166,36,.15)', color: '#FFC76A' },
+const MODE_PILL: Record<string, { bg: string; color: string; border: string }> = {
+  'battle-royale': { bg: 'rgba(232,51,74,.15)',  color: '#F05E70', border: 'rgba(232,51,74,.3)' },
+  'boss':          { bg: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: 'rgba(155,89,245,.3)' },
+  'mock-stocks':   { bg: 'rgba(245,166,36,.15)', color: '#FFC76A', border: 'rgba(245,166,36,.3)' },
 }
 
 const STATUS_TEXT: Record<GameInfo['status'], (tick: number) => string> = {
@@ -93,7 +93,7 @@ function StatItem({ label, value, color }: { label: string; value: string; color
   return (
     <div style={{ textAlign: 'center' }}>
       <span style={{ fontWeight: 300, color: MUTED, fontSize: 11, display: 'block', marginBottom: 4 }}>{label}</span>
-      <span style={{ fontFamily: DISPLAY_FONT, fontSize: 28, color: color ?? '#F0EBFF' }}>{value}</span>
+      <span style={{ fontFamily: FONT, fontSize: 28, color: color ?? '#F0EBFF' }}>{value}</span>
     </div>
   )
 }
@@ -113,10 +113,11 @@ interface ModeCardProps {
   btnColor: string
   pillBg: string
   pillColor: string
+  pillBorder: string
   onClick: () => void
 }
 
-function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnColor, pillBg, pillColor, onClick }: ModeCardProps) {
+function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnColor, pillBg, pillColor, pillBorder, onClick }: ModeCardProps) {
   function onEnter(e: React.MouseEvent<HTMLDivElement>) {
     const el = e.currentTarget
     el.style.transform = 'translateY(-4px)'
@@ -146,15 +147,16 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <span style={{
           display: 'inline-flex', alignItems: 'center',
-          padding: '3px 10px', borderRadius: 999,
+          padding: '2px calc(10px - 0.1em) 3px 10px', borderRadius: 999,
           background: pillBg, color: pillColor,
+          border: `1px solid ${pillBorder}`,
           fontSize: 10, fontWeight: 500, letterSpacing: '0.1em',
         }}>
           {mode}
         </span>
         <span style={{ fontSize: 28, color: pillColor, lineHeight: 1 }}>{icon}</span>
       </div>
-      <h3 style={{ fontFamily: DISPLAY_FONT, fontSize: 26, margin: '0 0 4px', color: '#F0EBFF' }}>{title}</h3>
+      <h3 style={{ fontFamily: FONT, fontSize: 26, margin: '0 0 4px', color: '#F0EBFF' }}>{title}</h3>
       <p style={{ fontWeight: 300, color: MUTED, fontSize: 12, margin: '0 0 20px' }}>{desc}</p>
       <button
         style={{
@@ -265,6 +267,7 @@ export default function MainPage() {
       minHeight: '100vh',
       background: '#0D0F14',
       color: '#E8EAF0',
+      fontFamily: FONT,
     }}>
       {/* ── Nav ── */}
       <nav style={{
@@ -288,13 +291,13 @@ export default function MainPage() {
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <button onClick={() => navigate('/rankings')} style={navBtn}>리더보드</button>
-          <button onClick={() => navigate('/games/list')} style={navBtn}>게임 목록</button>
+          <button onClick={() => navigate('/rankings')} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>리더보드</button>
+          <button onClick={() => navigate('/games/list')} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>게임 목록</button>
           <button onClick={() => navigate('/mypage')} style={{ ...navBtn, display: 'flex', alignItems: 'center', gap: 6, color: '#F0EBFF' }}>
             {displayName}
             {user && (
               <span style={{
-                padding: '1px 6px',
+                padding: '1px calc(6px - 0.05em) 1px 6px',
                 fontSize: 10, fontWeight: 500,
                 background: 'rgba(155,89,245,.15)', color: '#C8A8FF',
                 border: '1px solid rgba(155,89,245,.35)',
@@ -305,7 +308,7 @@ export default function MainPage() {
             )}
             ▾
           </button>
-          <button onClick={handleLogout} style={navBtn}>로그아웃</button>
+          <button onClick={handleLogout} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>로그아웃</button>
         </div>
       </nav>
 
@@ -326,7 +329,7 @@ export default function MainPage() {
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '3px 12px', borderRadius: 999,
+            padding: '2px calc(12px - 0.1em) 3px 12px', borderRadius: 999,
             background: 'rgba(155,89,245,.12)', border: '1px solid rgba(155,89,245,.3)', color: '#C8A8FF',
             fontSize: 10, fontWeight: 500, letterSpacing: '0.1em', marginBottom: 20,
           }}>
@@ -334,7 +337,7 @@ export default function MainPage() {
             WELCOME BACK
           </div>
 
-          <h1 style={{ fontFamily: DISPLAY_FONT, fontSize: 48, margin: '0 0 10px', lineHeight: 1.2 }}>
+          <h1 style={{ fontFamily: FONT, fontSize: 48, margin: '0 0 10px', lineHeight: 1.2 }}>
             {displayName} <span style={{ color: MUTED }}>님,</span>
           </h1>
           <p style={{ fontWeight: 300, color: MUTED, fontSize: 15, margin: '0 0 32px' }}>오늘도 봇을 단련시킬 시간입니다.</p>
@@ -360,21 +363,21 @@ export default function MainPage() {
             mode="GAME MODE 01" icon="◆" title="배틀로얄" desc="최후의 1인이 되어라"
             borderColor="rgba(155,89,245,.25)" glowColor="rgba(155,89,245,.15)"
             btnBg="#9B59F5" btnColor="#fff"
-            pillBg="rgba(155,89,245,.15)" pillColor="#C8A8FF"
+            pillBg="rgba(155,89,245,.15)" pillColor="#C8A8FF" pillBorder="rgba(155,89,245,.3)"
             onClick={() => navigate('/games/new/battle-royale')}
           />
           <ModeCard
             mode="GAME MODE 02" icon="◉" title="보스전" desc="거대한 적을 쓰러뜨려라"
             borderColor="rgba(232,51,74,.25)" glowColor="rgba(232,51,74,.15)"
             btnBg="#E8334A" btnColor="#fff"
-            pillBg="rgba(232,51,74,.15)" pillColor="#F05E70"
+            pillBg="rgba(232,51,74,.15)" pillColor="#F05E70" pillBorder="rgba(232,51,74,.3)"
             onClick={() => navigate('/games/new/boss-battle')}
           />
           <ModeCard
             mode="GAME MODE 03" icon="▲" title="모의주식" desc="알고리즘으로 시장을 지배하라"
             borderColor="rgba(245,166,36,.25)" glowColor="rgba(245,166,36,.12)"
             btnBg="#F5A624" btnColor="#000"
-            pillBg="rgba(245,166,36,.15)" pillColor="#FFC76A"
+            pillBg="rgba(245,166,36,.15)" pillColor="#FFC76A" pillBorder="rgba(245,166,36,.3)"
             onClick={() => navigate('/games/new/mock-stocks')}
           />
         </div>
@@ -386,7 +389,7 @@ export default function MainPage() {
           <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 14, padding: 20, gridColumn: 'span 2' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h4 style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>최근 게임</h4>
-              <button onClick={() => navigate('/games/list')} style={linkBtn}>전체보기 →</button>
+              <button onClick={() => navigate('/games/list')} style={linkBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>전체보기 →</button>
             </div>
 
             {gamesLoading ? (
@@ -429,8 +432,9 @@ export default function MainPage() {
                         {pill && (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center',
-                            padding: '2px 8px', borderRadius: 999,
+                            padding: '2px calc(8px - 0.08em) 2px 8px', borderRadius: 999,
                             background: pill.bg, color: pill.color,
+                            border: `1px solid ${pill.border}`,
                             fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', whiteSpace: 'nowrap',
                           }}>
                             {modeLabel}
@@ -457,7 +461,7 @@ export default function MainPage() {
           <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 14, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h4 style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>TOP 5 🏆</h4>
-              <button onClick={() => navigate('/rankings')} style={linkBtn}>전체 →</button>
+              <button onClick={() => navigate('/rankings')} style={linkBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>전체 →</button>
             </div>
 
             {statsLoading ? (
@@ -480,7 +484,7 @@ export default function MainPage() {
                         margin: isMe ? '0 -6px' : undefined,
                       }}
                     >
-                      <span style={{ fontFamily: DISPLAY_FONT, color: rankColor, width: 18, textAlign: 'center', flexShrink: 0 }}>
+                      <span style={{ fontFamily: FONT, color: rankColor, width: 18, textAlign: 'center', flexShrink: 0 }}>
                         {entry.rank}
                       </span>
                       <span style={{ flex: 1, color: isMe ? '#C8A8FF' : '#F0EBFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -497,7 +501,7 @@ export default function MainPage() {
                   <>
                     <div style={{ borderTop: `1px solid ${PANEL_BORDER}`, margin: '4px 0' }} />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, background: 'rgba(155,89,245,.1)', borderRadius: 6, padding: '3px 6px', margin: '0 -6px' }}>
-                      <span style={{ fontFamily: DISPLAY_FONT, color: MUTED, width: 18, textAlign: 'center', flexShrink: 0 }}>{myRanking.rank}</span>
+                      <span style={{ fontFamily: FONT, color: MUTED, width: 18, textAlign: 'center', flexShrink: 0 }}>{myRanking.rank}</span>
                       <span style={{ flex: 1, color: '#C8A8FF' }}>
                         {myRanking.display_name}
                         <span style={{ fontSize: 10, color: MUTED, marginLeft: 4 }}>(나)</span>
@@ -517,10 +521,10 @@ export default function MainPage() {
 
 const navBtn: React.CSSProperties = {
   background: 'none', border: 'none', cursor: 'pointer',
-  color: MUTED, fontSize: 13, padding: 0,
+  color: MUTED, fontSize: 13, padding: 0, transition: 'color .15s',
 }
 
 const linkBtn: React.CSSProperties = {
   background: 'none', border: 'none', cursor: 'pointer',
-  color: MUTED, fontSize: 12,
+  color: MUTED, fontSize: 12, transition: 'color .15s',
 }
