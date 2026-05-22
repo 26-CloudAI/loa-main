@@ -55,7 +55,7 @@ export default function RankingPage() {
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center justify-between" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/games')}
+            onClick={() => navigate('/games/list')}
             className="text-gray-400 hover:text-white text-sm transition-colors"
           >
             ◀ 게임 목록

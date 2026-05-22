@@ -289,7 +289,7 @@ export default function BattleRoyaleReplayPage() {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{loadError}</p>
-        <button onClick={() => navigate('/games')}
+        <button onClick={() => navigate('/games/list')}
           className="text-sm text-indigo-400 hover:text-indigo-300 underline underline-offset-2">
           게임 목록으로
         </button>
@@ -301,7 +301,7 @@ export default function BattleRoyaleReplayPage() {
     <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games')}
+        <button onClick={() => navigate('/games/list')}
           className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 게임 목록
         </button>

@@ -396,7 +396,7 @@ export default function MockStocksReplayPage() {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{loadError}</p>
-        <button onClick={() => navigate('/games')}
+        <button onClick={() => navigate('/games/list')}
           className="text-sm text-indigo-400 hover:text-indigo-300 underline underline-offset-2">
           게임 목록으로
         </button>
@@ -409,7 +409,7 @@ export default function MockStocksReplayPage() {
 
       {/* ── 헤더 ── */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games')} className="text-gray-400 hover:text-white text-sm transition-colors">
+        <button onClick={() => navigate('/games/list')} className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 게임 목록
         </button>
         <span className="text-gray-600">|</span>
@@ -713,7 +713,7 @@ export default function MockStocksReplayPage() {
                 닫기
               </button>
               <button
-                onClick={() => navigate('/games')}
+                onClick={() => navigate('/games/list')}
                 className="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-xl py-2.5 text-sm font-medium transition-colors"
               >
                 게임 목록으로

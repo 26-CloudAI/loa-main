@@ -56,7 +56,7 @@ export default function MockStocksResultPage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
-          onClick={() => navigate('/games')}
+          onClick={() => navigate('/games/list')}
           className="text-gray-400 hover:text-white transition-colors text-sm"
         >
           ← 게임 목록
