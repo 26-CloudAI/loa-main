@@ -175,7 +175,10 @@ def create_app() -> FastAPI:
     def health() -> dict[str, str]:  # noqa: D401 — 짧은 헬스체크 응답
         return {"status": "ok", "protocol": PROTOCOL_VERSION}
 
-    @app.websocket("/battleroyale/match/{match_id}")
+    # 통합 서버에 /battleroyale2 로 mount 되므로 여기선 prefix 없이 /match/{id}.
+    # 최종 경로: ws://<host>/battleroyale2/match/{match_id}
+    # (단독 실행 시 BattleRoyale2.run_server 도 동일 앱을 그대로 띄움)
+    @app.websocket("/match/{match_id}")
     async def match_ws(ws: WebSocket, match_id: str) -> None:
         await ws.accept()
         session = MatchSession(ws, match_id)

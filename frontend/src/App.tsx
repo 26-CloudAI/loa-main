@@ -16,6 +16,7 @@ import MockStocksReplayPage from './pages/MockStocksReplayPage'
 import RankingPage from './pages/RankingPage'
 import UserBotDetailPage from './pages/UserBotDetailPage'
 import MyPage from './pages/MyPage'
+import GodotTestPage from './pages/GodotTestPage'
 
 function LoadingScreen() {
   return (
@@ -100,6 +101,7 @@ function AppRoutes() {
       <Route path="/users/:user_id/bots" element={<UserBotDetailPage />} />
       <Route path="/mypage" element={<MyPage />} />
       {/* 기본 진입점 */}
+      <Route path="/godot-test" element={<GodotTestPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
