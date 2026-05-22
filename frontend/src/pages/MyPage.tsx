@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import PythonEditor from '../components/PythonEditor'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
@@ -437,17 +438,10 @@ export default function MyPage() {
                           </button>
                         </div>
                       </div>
-                      {/* textarea */}
-                      <textarea
+                      {/* 코드 에디터 */}
+                      <PythonEditor
                         value={curCode}
-                        onChange={e => setEditingCode(prev => ({ ...prev, [selected.id]: e.target.value }))}
-                        style={{
-                          flex: 1, minHeight: 380, resize: 'none', outline: 'none', border: 'none',
-                          background: 'rgba(8,4,20,.8)', color: '#C8C0E0',
-                          padding: '20px 24px', fontSize: 12.5,
-                          fontFamily: '"Fira Code","Consolas","Courier New",monospace',
-                          lineHeight: 1.75, tabSize: 4, letterSpacing: '0.01em',
-                        }}
+                        onChange={code => setEditingCode(prev => ({ ...prev, [selected.id]: code }))}
                       />
                     </div>
                   ) : (
