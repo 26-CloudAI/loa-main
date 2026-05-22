@@ -16,7 +16,7 @@
 import { useRef, useState, useCallback } from 'react'
 import PythonEditor from './PythonEditor'
 
-type AccentColor = 'indigo' | 'red' | 'green'
+type AccentColor = 'indigo' | 'red' | 'green' | 'gold'
 
 interface BotCodeInputProps {
   value: string
@@ -43,6 +43,12 @@ const ACCENT: Record<AccentColor, { active: string; ring: string; border: string
     ring:   'ring-green-500',
     border: 'border-green-500/40 hover:border-green-400',
     text:   'text-green-400',
+  },
+  gold: {
+    active: 'text-white',
+    ring:   'ring-[#F5A624]',
+    border: 'border-[#F5A624]/40 hover:border-[#F5A624]',
+    text:   'text-[#FFC76A]',
   },
 }
 
@@ -120,21 +126,29 @@ export default function BotCodeInput({
           type="button"
           onClick={() => switchMode('editor')}
           className={[
-            'flex items-center gap-1.5 text-xs font-medium rounded-md px-3 py-1.5 transition-colors',
+            'flex items-center text-xs font-medium rounded-md py-1.5 transition-colors',
             mode === 'editor' ? ac.active : 'text-gray-400 hover:text-gray-200',
           ].join(' ')}
+          style={{
+            paddingLeft: 8, paddingRight: 12,
+            ...(mode === 'editor' && accentColor === 'gold' ? { background: '#F5A624' } : {}),
+          }}
         >
-          ✏️ 코드 직접입력
+          <span style={{ fontSize: 11 }}>✏️</span>&nbsp;코드 직접입력
         </button>
         <button
           type="button"
           onClick={() => switchMode('upload')}
           className={[
-            'flex items-center gap-1.5 text-xs font-medium rounded-md px-3 py-1.5 transition-colors',
+            'flex items-center text-xs font-medium rounded-md py-1.5 transition-colors',
             mode === 'upload' ? ac.active : 'text-gray-400 hover:text-gray-200',
           ].join(' ')}
+          style={{
+            paddingLeft: 8, paddingRight: 12,
+            ...(mode === 'upload' && accentColor === 'gold' ? { background: '#F5A624' } : {}),
+          }}
         >
-          📁 파일 업로드
+          <span style={{ fontSize: 11 }}>📁</span>&nbsp;파일 업로드
         </button>
       </div>
 
