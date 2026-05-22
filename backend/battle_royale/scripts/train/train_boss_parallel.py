@@ -87,8 +87,8 @@ try:
 except ImportError:
     SAMPLE_USER_BOTS = []
 
-WEIGHTS_PATH     = _PROJECT_ROOT / "bots" / "trained_weights_torch.pt"
-LOCK_FILE        = _PROJECT_ROOT / "bots" / ".train_lock"
+WEIGHTS_PATH     = _PROJECT_ROOT / "bots" / "boss" / "trained_weights_torch.pt"
+LOCK_FILE        = _PROJECT_ROOT / "bots" / "boss" / ".train_lock"
 META_FILENAME    = "training_meta.json"
 HISTORY_FILENAME = "trained_bot_history.json"
 

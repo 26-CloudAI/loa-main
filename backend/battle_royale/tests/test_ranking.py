@@ -19,7 +19,6 @@ from src.arena.db.schema import init_db
 from src.arena.db.user_repo import UserRepository
 from src.arena.db.bot_repo import BotRepository
 from src.arena.db.game_repo import GameRepository
-from src.arena.auth.auth_service import generate_salt, hash_password
 from src.arena.ranking.elo import (
     DEFAULT_ELO_CONFIG,
     EloConfig,
@@ -169,15 +168,22 @@ class RankingDBBase(unittest.TestCase):
         self.conn.close()
 
     def _user(self, name="u1"):
-        salt = generate_salt()
-        return self.users.create(name, name, hash_password("pw", salt), salt).id
+        return self.users.create(f"uid_{name}", name, name).id
 
     def _bot(self, uid, name="b1"):
         return self.bots.create(uid, name, "def action(s): return 'STAY'").id
 
-    def _game(self, gid="g-001", n=4):
-        self.games.create_game(gid, n)
+    def _game(self, gid="g-001", n=4, owner_user_id=None):
+        if owner_user_id is None:
+            owner_user_id = self._default_owner_id()
+        self.games.create_game(gid, owner_user_id, n)
         return gid
+
+    def _default_owner_id(self):
+        """게임 owner 용으로 한 번만 생성되는 더미 유저 id를 반환."""
+        if not hasattr(self, "_owner_id"):
+            self._owner_id = self._user("game_owner")
+        return self._owner_id
 
     def _setup4(self):
         u1, u2 = self._user("u1"), self._user("u2")
@@ -334,7 +340,7 @@ class TestIntegration(RankingDBBase):
         patterns = [[1,2,3],[1,3,2],[1,2,3],[2,1,3],[1,2,3],
                      [1,2,3],[1,3,2],[2,1,3],[1,2,3],[1,2,3]]
         for i, ranks in enumerate(patterns):
-            self.games.create_game(f"g{i}", 3)
+            self.games.create_game(f"g{i}", u1, 3)
             parts = [{"bot_id": bid, "final_rank": r, "kills": 0, "minerals_mined": 0, "survival_ticks": 0}
                      for bid, r in zip([b1, b2, b3], ranks)]
             self.rankings.process_game_results(f"g{i}", s.id, parts)

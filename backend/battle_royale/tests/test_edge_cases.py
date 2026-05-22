@@ -29,7 +29,6 @@ from src.arena.db.schema import init_db
 from src.arena.db.user_repo import UserRepository
 from src.arena.db.bot_repo import BotRepository
 from src.arena.db.game_repo import GameRepository
-from src.arena.auth.auth_service import generate_salt, hash_password
 from src.arena.ranking.repository import RankingRepository, SeasonRepository, init_ranking_tables
 
 
@@ -178,14 +177,17 @@ class TestZoneBoundary(unittest.TestCase):
     def test_exact_boundary(self):
         cfg = small_cfg()
         zone = ZoneManager(cfg)
-        zone.boundary = 2
+        # 새 API: bounds(min_x, min_y, max_x, max_y) + current_shrink>0
+        zone.current_shrink = 1
+        zone.bounds = (2, 2, 7, 7)
         self.assertTrue(zone.is_outside_safe_zone(Position(1, 5)))
         self.assertFalse(zone.is_outside_safe_zone(Position(2, 5)))
 
     def test_corners_outside(self):
         cfg = small_cfg()
         zone = ZoneManager(cfg)
-        zone.boundary = 1
+        zone.current_shrink = 1
+        zone.bounds = (1, 1, 8, 8)
         for pos in [Position(0, 0), Position(9, 9), Position(0, 9), Position(9, 0)]:
             self.assertTrue(zone.is_outside_safe_zone(pos))
 
@@ -314,10 +316,9 @@ class TestFullPipeline(unittest.TestCase):
         self.conn.close()
 
     def test_end_to_end(self):
-        # 유저 생성
-        salt1, salt2 = generate_salt(), generate_salt()
-        u1 = self.users.create("alice", "Alice", hash_password("pw", salt1), salt1)
-        u2 = self.users.create("bob", "Bob", hash_password("pw", salt2), salt2)
+        # 유저 생성 (Firebase Auth 기반)
+        u1 = self.users.create("uid_alice", "alice", "Alice")
+        u2 = self.users.create("uid_bob", "bob", "Bob")
 
         # 봇 등록
         b1 = self.bots_repo.create(u1.id, "alice_bot", "def action(s): return 'MINE'")
@@ -353,7 +354,7 @@ class TestFullPipeline(unittest.TestCase):
 
         # 게임 기록
         game_id = "game_001"
-        self.games_repo.create_game(game_id, 2, seed=42)
+        self.games_repo.create_game(game_id, u1.id, 2, seed=42)
         self.games_repo.update_game_started(game_id)
         self.games_repo.update_game_finished(game_id, result.final_tick, result.reason.value)
 

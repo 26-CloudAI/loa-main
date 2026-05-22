@@ -73,7 +73,7 @@ try:
 except ImportError:
     SAMPLE_USER_BOTS = []
 
-WEIGHTS_PATH = _PROJECT_ROOT / "bots" / "trained_weights.json"
+WEIGHTS_PATH = _PROJECT_ROOT / "bots" / "boss" / "trained_weights.json"
 
 # ---------------------------------------------------------------------------
 # 유저 봇 어댑터 — app.py 의 InProcessBot 와 동일한 패턴
