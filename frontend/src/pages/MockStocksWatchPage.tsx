@@ -357,10 +357,14 @@ export default function MockStocksWatchPage() {
   const displayRankings  = gameOver && finalRankings.length > 0 ? finalRankings : leaderboard
 
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
+    <div className="h-screen text-white flex flex-col overflow-hidden" style={{
+      background: '#0D0F14',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
 
       {/* ── 헤더 ── */}
-      <header className="sticky top-0 z-20 h-14 border-b border-gray-800 bg-gray-950 px-6 flex items-center gap-4 shrink-0">
+      <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button onClick={() => navigate('/games/new')} className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 나가기
         </button>

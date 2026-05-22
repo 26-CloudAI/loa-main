@@ -15,6 +15,9 @@
   font-weight: 300;
   font-style: normal;
   font-display: swap;
+  ascent-override: 85%;
+  descent-override: 17%;
+  line-gap-override: 0%;
 }
 @font-face {
   font-family: "SB Aggro";
@@ -22,6 +25,9 @@
   font-weight: 500;
   font-style: normal;
   font-display: swap;
+  ascent-override: 85%;
+  descent-override: 17%;
+  line-gap-override: 0%;
 }
 @font-face {
   font-family: "SB Aggro";
@@ -29,6 +35,9 @@
   font-weight: 700;
   font-style: normal;
   font-display: swap;
+  ascent-override: 85%;
+  descent-override: 17%;
+  line-gap-override: 0%;
 }
 
 /* ── Design tokens ──────────────────────────────────────────────────────────── */
@@ -39,7 +48,6 @@
   /* Display font (JalnanGothic) — use with font-display utility class */
   --font-display: "JalnanGothic", system-ui, sans-serif;
   --font-mono:    "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
-  --font-aggro:   "SB Aggro", system-ui, sans-serif;
 
   /* White → cool off-white */
   --color-white: #E8EAF0;
@@ -72,7 +80,7 @@
 /* ── Global base ─────────────────────────────────────────────────────────────── */
 
 body {
-  font-family: var(--font-sans);
+  font-family: "SB Aggro", system-ui, sans-serif;
   color: #E8EAF0;
   background: #0D0F14;
 }

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import PythonEditor from '../components/PythonEditor'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
-const DISPLAY_FONT = '"JalnanGothic",system-ui,sans-serif'
-const PANEL_BG     = '#221638'
+const DISPLAY_FONT = '"SB Aggro",system-ui,sans-serif'
+const PANEL_BG     = '#161A23'
 const PANEL_BORDER = 'rgba(255,255,255,.06)'
-const MUTED        = '#726890'
+const MUTED        = '#5A6270'
 
 const TIER_LIST = [
   { min: 2000, label: 'Grandmaster', color: '#E8334A' },
@@ -21,8 +22,8 @@ const TIER_LIST = [
 ]
 
 const MODE_COLOR: Record<string, { bg: string; border: string; text: string }> = {
-  '배틀로얄': { bg: 'rgba(232,51,74,.15)',  border: 'rgba(232,51,74,.4)',  text: '#F05E70' },
-  '보스전':   { bg: 'rgba(155,89,245,.15)', border: 'rgba(155,89,245,.4)', text: '#C8A8FF' },
+  '배틀로얄': { bg: 'rgba(155,89,245,.15)', border: 'rgba(155,89,245,.4)', text: '#C8A8FF' },
+  '보스전':   { bg: 'rgba(232,51,74,.15)',  border: 'rgba(232,51,74,.4)',  text: '#F05E70' },
   '모의주식': { bg: 'rgba(245,166,36,.15)', border: 'rgba(245,166,36,.4)', text: '#F5A624' },
 }
 
@@ -51,7 +52,7 @@ interface RankEntry { rank: number; username: string }
 
 // ── 공통 스타일 ─────────────────────────────────
 const labelStyle: React.CSSProperties = { fontSize: 11, color: MUTED, display: 'block', marginBottom: 5, letterSpacing: '0.05em' }
-const readonlyStyle: React.CSSProperties = { padding: '9px 12px', borderRadius: 7, fontSize: 12, color: '#554C78', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.05)' }
+const readonlyStyle: React.CSSProperties = { padding: '9px 12px', borderRadius: 7, fontSize: 12, color: MUTED, background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.05)' }
 const inputStyle: React.CSSProperties = { padding: '9px 12px', borderRadius: 7, fontSize: 13, color: '#F0EBFF', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)', outline: 'none' }
 const btnPrimary: React.CSSProperties = { padding: '9px 20px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: '#E8334A', color: '#fff', transition: 'opacity .2s' }
 const btnGhost: React.CSSProperties = { padding: '9px 20px', borderRadius: 7, border: '1px solid rgba(255,255,255,.1)', cursor: 'pointer', fontSize: 12, background: 'rgba(255,255,255,.04)', color: '#F0EBFF' }
@@ -60,7 +61,7 @@ const btnDanger: React.CSSProperties = { padding: '9px 20px', borderRadius: 7, b
 function SettingGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: '#554C78', margin: '0 0 14px', textTransform: 'uppercase' as const }}>{label}</p>
+      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: MUTED, margin: '0 0 14px', textTransform: 'uppercase' as const }}>{label}</p>
       {children}
     </div>
   )
@@ -175,28 +176,27 @@ export default function MyPage() {
   return (
     <div style={{
       minHeight: '100vh', background: '#241848', color: '#F0EBFF',
-      fontFamily: '"Pretendard Variable","Pretendard",system-ui,sans-serif',
     }}>
 
       {/* ── Nav ── */}
       <nav style={{
-        background: 'rgba(26,16,48,.88)', backdropFilter: 'blur(14px)',
+        background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
         height: 56, padding: '0 28px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0, zIndex: 20,
-        borderBottom: '1px solid rgba(255,255,255,.05)',
       }}>
         <button onClick={() => navigate('/games')}
           style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-          <span style={{ color: '#E8334A', fontSize: 16 }}>◆</span>
+          <span style={{ color: '#E8334A', fontSize: 16, lineHeight: 1 }}>◆</span>
           <span style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', color: '#F0EBFF' }}>LEAGUE OF AGENTS</span>
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <button onClick={() => navigate('/rankings')} style={{ color: MUTED, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>리더보드</button>
-          <button onClick={() => navigate('/games/list')} style={{ color: MUTED, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>게임 목록</button>
+          <button onClick={() => navigate('/rankings')} style={{ color: MUTED, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: 0, transition: 'color .15s' }} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>리더보드</button>
+          <button onClick={() => navigate('/games/list')} style={{ color: MUTED, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: 0, transition: 'color .15s' }} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>게임 목록</button>
           <button onClick={async () => { await logout(); navigate('/login') }}
-            style={{ color: '#F0EBFF', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>
+            style={{ color: MUTED, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: 0, transition: 'color .15s' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>
             로그아웃
           </button>
         </div>
@@ -269,8 +269,8 @@ export default function MyPage() {
                             transition: 'width 1s cubic-bezier(.25,.46,.45,.94)',
                           }} />
                         </div>
-                        <span style={{ fontSize: 12, color: '#F0EBFF', whiteSpace: 'nowrap' }}>
-                          {nextTier.label}까지{' '}
+                        <span style={{ fontSize: 12, color: '#F0EBFF', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'baseline', gap: '0.3em' }}>
+                          <span>{nextTier.label}까지</span>
                           <span style={{ color: tier.color, fontWeight: 700 }}>{eloToNext}</span>
                         </span>
                       </div>
@@ -400,7 +400,7 @@ export default function MyPage() {
                             transition: 'background .15s',
                           }}>
                           {/* 모드 뱃지 */}
-                          {mc && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: mc.text, background: mc.bg, border: `1px solid ${mc.border}`, borderRadius: 999, padding: '2px 7px', display: 'inline-block', marginBottom: 6 }}>{bot.game_mode}</span>}
+                          {mc && <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.06em', color: mc.text, background: mc.bg, border: `1px solid ${mc.border}`, borderRadius: 999, padding: '2px 7px', display: 'inline-block', marginBottom: 6 }}>{bot.game_mode}</span>}
                           {/* 봇명 */}
                           <div style={{ fontSize: 13, fontWeight: 600, color: active ? '#F0EBFF' : '#B0A8D0', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bot.name}</div>
                           {bot.game_name && <div style={{ fontSize: 11, color: '#3D3558', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bot.game_name}</div>}
@@ -427,7 +427,7 @@ export default function MyPage() {
                       <div style={{ padding: '12px 20px', borderBottom: `1px solid ${PANEL_BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,.2)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 13, fontWeight: 600, color: '#F0EBFF' }}>{selected.name}</span>
-                          {selected.game_mode && (() => { const mc = MODE_COLOR[selected.game_mode]; return <span style={{ fontSize: 9, fontWeight: 700, color: mc.text, background: mc.bg, border: `1px solid ${mc.border}`, borderRadius: 999, padding: '2px 7px' }}>{selected.game_mode}</span> })()}
+                          {selected.game_mode && (() => { const mc = MODE_COLOR[selected.game_mode]; return <span style={{ fontSize: 9, fontWeight: 500, color: mc.text, background: mc.bg, border: `1px solid ${mc.border}`, borderRadius: 999, padding: '2px 7px' }}>{selected.game_mode}</span> })()}
                           <span style={{ fontSize: 11, color: selected.is_public ? '#4ade80' : MUTED }}>{selected.is_public ? '공개' : '비공개'}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -438,17 +438,10 @@ export default function MyPage() {
                           </button>
                         </div>
                       </div>
-                      {/* textarea */}
-                      <textarea
+                      {/* 코드 에디터 */}
+                      <PythonEditor
                         value={curCode}
-                        onChange={e => setEditingCode(prev => ({ ...prev, [selected.id]: e.target.value }))}
-                        style={{
-                          flex: 1, minHeight: 380, resize: 'none', outline: 'none', border: 'none',
-                          background: 'rgba(8,4,20,.8)', color: '#C8C0E0',
-                          padding: '20px 24px', fontSize: 12.5,
-                          fontFamily: '"Fira Code","Consolas","Courier New",monospace',
-                          lineHeight: 1.75, tabSize: 4, letterSpacing: '0.01em',
-                        }}
+                        onChange={code => setEditingCode(prev => ({ ...prev, [selected.id]: code }))}
                       />
                     </div>
                   ) : (
