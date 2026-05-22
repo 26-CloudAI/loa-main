@@ -17,6 +17,10 @@ COPY mock_stocks/src/stocks/ ./src/stocks/
 COPY battle_royale/bots/ ./bots/
 COPY mock_stocks/bots/ ./bots/
 
+# 새 Godot 게임(BattleRoyale2) — self-contained 패키지 (자체 src/arena, bots 포함)
+# /app/BattleRoyale2 로 통째 복사 → run_server 가 /battleroyale2 에 mount
+COPY BattleRoyale2/ ./BattleRoyale2/
+
 # 통합 엔트리포인트
 COPY run_server.py ./
 
