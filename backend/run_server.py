@@ -109,8 +109,6 @@ def main():
     from src.arena.server.app import create_app as create_br_app
     from src.arena.server.config import ServerConfig, RedisConfig, APIConfig
     from src.stocks.server.app import create_app as create_ms_app
-    # 새 Godot 게임(BattleRoyale2) WS 서버. backend/ 가 sys.path 에 있어 임포트 가능.
-    from BattleRoyale2.server.ws_server import create_app as create_br2_app
 
     redis_host = args.redis_host or os.environ.get("REDIS_HOST", "localhost")
     redis_cfg = RedisConfig(host=redis_host, port=args.redis_port)
@@ -119,7 +117,15 @@ def main():
 
     br_app = create_br_app(server_config=server_cfg, use_redis=use_redis)
     ms_app = create_ms_app()
-    br2_app = create_br2_app()
+
+    # 새 Godot 게임(BattleRoyale2) WS 서버 — 선택적.
+    # 패키지가 없는 환경(예: 이미지에 미포함)에서도 나머지 서비스는 정상 기동하도록 방어적 로드.
+    br2_app = None
+    try:
+        from BattleRoyale2.server.ws_server import create_app as create_br2_app
+        br2_app = create_br2_app()
+    except Exception as e:  # noqa: BLE001 — 어떤 import/생성 실패도 전체 기동을 막지 않게
+        logger.warning("BattleRoyale2 미탑재 — /battleroyale2 비활성화 (%s)", e)
 
     # 서브앱을 mount()하면 각 앱의 lifespan이 자동 실행되지 않으므로
     # 부모 앱 lifespan에서 명시적으로 호출 (BR2 는 lifespan 없음 → 생략)
@@ -134,14 +140,15 @@ def main():
 
     app.mount("/battleroyale", br_app)
     app.mount("/stocks", ms_app)
-    app.mount("/battleroyale2", br2_app)   # 새 Godot 게임 WS: /battleroyale2/match/{id}
+    if br2_app is not None:
+        app.mount("/battleroyale2", br2_app)   # 새 Godot 게임 WS: /battleroyale2/match/{id}
 
     print("=" * 50)
     print("  League of Agents 통합 서버")
     print(f"  http://{args.host}:{args.port}")
     print(f"  BattleRoyale : /battleroyale")
     print(f"  MockStocks   : /stocks")
-    print(f"  BattleRoyale2: /battleroyale2 (Godot 게임 WS /match/{{id}})")
+    print(f"  BattleRoyale2: {'/battleroyale2 (Godot 게임 WS /match/{id})' if br2_app is not None else '비활성 (패키지 미탑재)'}")
     print(f"  Redis: {'활성' if use_redis else '인메모리 (개발 모드)'}")
     print("=" * 50)
 
