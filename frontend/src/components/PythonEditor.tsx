@@ -6,9 +6,11 @@ interface PythonEditorProps {
   value: string
   onChange: (value: string) => void
   hasError?: boolean
+  readOnly?: boolean
+  height?: string
 }
 
-export default function PythonEditor({ value, onChange, hasError }: PythonEditorProps) {
+export default function PythonEditor({ value, onChange, hasError, readOnly = false, height = '480px' }: PythonEditorProps) {
   return (
     <div
       style={{
@@ -20,17 +22,18 @@ export default function PythonEditor({ value, onChange, hasError }: PythonEditor
     >
       <CodeMirror
         value={value}
-        height="480px"
+        height={height}
         theme={vscodeDark}
         extensions={[python()]}
         onChange={onChange}
+        readOnly={readOnly}
         basicSetup={{
           lineNumbers: true,
           foldGutter: true,
-          highlightActiveLine: true,
+          highlightActiveLine: !readOnly,
           bracketMatching: true,
-          autocompletion: true,
-          indentOnInput: true,
+          autocompletion: !readOnly,
+          indentOnInput: !readOnly,
         }}
         style={{ fontSize: 13 }}
       />

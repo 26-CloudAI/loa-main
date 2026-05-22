@@ -303,9 +303,9 @@ export default function WatchPage() {
 
   if (gameStatus === 'error') {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen text-white flex flex-col items-center justify-center gap-4" style={{ background: '#0D0F14', backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
         <p className="text-red-400">{loadError || '게임을 찾을 수 없습니다.'}</p>
-        <button onClick={() => navigate('/games')}
+        <button onClick={() => navigate('/games/list')}
           className="text-sm text-indigo-400 hover:text-indigo-300 underline underline-offset-2">
           게임 목록으로
         </button>
@@ -316,10 +316,14 @@ export default function WatchPage() {
   // ── Main render ────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
+    <div className="h-screen text-white flex flex-col overflow-hidden" style={{
+      background: '#0D0F14',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
       {/* Header */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games')}
+        <button onClick={() => navigate('/games/list')}
           className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 게임 목록
         </button>
@@ -483,7 +487,7 @@ export default function WatchPage() {
       {gameEnd && showModal && (
         <GameEndModal
           data={gameEnd} colorMap={colorMapRef.current}
-          onClose={() => setShowModal(false)} onGoList={() => navigate('/games')}
+          onClose={() => setShowModal(false)} onGoList={() => navigate('/games/list')}
         />
       )}
     </div>

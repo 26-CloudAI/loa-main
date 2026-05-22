@@ -1,6 +1,13 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import PythonEditor from '../components/PythonEditor'
+
+const MUTED = '#5A6270'
+const navBtn: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  color: MUTED, fontSize: 13, padding: 0, transition: 'color .15s',
+}
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
@@ -69,35 +76,58 @@ export default function UserBotDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <header className="sticky top-0 z-20 h-14 px-6 flex items-center justify-between" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/rankings')}
-            className="text-gray-400 hover:text-white text-sm transition-colors"
-          >
-            ◀ 리더보드
-          </button>
-          <span className="text-gray-600">|</span>
-          <span className="font-bold">봇 코드</span>
-        </div>
-        <div className="flex items-center gap-4">
+    <div style={{
+      minHeight: '100vh',
+      background: '#0D0F14',
+      color: '#E8EAF0',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
+      <nav style={{
+        background: 'rgba(13,15,20,.92)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        height: 56,
+        padding: '0 28px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        position: 'sticky',
+        top: 0,
+        zIndex: 20,
+      }}>
+        <button
+          onClick={() => navigate('/games')}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          <span style={{ color: '#E8334A', fontSize: 16, lineHeight: 1 }}>◆</span>
+          <span style={{ fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', color: '#F0EBFF' }}>LEAGUE OF AGENTS</span>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <button onClick={() => navigate('/rankings')} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>리더보드</button>
+          <button onClick={() => navigate('/games/list')} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>게임 목록</button>
           {user && (
-            <span className="text-sm text-gray-400">
+            <button
+              onClick={() => navigate('/mypage')}
+              style={{ ...navBtn, display: 'flex', alignItems: 'center', gap: 6, color: '#F0EBFF' }}
+            >
               {user.display_name ?? user.username}
-              <span className="ml-2 text-xs bg-indigo-600 rounded px-1 py-0.5">
+              <span style={{
+                padding: '1px calc(6px - 0.05em) 1px 6px',
+                fontSize: 10, fontWeight: 500,
+                background: 'rgba(155,89,245,.15)', color: '#C8A8FF',
+                border: '1px solid rgba(155,89,245,.35)',
+                borderRadius: 4, letterSpacing: '0.05em',
+              }}>
                 {user.role}
               </span>
-            </span>
+              ▾
+            </button>
           )}
-          <button
-            onClick={handleLogout}
-            className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-full px-4 py-1.5 transition-colors"
-          >
-            로그아웃
-          </button>
+          <button onClick={handleLogout} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>로그아웃</button>
         </div>
-      </header>
+      </nav>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
 
@@ -205,11 +235,14 @@ export default function UserBotDetailPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex-1 overflow-auto">
+                    <div className="flex-1 overflow-hidden">
                       {selectedBot.code ? (
-                        <pre className="px-5 py-4 text-xs font-mono text-gray-200 leading-relaxed whitespace-pre">
-                          {selectedBot.code}
-                        </pre>
+                        <PythonEditor
+                          value={selectedBot.code}
+                          onChange={() => {}}
+                          readOnly
+                          height="520px"
+                        />
                       ) : (
                         <div className="flex items-center justify-center h-full">
                           <p className="text-gray-500 text-sm">🔒 비공개 코드입니다.</p>

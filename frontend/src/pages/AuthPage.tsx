@@ -12,7 +12,11 @@ export default function AuthPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{
+      background: '#0D0F14',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
       {/* 로고 / 타이틀 */}
       <div className="mb-8 text-center">
         <h1 className="text-4xl font-bold text-white tracking-tight">

@@ -13,6 +13,7 @@ interface GameMode {
   title: string
   description: React.ReactNode
   icon: string
+  symbol: string
   available: boolean
   route?: string
   theme: ModeTheme
@@ -22,8 +23,9 @@ const MODES: GameMode[] = [
   {
     id: 'battle-royale',
     title: '배틀로얄',
-    description: 'AI 봇을 코딩해 맵에서 싸워라. 채굴·전투·생존으로 최고 점수를 노려라.',
+    description: 'AI 봇을 코딩해 채굴·전투·생존으로 최고 점수를 노려라.',
     icon: '⚔️',
+    symbol: '◆',
     available: true,
     route: '/games/new/battle-royale',
     theme: {
@@ -38,6 +40,7 @@ const MODES: GameMode[] = [
     title: '보스전',
     description: <>강화학습으로 훈련된 보스 봇과 1대1로 맞붙어라. <span className="whitespace-nowrap">이길 수 있겠어?</span></>,
     icon: '👾',
+    symbol: '◉',
     available: true,
     route: '/games/new/boss-battle',
     theme: {
@@ -52,6 +55,7 @@ const MODES: GameMode[] = [
     title: '모의주식',
     description: '실시간 시세를 예측하는 트레이딩 AI를 만들어 수익률을 겨뤄라.',
     icon: '📈',
+    symbol: '▲',
     available: true,
     route: '/games/new/mock-stocks',
     theme: {
@@ -67,7 +71,12 @@ export default function GameSelectPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{
+      background: '#0D0F14',
+      color: '#E8EAF0',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
           onClick={() => navigate('/games')}
@@ -108,7 +117,7 @@ function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
         onClick={mode.available ? onClick : undefined}
         className="w-full rounded-2xl p-6 flex flex-col gap-4 text-left transition-all duration-200"
         style={{
-          background: '#221638',
+          background: '#161A23',
           border: `1px solid ${theme.border}`,
           boxShadow: `0 0 32px ${theme.glow}`,
           cursor: mode.available ? 'pointer' : 'default',
@@ -129,12 +138,7 @@ function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
       >
         <div className="flex items-center justify-between">
           <span className="text-4xl leading-none -ml-1">{mode.icon}</span>
-          <span
-            className="text-xs font-bold tracking-widest px-2 py-1 rounded-full"
-            style={{ background: theme.accentBg, color: theme.accent }}
-          >
-            NEW
-          </span>
+          <span style={{ fontSize: 20, color: theme.accent, lineHeight: 1 }}>{mode.symbol}</span>
         </div>
         <div className="flex flex-col gap-1">
           <span className="font-bold text-lg" style={{ color: '#F0EBFF' }}>{mode.title}</span>

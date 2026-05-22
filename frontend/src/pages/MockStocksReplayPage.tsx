@@ -385,7 +385,7 @@ export default function MockStocksReplayPage() {
   // 로딩 / 에러 화면
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen text-white flex flex-col items-center justify-center gap-4" style={{ background: '#0D0F14', backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
         <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-gray-400 text-sm">리플레이 데이터 로딩 중...</p>
       </div>
@@ -394,9 +394,9 @@ export default function MockStocksReplayPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen text-white flex flex-col items-center justify-center gap-4" style={{ background: '#0D0F14', backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
         <p className="text-red-400">{loadError}</p>
-        <button onClick={() => navigate('/games')}
+        <button onClick={() => navigate('/games/list')}
           className="text-sm text-indigo-400 hover:text-indigo-300 underline underline-offset-2">
           게임 목록으로
         </button>
@@ -405,11 +405,15 @@ export default function MockStocksReplayPage() {
   }
 
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
+    <div className="h-screen text-white flex flex-col overflow-hidden" style={{
+      background: '#0D0F14',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
 
       {/* ── 헤더 ── */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games')} className="text-gray-400 hover:text-white text-sm transition-colors">
+        <button onClick={() => navigate('/games/list')} className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 게임 목록
         </button>
         <span className="text-gray-600">|</span>
@@ -713,7 +717,7 @@ export default function MockStocksReplayPage() {
                 닫기
               </button>
               <button
-                onClick={() => navigate('/games')}
+                onClick={() => navigate('/games/list')}
                 className="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-xl py-2.5 text-sm font-medium transition-colors"
               >
                 게임 목록으로
