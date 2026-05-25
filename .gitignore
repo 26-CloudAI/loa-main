@@ -33,6 +33,8 @@ venv/
 *.pfx
 *service-account*.json
 *service_account*.json
+*serviceAccount*.json
+*ServiceAccount*.json
 *-credentials.json
 *_credentials.json
 *-key.json
