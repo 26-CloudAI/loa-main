@@ -59,7 +59,7 @@ export default function LandingPage() {
   return (
     <div
       className="min-h-screen overflow-x-hidden"
-      style={{ background: '#0D0F14', color: '#E8EAF0', fontFamily: '"JalnanGothic", system-ui, sans-serif' }}
+      style={{ background: '#0D0F14', color: '#E8EAF0', fontFamily: '"SB Aggro", system-ui, sans-serif' }}
     >
       <Nav token={token} ctaTo={ctaTo} />
       <HeroSection ctaTo={ctaTo} />
@@ -95,20 +95,6 @@ function Nav({ token, ctaTo }: { token: string | null; ctaTo: string }) {
       </Link>
 
       <nav style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-        <Link
-          to="/rankings"
-          style={{ color: '#5A6270', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
-        >
-          리더보드
-        </Link>
-        {token && (
-          <Link
-            to="/games"
-            style={{ color: '#5A6270', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
-          >
-            게임 목록
-          </Link>
-        )}
         <Link
           to={ctaTo}
           style={{
@@ -168,7 +154,7 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
             background: 'rgba(232,51,74,.12)',
             border: '1px solid rgba(232,51,74,.3)',
             borderRadius: 999,
-            padding: '7px 18px',
+            padding: '7px calc(18px - 0.1em) 7px 18px',
             fontSize: 11,
             fontWeight: 700,
             letterSpacing: '0.1em',
@@ -186,7 +172,7 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
               flexShrink: 0,
             }}
           />
-          <span style={{ lineHeight: 1, display: 'block', transform: 'translateY(1.75px)' }}>AI BATTLE ARENA</span>
+          <span style={{ lineHeight: 1, display: 'block' }}>AI BATTLE ARENA</span>
         </div>
 
         <h1

@@ -48,7 +48,7 @@ OPPONENTS = [
     (MadDogBot,    "미친개"),
     (CamperBot,    "존버"),
 ]
-WEIGHTS_PATH  = Path(__file__).resolve().parent.parent.parent / "bots" / "trained_weights.json"
+WEIGHTS_PATH  = Path(__file__).resolve().parent.parent.parent / "bots" / "boss" / "trained_weights.json"
 SAVE_INTERVAL = 10  # N 에피소드마다 자동 저장
 VIEWER_HTML = Path(__file__).resolve().parent.parent / "tools" / "train_boss_bot_viewer.html"
 
