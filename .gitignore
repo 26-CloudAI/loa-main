@@ -43,6 +43,10 @@ gemini_key.py
 secrets/*
 !secrets/*.example.json
 !secrets/*.example.py
+# repo 루트가 loa-backend 이므로 backend/secrets 경로도 명시 (예: serviceAccountKey.json)
+backend/secrets/*
+!backend/secrets/*.example.json
+!backend/secrets/*.example.py
 
 # ── 학습 가중치 (GCS로 관리) ──────────────────────
 backend/battle_royale/bots/trained_weights.json
