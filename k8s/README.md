@@ -46,6 +46,30 @@ k8s/
 
 ---
 
+## 클러스터 생성 / 삭제
+
+```bash
+# 생성 (5~10분 소요, 이 시점부터 비용 발생 ~$5/일)
+gcloud container clusters create-auto loa-arena \
+    --region asia-northeast3 \
+    --release-channel regular \
+    --network default \
+    --subnetwork default \
+    --project knu-2026-sungjin0418
+
+# kubectl context 등록 (생성 직후 한 번)
+gcloud container clusters get-credentials loa-arena \
+    --region asia-northeast3 --project knu-2026-sungjin0418
+
+# 삭제 (비용 즉시 0 — 매니페스트/코드는 레포에 남아있으므로 재생성 가능)
+gcloud container clusters delete loa-arena --region asia-northeast3
+```
+
+> 작업이 없을 때는 삭제해 두고 필요할 때 재생성하는 것을 권장.
+> 재생성 후에는 `get-credentials` → Secret 재생성 → `kubectl apply -k k8s/base/` → `kubectl set image` 순서로 재배포.
+
+---
+
 ## 적용 방법
 
 ### 수동 적용 (Phase 4 이후)
