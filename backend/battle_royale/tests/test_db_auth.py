@@ -133,10 +133,16 @@ class TestBotRepo(DBTestBase):
         self.assertEqual(len(all_bots), 1)
 
     def test_duplicate_name_per_user(self):
+        """
+        스키마 v7부터 같은 유저가 같은 이름의 봇을 여러 개 만들 수 있도록
+        bots(user_id, name) UNIQUE 제약을 일반 인덱스로 변경했다.
+        따라서 중복 이름은 더 이상 예외를 발생시키지 않고, 각자 다른 id를 갖는다.
+        """
         uid = self._create_test_user()
-        self.bots.create(uid, "same_name", "def action(s): return 'STAY'")
-        with self.assertRaises(Exception):
-            self.bots.create(uid, "same_name", "def action(s): return 'MINE'")
+        b1 = self.bots.create(uid, "same_name", "def action(s): return 'STAY'")
+        b2 = self.bots.create(uid, "same_name", "def action(s): return 'MINE'")
+        self.assertNotEqual(b1.id, b2.id)
+        self.assertEqual(b1.name, b2.name)
 
     def test_different_users_same_name(self):
         uid1 = self._create_test_user("user1")
