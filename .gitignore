@@ -40,9 +40,9 @@ venv/
 firebase-adminsdk*.json
 gcloud-key*.json
 gemini_key.py
-secrets/*
-!secrets/*.example.json
-!secrets/*.example.py
+**/secrets/*
+!**/secrets/*.example.json
+!**/secrets/*.example.py
 
 # ── 학습 가중치 (GCS로 관리) ──────────────────────
 backend/battle_royale/bots/trained_weights.json
