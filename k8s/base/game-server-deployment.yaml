@@ -35,11 +35,12 @@ spec:
               memory: "1Gi"
           securityContext:
             allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10002
             capabilities:
               drop: ["ALL"]
             seccompProfile:
               type: RuntimeDefault
-            # runAsNonRoot: true 는 backend/Dockerfile에 non-root USER 추가 후 설정 가능
           readinessProbe:
             httpGet:
               path: /healthz

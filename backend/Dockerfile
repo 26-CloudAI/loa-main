@@ -24,6 +24,11 @@ COPY BattleRoyale2/ ./BattleRoyale2/
 # 통합 엔트리포인트
 COPY run_server.py ./
 
+# non-root 실행 — 컨테이너 침해 시 권한 최소화 (bot-runner와 동일 패턴)
+RUN groupadd -r appuser && useradd -r -g appuser -u 10002 appuser \
+    && chown -R appuser:appuser /app
+USER 10002
+
 EXPOSE 8080
 
 CMD ["sh", "-c", "python run_server.py --host 0.0.0.0 --port ${PORT:-8080}"]
