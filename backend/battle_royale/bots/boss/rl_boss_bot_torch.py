@@ -602,6 +602,12 @@ class RLBossBotTorch(BotInterface):
         """병렬 학습 시 worker가 최신 가중치를 받아올 때 사용."""
         self._online.load_state_dict({k: v.to(self._device) for k, v in d["online"].items()})
         self._target.load_state_dict({k: v.to(self._device) for k, v in d["target"].items()})
+        if "optimizer" in d:
+            self._optimizer.load_state_dict(d["optimizer"])
+        else:
+            # 다른 worker 가중치를 덮어쓸 때 기존 모멘트는 새 파라미터와 불일치 —
+            # 리셋해서 불안정 학습 방지
+            self._optimizer = optim.Adam(self._online.parameters(), lr=LR)
         self._step_count    = d.get("step_count", self._step_count)
         self._episode_count = d.get("episode_count", self._episode_count)
         if self._epsilon_override is None:

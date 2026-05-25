@@ -48,8 +48,8 @@ sys.path.insert(0, str(_PROJECT_ROOT))
 sys.path.insert(0, str(_PROJECT_ROOT.parent))  # backend/ (core 검색용)
 
 from core.bot_interface import BotInterface
-from core.config import DEFAULT_CONFIG
 from core.engine import GameEngine
+from src.arena.server.boss.config import boss_battle_config
 
 from bots.battle_royale.camper import CamperBot
 from bots.battle_royale.herbivore import HerbivoreBot
@@ -365,7 +365,7 @@ def _worker(
         all_bots: list[BotInterface] = [boss] + opponents
 
         try:
-            engine = GameEngine(all_bots, config=DEFAULT_CONFIG, seed=ep_seed)
+            engine = GameEngine(all_bots, config=boss_battle_config(), seed=ep_seed)
             result = engine.run_full_game()
         except Exception:
             logger.debug("W%d ep%d 예외: %s", worker_id, ep, traceback.format_exc())
@@ -388,6 +388,7 @@ def _worker(
                             boss.set_weights_state_dict({
                                 "online": ckpt["online"],
                                 "target": ckpt["target"],
+                                "optimizer": ckpt["optimizer"],
                                 "step_count": ckpt["step_count"],
                                 "episode_count": ckpt["episode_count"],
                                 "epsilon": ckpt.get("epsilon", boss._epsilon),

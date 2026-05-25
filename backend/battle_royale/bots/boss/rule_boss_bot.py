@@ -38,11 +38,11 @@ _MED_HUNT      = 70               # 중: 적 추적 시작 에너지
 _MED_EMERGENCY = 40               # 중: 긴급 채굴 에너지
 _MED_TIMEOUT   = 10               # 중: 적 시야 이탈 후 추적 포기 틱
 
-# ── 자기장 예측 (ZoneConfig 기준) ─────────────────────────────────────────────
-_ZONE_P2_START    = 76
-_ZONE_P3_START    = 151
-_ZONE_P2_INTERVAL = 4
-_ZONE_P3_INTERVAL = 2
+# ── 자기장 예측 (boss_battle_config 기준) ─────────────────────────────────────
+_ZONE_P2_START    = 151  # phase1_end=150
+_ZONE_P3_START    = 321  # phase2_end=320
+_ZONE_P2_INTERVAL = 8    # phase2_shrink_interval=8
+_ZONE_P3_INTERVAL = 5    # phase3_shrink_interval=5
 _ZONE_BUFFER      = 2   # 경계에서 N칸 이내면 미리 중앙으로
 
 # ── 광물 메모리 만료 ───────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ RLBossBot — Deep Q-Network (DQN) 기반 보스 봇
 from __future__ import annotations
 
 import json
+import logging
 import random
 from collections import deque
 from pathlib import Path
@@ -73,7 +74,7 @@ CELL_ENCODING: dict[str, float] = {
     "zone":        -0.8,
 }
 
-MAX_TICKS = 200
+MAX_TICKS = 400  # boss_battle_config: max_ticks=400
 
 # 게임 상수 (config.py 동기화)
 _ATTACK_DAMAGE  = 25    # CombatConfig.attack_damage
@@ -85,8 +86,8 @@ _ATTACK_COST    = 5     # ActionCost.attack
 ENERGY_CRITICAL  = 30   # 극위기: flee/라스트힛 강제
 _LASTBIT_HP      = _ATTACK_DAMAGE  # 상대 에너지 이하면 한 방 처치
 
-# 자기장 예측 (ZoneConfig 동기화)
-_ZONE_P2_START   = 76
+# 자기장 예측 (boss_battle_config 기준)
+_ZONE_P2_START   = 151  # boss_battle_config: phase1_end=150
 _ZONE_BUFFER     = 2    # 경계에서 N칸 이내 미리 중앙으로
 
 # 광물 메모리 만료
@@ -368,7 +369,7 @@ class RewardCalculator:
         reward = 0.0
 
         # ── 킬 보상 (kill_delta 직접 사용, 휴리스틱 폴백) ──────────────
-        kill_delta = curr_my.get("kills", -1) - prev_my.get("kills", -1)
+        kill_delta = curr_my.get("kills", 0) - prev_my.get("kills", 0)
         if kill_delta > 0:
             reward += 50.0 * kill_delta
         else:
@@ -694,14 +695,14 @@ class RLBossBot(BotInterface):
         min_x: int, max_x: int,
         min_y: int, max_y: int,
     ) -> int:
-        if random.random() < self._epsilon:
-            if random.random() < 0.70:
+        if self._rng.random() < self._epsilon:
+            if self._rng.random() < 0.70:
                 guided = self._guided_action(grid, pos_x, pos_y, min_x, max_x, min_y, max_y)
                 if guided is not None:
                     return guided
             return self._rng.choice(self._valid_actions(grid))
 
-        if random.random() < EXPLOIT_GUIDE_PROB:
+        if self._rng.random() < EXPLOIT_GUIDE_PROB:
             guided = self._guided_action(grid, pos_x, pos_y, min_x, max_x, min_y, max_y)
             if guided is not None:
                 return guided
@@ -731,7 +732,7 @@ class RLBossBot(BotInterface):
                 return move_idx
 
         # 인접 적 공격 (50% 확률)
-        if random.random() < 0.5:
+        if self._rng.random() < 0.5:
             for dx, dy, _, attack_idx, cell in adj:
                 if cell == "bot_enemy":
                     return attack_idx
@@ -937,11 +938,14 @@ class RLBossBot(BotInterface):
                     or data.get("n_hidden") != N_HIDDEN
                     or data.get("n_actions") != N_ACTIONS):
                 return
-            self._online.from_dict(data["online"])
-            self._target.from_dict(data["target"])
-            if not self._online.shape_ok() or not self._target.shape_ok():
-                self._target.copy_from(self._online)
+            tmp_online = DQNetwork()
+            tmp_target = DQNetwork()
+            tmp_online.from_dict(data["online"])
+            tmp_target.from_dict(data["target"])
+            if not tmp_online.shape_ok() or not tmp_target.shape_ok():
                 return
+            self._online.copy_from(tmp_online)
+            self._target.copy_from(tmp_target)
             self._step_count    = data.get("step_count", 0)
             self._episode_count = data.get("episode_count", 0)
             if self._epsilon_override is None:
@@ -949,8 +953,10 @@ class RLBossBot(BotInterface):
             buf_data = data.get("buffer", [])
             if buf_data:
                 self._buffer.from_list(buf_data)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "체크포인트 로드 실패 (%s): %s", path, exc
+            )
 
     # 하위 호환 API
     def get_weights(self) -> dict:
