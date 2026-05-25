@@ -6,8 +6,8 @@ metadata:
   annotations:
     kubernetes.io/ingress.global-static-ip-name: "loa-arena-ingress-ip"  # Phase 4에서 예약
     networking.gke.io/managed-certificates: "arena-cert"
-    kubernetes.io/ingress.class: "gce"
 spec:
+  ingressClassName: gce  # kubernetes.io/ingress.class annotation 대신 spec 필드 사용 (deprecated 대체)
   rules:
     - host: api.leagueofagents.net
       http:

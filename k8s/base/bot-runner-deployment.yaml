@@ -42,6 +42,8 @@ spec:
             runAsUser: 10001
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault  # gVisor fallback 대비 syscall 필터 추가
           volumeMounts:
             - name: tmp
               mountPath: /tmp
