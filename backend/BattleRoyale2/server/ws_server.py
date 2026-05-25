@@ -21,7 +21,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
 
 from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot
 from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
@@ -29,6 +29,30 @@ from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = "0.1"
+GAME_MODE = "battleroyale2"   # games.mode 값 (기존 'battle-royale' 과 구분)
+
+# 기존 battle_royale 의 GameRepository 재활용 (games / game_participants 테이블 공유).
+# 통합 서버(run_server.py)에서 virtual 'src' 패키지가 battle_royale/src 를 가리키므로
+# 'from src.arena.db import ...' 가 동작. 단독 실행 등으로 import 실패 시 저장 비활성(None).
+_GAME_REPO = None          # GameRepository 인스턴스
+_GAME_REPO_TRIED = False   # 한 번 시도했는지 (실패 시 재시도 안 함)
+
+
+def _get_game_repo():
+    """GameRepository 를 lazy 하게 1회 초기화. 실패하면 None (저장 비활성)."""
+    global _GAME_REPO, _GAME_REPO_TRIED
+    if _GAME_REPO_TRIED:
+        return _GAME_REPO
+    _GAME_REPO_TRIED = True
+    try:
+        from src.arena.db import init_db, GameRepository  # type: ignore
+        conn = init_db()
+        _GAME_REPO = GameRepository(conn)
+        logger.info("[BR2] GameRepository 연결됨 (DB 저장 활성)")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[BR2] DB 연결 실패 — 매치 기록 저장 비활성 (%s)", e)
+        _GAME_REPO = None
+    return _GAME_REPO
 
 # bot_id → 봇 클래스 매핑. ws_server 는 이 매핑으로 인스턴스 생성.
 BOT_CLASS_BY_ID: dict[str, type[BattleRoyale2DBot]] = {
@@ -111,7 +135,62 @@ class MatchSession:
 
     async def send_match_start(self) -> None:
         self.started = True
+        self._db_on_start()
         await self.send({"type": "MATCH_START"})
+
+    # ---------- DB 기록 (games / game_participants 재활용) ----------
+    def _db_on_start(self) -> None:
+        """매치 시작 시: games 행 생성(없으면) + participants 추가 + running 표시."""
+        repo = _get_game_repo()
+        if repo is None:
+            return
+        try:
+            game = repo.get_game(self.match_id)
+            if game is None:
+                repo.create_game(
+                    game_id=self.match_id,
+                    owner_user_id=None,
+                    total_bots=len(self.bot_spec),
+                    seed=None,
+                    mode=GAME_MODE,
+                    name=None,
+                )
+            # 참가자 등록 (AI 봇)
+            for _bid, name in self.bot_spec:
+                repo.add_participant(self.match_id, bot_name=name, is_ai_filler=True)
+            repo.update_game_started(self.match_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("[match=%s] _db_on_start 실패", self.match_id)
+
+    def _db_on_end(self, data: dict[str, Any]) -> None:
+        """매치 종료 시: games finished + 참가자 결과 갱신."""
+        repo = _get_game_repo()
+        if repo is None:
+            return
+        rankings = data.get("rankings", []) if isinstance(data, dict) else []
+        duration = float(data.get("duration", 0.0)) if isinstance(data, dict) else 0.0
+        reason = str(data.get("reason", "max_ticks")) if isinstance(data, dict) else "max_ticks"
+        try:
+            repo.update_game_finished(
+                game_id=self.match_id,
+                final_tick=int(duration * 10.0),
+                end_reason=reason,
+            )
+            for entry in rankings:
+                name = entry.get("bot_name") or entry.get("name")
+                if not name:
+                    continue
+                repo.update_participant_result(
+                    game_id=self.match_id,
+                    bot_name=name,
+                    final_rank=int(entry.get("rank", 0)),
+                    final_score=float(entry.get("score", 0.0)),
+                    kills=int(entry.get("kills", 0)),
+                    minerals_mined=int(entry.get("minerals_mined", 0)),
+                    survival_ticks=int(entry.get("survival_ticks", 0)),
+                )
+        except Exception:  # noqa: BLE001
+            logger.exception("[match=%s] _db_on_end 실패", self.match_id)
 
     def handle_state(self, tick: int, data: dict[str, Any]) -> dict[str, Any]:
         """봇들의 state 를 받아 각 봇의 get_action 호출 → action dict 반환."""
@@ -151,6 +230,7 @@ class MatchSession:
 
     def handle_match_end(self, data: dict[str, Any]) -> None:
         self.ended = True
+        self._db_on_end(data)
         rankings = data.get("rankings", []) if isinstance(data, dict) else []
         n = len(rankings)
         for entry in rankings:
@@ -174,6 +254,33 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, str]:  # noqa: D401 — 짧은 헬스체크 응답
         return {"status": "ok", "protocol": PROTOCOL_VERSION}
+
+    @app.post("/api/games")
+    def create_game(body: dict[str, Any] = Body(default={})):  # noqa: B008
+        """새 BR2 게임 레코드 생성 → game_id 발급.
+        프론트: POST /battleroyale2/api/games → game_id → /games/{id}/watch (Godot match={id}).
+        실제 매치 진행/참가자 등록은 WS MATCH_START 시점에 보강된다.
+        """
+        repo = _get_game_repo()
+        game_id = uuid.uuid4().hex
+        if repo is None:
+            # DB 비활성 환경에서도 game_id 는 발급 (저장만 생략)
+            return {"game_id": game_id, "persisted": False}
+        try:
+            owner = body.get("owner_user_id")
+            name = body.get("name")
+            repo.create_game(
+                game_id=game_id,
+                owner_user_id=owner,
+                total_bots=len(DEFAULT_BOT_FACTORY),
+                seed=body.get("seed"),
+                mode=GAME_MODE,
+                name=name,
+            )
+            return {"game_id": game_id, "persisted": True}
+        except Exception:  # noqa: BLE001
+            logger.exception("[BR2] create_game 실패")
+            return {"game_id": game_id, "persisted": False}
 
     # 통합 서버에 /battleroyale2 로 mount 되므로 여기선 prefix 없이 /match/{id}.
     # 최종 경로: ws://<host>/battleroyale2/match/{match_id}
