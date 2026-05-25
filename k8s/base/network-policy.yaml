@@ -32,10 +32,14 @@ spec:
   policyTypes:
     - Ingress
   ingress:
+    # GKE 외부 HTTP(S) LB(GFE) + 헬스체커는 Pod이 아니라 Google LB IP 대역에서 옴.
+    # NEG(container-native LB)는 이 대역에서 Pod IP로 직접 트래픽/헬스체크 전송.
+    # namespaceSelector로는 이 대역을 못 잡으므로 ipBlock 사용. (그 외 클러스터 내 Pod 횡방향 접근은 차단)
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system  # GKE Ingress controller (kube-system)
+        - ipBlock:
+            cidr: 130.211.0.0/22
+        - ipBlock:
+            cidr: 35.191.0.0/16
       ports:
         - protocol: TCP
           port: 8080
