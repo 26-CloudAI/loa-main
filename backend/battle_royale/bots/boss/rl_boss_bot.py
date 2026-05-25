@@ -371,11 +371,11 @@ class RewardCalculator:
         # ── 킬 보상 (kill_delta 직접 사용, 휴리스틱 폴백) ──────────────
         kill_delta = curr_my.get("kills", 0) - prev_my.get("kills", 0)
         if kill_delta > 0:
-            reward += 50.0 * kill_delta
+            reward += 100.0 * kill_delta
         else:
             score_delta = curr_my["score"] - prev_my["score"]
             if score_delta >= 25:
-                reward += 50.0  # kill 휴리스틱
+                reward += 100.0  # kill 휴리스틱
             elif score_delta > 0:
                 reward += score_delta * 0.3
 
@@ -731,8 +731,8 @@ class RLBossBot(BotInterface):
             if cell == "mineral_rare":
                 return move_idx
 
-        # 인접 적 공격 (50% 확률)
-        if self._rng.random() < 0.5:
+        # 인접 적 공격 (80% 확률)
+        if self._rng.random() < 0.8:
             for dx, dy, _, attack_idx, cell in adj:
                 if cell == "bot_enemy":
                     return attack_idx
