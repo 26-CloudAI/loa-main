@@ -42,6 +42,7 @@ import traceback
 from datetime import datetime, timezone, timedelta
 from multiprocessing import Process, Queue
 from pathlib import Path
+from typing import Optional
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
@@ -54,6 +55,8 @@ from src.arena.server.boss.config import boss_battle_config
 from bots.battle_royale.camper import CamperBot
 from bots.battle_royale.herbivore import HerbivoreBot
 from bots.battle_royale.mad_dog import MadDogBot
+from bots.boss.rule_boss_bot import RuleBossEasyBot, RuleBossMediumBot
+from bots.boss import league as _league
 from src.arena import gcs_weights
 
 logger = logging.getLogger("train_parallel")
@@ -81,6 +84,33 @@ COLDSTART_FACTORIES = [
     (MadDogBot,    "미친개"),
     (CamperBot,    "존버"),
 ]
+
+RULE_BOT_FACTORIES = [
+    (RuleBossEasyBot,    "룰_하"),
+    (RuleBossMediumBot,  "룰_중"),
+]
+
+# ---------------------------------------------------------------------------
+# Opponent mix 정책 (PFSP 단순화 — B 트랙 설계 리뷰 확정)
+# ---------------------------------------------------------------------------
+# 각 에피소드 상대 N명을 다음 비율로 구성:
+OPP_RATIO_USER     = 0.40   # 현재 메타 (유저 품질봇)
+OPP_RATIO_DIVERSE  = 0.35   # SAMPLE_USER_BOTS + 콜드스타트
+OPP_RATIO_LEAGUE   = 0.20   # League 과거 보스 (autocurriculum 핵심)
+OPP_RATIO_RULE     = 0.05   # 룰봇 sanity check (데이터 수집용)
+
+PURE_RULE_EVERY_K_EP = 10   # 매 K 에피소드마다 "전원 룰봇" 시나리오
+                            # → catastrophic forgetting 즉시 감지용
+
+# 회귀 alert 임계값 (B baseline 기준, 5%p 이내 하락까지 허용)
+# 측정 baseline (2026-05-26 deterministic):
+#   medium      win=13.3% top2=70.0%
+#   easy        win=20.0% top2=60.0%
+# pure_rule 시나리오는 두 룰봇 mix 라 그 중간값으로 잡음.
+REGRESSION_THRESHOLDS = {
+    "pure_rule_top2_rate": 0.50,   # ← 50% 미만이면 forgetting 의심
+    "pure_rule_win_rate":  0.05,   # ← 5% 미만이면 wins 망각
+}
 
 try:
     from bots.battle_royale.sample_user_bots import SAMPLE_USER_BOTS
@@ -270,24 +300,108 @@ class _InProcessUserBot(BotInterface):
             return "STAY"
 
 
-def _build_opponents(user_bots: list[dict], n: int, seed: int, rng: random.Random) -> list[BotInterface]:
-    pool = list(user_bots)
-    rng.shuffle(pool)
-    opponents: list[BotInterface] = []
-    for b in pool[:n]:
-        opponents.append(_InProcessUserBot(f"USR_{b['id']}", b["code"]))
+def _slot_allocation(n: int) -> dict[str, int]:
+    """비율을 정수 슬롯으로 변환. 부족분은 'diverse' 가 흡수."""
+    league  = round(OPP_RATIO_LEAGUE * n)
+    rule    = round(OPP_RATIO_RULE   * n)
+    user    = round(OPP_RATIO_USER   * n)
+    used    = league + rule + user
+    diverse = max(0, n - used)
+    # 합이 n 을 초과하면 user 부터 축소
+    overflow = used + diverse - n
+    while overflow > 0:
+        if user > 0:
+            user -= 1
+        elif diverse > 0:
+            diverse -= 1
+        elif rule > 0:
+            rule -= 1
+        else:
+            league -= 1
+        overflow -= 1
+    return {"league": league, "rule": rule, "user": user, "diverse": diverse}
 
+
+def _build_opponents(
+    user_bots: list[dict],
+    n: int,
+    seed: int,
+    rng: random.Random,
+    league_index: Optional["_league.LeagueIndex"] = None,
+    device: Optional[str] = None,
+    force_pure_rule: bool = False,
+) -> list[BotInterface]:
+    """
+    PFSP 단순화 풀에서 상대 n 명 구성.
+
+    구성 비율: League 20% / 유저 40% / 다양성 35% / 룰봇 5%.
+    한 풀이 부족하면 다양성으로 fallback.
+
+    force_pure_rule=True: 전원 룰봇 (catastrophic forgetting 감지 에피소드)
+    """
+    opponents: list[BotInterface] = []
+
+    # ── 0. Pure-rule 시나리오 (sanity check) ────────────────────────────
+    if force_pure_rule:
+        for i in range(n):
+            cls, label = rng.choice(RULE_BOT_FACTORIES)
+            opponents.append(cls(bot_id=f"{label}_{i:02d}", seed=seed + i))
+        return opponents
+
+    alloc = _slot_allocation(n)
+
+    # ── 1. League 슬롯 (과거 보스 — autocurriculum 핵심) ────────────────
+    n_league = alloc["league"]
+    if n_league > 0 and league_index is not None and league_index.entries:
+        # PastBossOpponent 는 lazy import (torch 미설치 환경 보호)
+        from bots.boss.past_boss_opponent import from_entry as past_from_entry
+        for i in range(n_league):
+            entry = _league.sample_entry(rng, index=league_index)
+            past  = past_from_entry(
+                entry,
+                bot_id=f"과거보스_g{entry.generation}_{i}" if entry else None,
+                seed=seed + i,
+                device=device,
+            ) if entry is not None else None
+            if past is not None:
+                opponents.append(past)
+            else:
+                # 로드 실패 → diverse 슬롯으로 회수
+                alloc["diverse"] += 1
+    else:
+        alloc["diverse"] += n_league
+
+    # ── 2. Rule 슬롯 (sanity check 데이터) ──────────────────────────────
+    for i in range(alloc["rule"]):
+        cls, label = rng.choice(RULE_BOT_FACTORIES)
+        opponents.append(cls(bot_id=f"{label}_{len(opponents):02d}",
+                             seed=seed + len(opponents)))
+
+    # ── 3. User 슬롯 (현재 메타 — 유저 품질봇) ──────────────────────────
+    n_user = alloc["user"]
+    user_pool = list(user_bots) if user_bots else []
+    rng.shuffle(user_pool)
+    placed_user = 0
+    for b in user_pool[:n_user]:
+        opponents.append(_InProcessUserBot(f"USR_{b['id']}", b["code"]))
+        placed_user += 1
+    # 유저봇 부족분은 diverse 로 회수
+    alloc["diverse"] += (n_user - placed_user)
+
+    # ── 4. Diverse 슬롯 (SAMPLE_USER_BOTS + 콜드스타트) ─────────────────
     sample_pool = list(SAMPLE_USER_BOTS)
     rng.shuffle(sample_pool)
     si = 0
     while len(opponents) < n:
         idx = len(opponents)
         if si < len(sample_pool):
-            cls, label = sample_pool[si % len(sample_pool)]
+            cls, label = sample_pool[si]
             si += 1
         else:
             cls, label = rng.choice(COLDSTART_FACTORIES)
         opponents.append(cls(bot_id=f"{label}_{idx:02d}", seed=seed + idx))
+
+    rng.shuffle(opponents)  # 위치 효과 제거
     return opponents
 
 
@@ -348,7 +462,14 @@ def _worker(
         result_queue.put({"worker_id": worker_id, "error": str(exc)})
         return
 
+    # League 인덱스 로드 — 학습 중에는 갱신 안 됨 (snapshot 은 학습 후),
+    # 그러므로 worker 시작 시 한번만 로드해도 안전.
+    league_index = _league.load_index()
+    if league_index.entries:
+        logger.info("W%d: League 로드 — %d개 체크포인트", worker_id, len(league_index.entries))
+
     rank_hist, score_hist, kill_hist = [], [], []
+    pure_rule_rank_hist: list[int] = []   # forgetting floor 모니터링용
     t_local = time.time()
     deadline = t_start_unix + MAX_RUNTIME_HOURS * 3600
 
@@ -361,7 +482,17 @@ def _worker(
         ep_seed = rng.randint(0, 1_000_000)
         boss.reset_for_episode()
 
-        opponents = _build_opponents(training_bots, N_BOTS_PER_EP - 1, ep_seed, rng)
+        # 매 K 에피소드마다 pure_rule 시나리오 (forgetting floor sanity)
+        force_pure_rule = (ep % PURE_RULE_EVERY_K_EP == 0)
+
+        opponents = _build_opponents(
+            training_bots,
+            N_BOTS_PER_EP - 1,
+            ep_seed, rng,
+            league_index=league_index,
+            device=device,
+            force_pure_rule=force_pure_rule,
+        )
         all_bots: list[BotInterface] = [boss] + opponents
 
         try:
@@ -374,6 +505,8 @@ def _worker(
         rank, score, surv = _find_boss_rank(result.rankings, N_BOTS_PER_EP)
         rank_hist.append(rank)
         score_hist.append(score)
+        if force_pure_rule:
+            pure_rule_rank_hist.append(rank)
 
         boss.on_episode_done(rank, N_BOTS_PER_EP)
 
@@ -408,6 +541,9 @@ def _worker(
         )
 
     wins = sum(1 for r in rank_hist if r == 1)
+    n_pure = len(pure_rule_rank_hist)
+    pure_wins = sum(1 for r in pure_rule_rank_hist if r == 1)
+    pure_top2 = sum(1 for r in pure_rule_rank_hist if r <= 2)
     result_queue.put({
         "worker_id":    worker_id,
         "episodes":     len(rank_hist),
@@ -418,6 +554,10 @@ def _worker(
         "step_count":   boss._step_count,
         "buffer_size":  len(boss._buffer),
         "total_episodes": boss._episode_count,
+        # forgetting floor (pure_rule 에피소드만)
+        "pure_rule_episodes": n_pure,
+        "pure_rule_win_rate": pure_wins / n_pure if n_pure else 0,
+        "pure_rule_top2_rate": pure_top2 / n_pure if n_pure else 0,
     })
 
 
@@ -532,6 +672,17 @@ def train(
     last_eps   = min((r.get("epsilon", 1.0) for r in results if "error" not in r), default=1.0)
     elapsed    = time.time() - t_start
 
+    # pure_rule (forgetting floor) 통계 집계
+    total_pure = sum(r.get("pure_rule_episodes", 0) for r in results if "error" not in r)
+    pure_win_rate = (
+        sum(r.get("pure_rule_win_rate", 0) * r.get("pure_rule_episodes", 0)
+            for r in results if "error" not in r) / total_pure
+    ) if total_pure else 0.0
+    pure_top2_rate = (
+        sum(r.get("pure_rule_top2_rate", 0) * r.get("pure_rule_episodes", 0)
+            for r in results if "error" not in r) / total_pure
+    ) if total_pure else 0.0
+
     print()
     print("=" * 70)
     print(f"  학습 완료 | 총 {total_ep}ep | {elapsed/3600:.2f}h")
@@ -550,6 +701,45 @@ def train(
         _save_bot_history(history, selected_ids)
         logger.info("학습 이력 저장: 봇 %d개", len(selected_ids))
 
+    # ── League snapshot + prune (B 트랙 autocurriculum) ────────────────
+    league_size_before = len(_league.load_index().entries)
+    league_size_after  = league_size_before
+    if WEIGHTS_PATH.exists() and max_ep_cnt > 0:
+        try:
+            entry = _league.snapshot(
+                weights_src      = WEIGHTS_PATH,
+                generation       = max_ep_cnt,
+                win_rate         = win_rate,
+                epsilon          = last_eps,
+                step_count       = max_step,
+                session_episodes = total_ep,
+                notes            = f"trained_bots={len(selected_bots)}",
+            )
+            if entry is not None:
+                pruned = _league.prune()
+                league_size_after = len(pruned.entries)
+                print(f"  League snapshot → gen_{max_ep_cnt:05d}.pt "
+                      f"({league_size_before}개 → {league_size_after}개)")
+        except Exception as exc:
+            logger.warning("League snapshot/prune 실패: %s", exc)
+
+    # ── 회귀 alert (forgetting floor 위반 감지) ─────────────────────────
+    alerts: list[str] = []
+    if total_pure > 0:
+        if pure_top2_rate < REGRESSION_THRESHOLDS["pure_rule_top2_rate"]:
+            alerts.append(
+                f"pure_rule top2 {pure_top2_rate*100:.1f}% < "
+                f"{REGRESSION_THRESHOLDS['pure_rule_top2_rate']*100:.0f}% — forgetting 의심"
+            )
+        if pure_win_rate < REGRESSION_THRESHOLDS["pure_rule_win_rate"]:
+            alerts.append(
+                f"pure_rule win {pure_win_rate*100:.1f}% < "
+                f"{REGRESSION_THRESHOLDS['pure_rule_win_rate']*100:.0f}% — 1위 결정타 망각"
+            )
+    for a in alerts:
+        logger.warning("REGRESSION ALERT: %s", a)
+        print(f"  ⚠️  ALERT: {a}")
+
     # ── training_meta.json GCS 업로드 ────────────────────────────────────
     meta = {
         "updated_at":     datetime.now(timezone.utc).isoformat(),
@@ -563,6 +753,12 @@ def train(
         "trained_bots":   len(selected_bots),
         "session_episodes": total_ep,
         "runtime_hours":  round(elapsed / 3600, 2),
+        # B 트랙: forgetting floor / league 통계
+        "pure_rule_episodes":  total_pure,
+        "pure_rule_win_rate":  round(pure_win_rate, 3),
+        "pure_rule_top2_rate": round(pure_top2_rate, 3),
+        "league_size":         league_size_after,
+        "regression_alerts":   alerts,
     }
     if use_gcs and gcs_weights.enabled():
         gcs_weights.upload_json(meta, META_FILENAME)

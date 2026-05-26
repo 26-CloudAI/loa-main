@@ -345,16 +345,17 @@ class ReplayBuffer:
 
 class RewardCalculator:
     """
-    보상 설계:
-      - 킬 (kill_delta)       : +50.0 × delta  (직접 kills 필드 사용)
-      - 일반 채굴 (score_delta): +0.3 / 점
+    보상 설계 (v4, 2026-05-26):
+      - 킬 (kill_delta)       : +100.0 × delta  (직접 kills 필드 사용)
+      - 일반 채굴 (score_delta): +0.15 / 점     (v3 0.3 → 반감, mining 편향 완화)
       - 에너지 회복           : +0.02 / 에너지
       - 에너지 위험           : -1.0 (LOW) / -3.0 (CRITICAL)
       - 자기장 내             : -4.0 / 틱
       - 유효 이동 (zone 안)   : +0.1
       - STAY                  : -0.4
       - 헛 SHIELD (적 미인접) : -0.5
-      - 에피소드 순위         : 1위 +50 / 2위 +15 / 3위 -5 / 4위+ -20×(rank-3)
+      - 에피소드 순위         : 1위 +150 / 2위 +15 / 3위 -10 / 4위+ -20×(rank-3)
+                                (v3 1위 +50 → +150: top2 편향 해소, win 추구 강화)
     """
 
     ENERGY_LOW_THR      = 80
@@ -377,7 +378,7 @@ class RewardCalculator:
             if score_delta >= 25:
                 reward += 100.0  # kill 휴리스틱
             elif score_delta > 0:
-                reward += score_delta * 0.3
+                reward += score_delta * 0.15
 
         # ── 에너지 변화 ────────────────────────────────────────────────
         energy_delta = curr_my["energy"] - prev_my["energy"]
@@ -417,7 +418,7 @@ class RewardCalculator:
 
     @staticmethod
     def compute_episode_end(rank: int, n_bots: int) -> float:
-        table = {1: 50.0, 2: 15.0, 3: -5.0}
+        table = {1: 150.0, 2: 15.0, 3: -10.0}
         return table.get(rank, -20.0 * (rank - 3))
 
 
