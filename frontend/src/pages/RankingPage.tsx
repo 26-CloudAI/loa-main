@@ -264,7 +264,7 @@ export default function RankingPage() {
                   padding: '1px calc(6px - 0.05em) 1px 6px', fontSize: 10, fontWeight: 500,
                   background: 'rgba(155,89,245,.15)', color: '#C8A8FF',
                   border: '1px solid rgba(155,89,245,.35)', borderRadius: 4, letterSpacing: '0.05em',
-                }}>{user.role}</span>▾
+                }}>{user.role}</span>
               </button>
             )}
             <button type="button" onClick={handleLogout} style={navBtn}
