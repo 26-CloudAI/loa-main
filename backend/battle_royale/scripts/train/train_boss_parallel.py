@@ -117,10 +117,11 @@ try:
 except ImportError:
     SAMPLE_USER_BOTS = []
 
-WEIGHTS_PATH     = _PROJECT_ROOT / "bots" / "boss" / "trained_weights_torch.pt"
-LOCK_FILE        = _PROJECT_ROOT / "bots" / "boss" / ".train_lock"
-META_FILENAME    = "training_meta.json"
-HISTORY_FILENAME = "trained_bot_history.json"
+WEIGHTS_PATH       = _PROJECT_ROOT / "bots" / "boss" / "trained_weights_torch.pt"
+NUMPY_WEIGHTS_PATH = _PROJECT_ROOT / "bots" / "boss" / "trained_weights.json"
+LOCK_FILE          = _PROJECT_ROOT / "bots" / "boss" / ".train_lock"
+META_FILENAME      = "training_meta.json"
+HISTORY_FILENAME   = "trained_bot_history.json"
 
 
 # ---------------------------------------------------------------------------
@@ -766,10 +767,31 @@ def train(
 
     print("=" * 70)
 
-    # ── GCS 최종 가중치 업로드 ───────────────────────────────────────────
+    # ── GCS 최종 가중치 업로드 (torch.pt) ───────────────────────────────
     if use_gcs and gcs_weights.enabled() and WEIGHTS_PATH.exists():
         ok = gcs_weights.upload(WEIGHTS_PATH)
-        print(f"  가중치 GCS 업로드: {'성공' if ok else '실패'}")
+        print(f"  torch 가중치 GCS 업로드: {'성공' if ok else '실패'}")
+
+    # ── torch → numpy 변환 + 서빙용 trained_weights.json 갱신 ────────────
+    if WEIGHTS_PATH.exists():
+        try:
+            # scripts/tools/convert_torch_to_numpy 의 convert() 직접 호출
+            sys.path.insert(0, str(_PROJECT_ROOT / "scripts" / "tools"))
+            from convert_torch_to_numpy import convert as _torch_to_numpy_convert
+            _torch_to_numpy_convert(
+                in_path  = WEIGHTS_PATH,
+                out_path = NUMPY_WEIGHTS_PATH,
+            )
+            print(f"  torch → numpy 변환: {NUMPY_WEIGHTS_PATH.name}")
+            # 서빙 VM 이 폴링하는 numpy.json 도 GCS 업로드
+            if use_gcs and gcs_weights.enabled():
+                numpy_uri = gcs_weights._sibling_uri(NUMPY_WEIGHTS_PATH.name)
+                if numpy_uri:
+                    ok = gcs_weights.upload(NUMPY_WEIGHTS_PATH, gcs_uri=numpy_uri)
+                    print(f"  numpy 가중치 GCS 업로드: {'성공' if ok else '실패'}")
+        except Exception as exc:
+            logger.warning("torch → numpy 변환 실패 (서빙에 반영 안 됨): %s", exc)
+            print(f"  ⚠️  torch → numpy 변환 실패: {exc}")
 
     # ── VM 자동 종료 ──────────────────────────────────────────────────────
     if self_stop:
