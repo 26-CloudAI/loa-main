@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_ID } from '../dev/mock'
 import BotCodeInput from '../components/BotCodeInput'
+import TutorialBanner from '../components/TutorialBanner'
+import QuickRefPanel from '../components/QuickRefPanel'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
@@ -285,11 +287,14 @@ function saveBotIconPref(botId: string, icon: string) {
 export default function GameNewPage() {
   const { token } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [gameName, setGameName] = useState('')
   const [botId, setBotId] = useState('')
   const [botIcon, setBotIcon] = useState('⭐')
-  const [code, setCode] = useState(DEFAULT_CODE)
+  const [code, setCode] = useState<string>(
+    (location.state as { templateCode?: string } | null)?.templateCode ?? DEFAULT_CODE
+  )
   const [isPublic, setIsPublic] = useState(true)
   const [fillWithAi, setFillWithAi] = useState(true)
   const [minBots, setMinBots] = useState<number | ''>(4)
@@ -304,7 +309,7 @@ export default function GameNewPage() {
   const codeOverLimit = codeBytes > MAX_CODE_BYTES
   const canSubmit = !submitting && code.trim().length > 0 && !codeOverLimit
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
@@ -366,10 +371,10 @@ export default function GameNewPage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
-          onClick={() => navigate('/games/new')}
+          onClick={() => navigate(-1)}
           className="text-gray-400 hover:text-white text-sm transition-colors"
         >
-          ◀ 모드 선택
+          ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
         <span className="font-bold">새 게임 만들기</span>
@@ -384,6 +389,8 @@ export default function GameNewPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+
+          <TutorialBanner mode="battle-royale" />
 
           {/* 게임 이름 */}
           <section className="flex flex-col gap-2">
@@ -461,15 +468,20 @@ export default function GameNewPage() {
                 {codeOverLimit && ' — 초과'}
               </span>
             </div>
-            <BotCodeInput
-              value={code}
-              onChange={setCode}
-              hasError={codeOverLimit}
-              accentColor="indigo"
-            />
-            {codeOverLimit && (
-              <p className="text-red-400 text-xs">코드가 50KB를 초과합니다. 줄여주세요.</p>
-            )}
+            <div className="flex gap-3 items-start">
+              <div className="flex-1 min-w-0 flex flex-col gap-2">
+                <BotCodeInput
+                  value={code}
+                  onChange={setCode}
+                  hasError={codeOverLimit}
+                  accentColor="indigo"
+                />
+                {codeOverLimit && (
+                  <p className="text-red-400 text-xs">코드가 50KB를 초과합니다. 줄여주세요.</p>
+                )}
+              </div>
+              <QuickRefPanel mode="battle-royale" />
+            </div>
           </section>
 
           {/* 게임 옵션 */}
