@@ -68,6 +68,81 @@ def test_torch_layer_keys_complete():
 
 
 # ---------------------------------------------------------------------------
+# _verify_numpy_weights — 변환 후 안전망 검증 (torch 불필요)
+# ---------------------------------------------------------------------------
+
+def _valid_numpy_dict() -> dict:
+    """검증 통과해야 하는 정상 v4 numpy weights dict."""
+    rng = np.random.default_rng(0)
+    one_net = {
+        "W1": (rng.standard_normal((43, 256)) * 0.1).tolist(),
+        "b1": np.zeros(256).tolist(),
+        "W2": (rng.standard_normal((256, 128)) * 0.1).tolist(),
+        "b2": np.zeros(128).tolist(),
+        "W3": (rng.standard_normal((128, 19)) * 0.1).tolist(),
+        "b3": np.zeros(19).tolist(),
+    }
+    return {
+        "version": 4,
+        "n_features": 43, "n_hidden1": 256, "n_hidden2": 128, "n_actions": 19,
+        "step_count": 0, "episode_count": 0, "epsilon": 0.0,
+        "online": one_net,
+        "target": {k: v for k, v in one_net.items()},
+        "buffer": [],
+    }
+
+
+def test_verify_passes_valid_weights(tmp_path):
+    data = _valid_numpy_dict()
+    p = tmp_path / "ok.json"
+    p.write_text(json.dumps(data))
+    ok, msg = conv._verify_numpy_weights(p)
+    assert ok is True, f"검증 실패: {msg}"
+
+
+def test_verify_rejects_wrong_version(tmp_path):
+    data = _valid_numpy_dict()
+    data["version"] = 3
+    p = tmp_path / "v3.json"
+    p.write_text(json.dumps(data))
+    ok, msg = conv._verify_numpy_weights(p)
+    assert ok is False
+    assert "version" in msg
+
+
+def test_verify_rejects_wrong_shape(tmp_path):
+    data = _valid_numpy_dict()
+    data["online"]["W1"] = np.zeros((43, 64)).tolist()  # 잘못된 hidden size
+    p = tmp_path / "wrong.json"
+    p.write_text(json.dumps(data))
+    ok, msg = conv._verify_numpy_weights(p)
+    assert ok is False
+    assert "shape" in msg.lower() or "from_dict" in msg
+
+
+def test_verify_rejects_nan_weights(tmp_path):
+    data = _valid_numpy_dict()
+    bad = np.zeros((43, 256))
+    bad[0][0] = float("nan")
+    data["online"]["W1"] = bad.tolist()
+    p = tmp_path / "nan.json"
+    p.write_text(json.dumps(data))
+    ok, msg = conv._verify_numpy_weights(p)
+    assert ok is False
+    assert "NaN" in msg or "Inf" in msg or "nan" in msg.lower()
+
+
+def test_verify_missing_target_key(tmp_path):
+    data = _valid_numpy_dict()
+    del data["target"]
+    p = tmp_path / "no_target.json"
+    p.write_text(json.dumps(data))
+    ok, msg = conv._verify_numpy_weights(p)
+    assert ok is False
+    assert "target" in msg
+
+
+# ---------------------------------------------------------------------------
 # torch 환경에서 실제 변환 검증
 # ---------------------------------------------------------------------------
 

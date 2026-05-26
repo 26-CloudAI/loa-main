@@ -97,6 +97,55 @@ def _validate_shapes(np_dict: dict, name: str) -> None:
             )
 
 
+def _verify_numpy_weights(numpy_json_path: Path) -> tuple[bool, str]:
+    """저장된 numpy.json 을 RLBossBot 의 DQNetwork 로 실제 로드해 검증.
+
+    변환 후 GCS 업로드 전 호출. 실패 시 잘못된 가중치가 서빙으로 가는 것을 차단.
+
+    Returns:
+        (ok, message): ok=True 면 변환된 파일이 RLBossBot 호환.
+    """
+    import numpy as np
+    try:
+        sys.path.insert(0, str(_PROJECT_ROOT))
+        from bots.boss.rl_boss_bot import (
+            DQNetwork, N_FEATURES, N_ACTIONS,
+        )
+    except Exception as exc:
+        return False, f"rl_boss_bot import 실패: {exc}"
+
+    try:
+        data = json.loads(numpy_json_path.read_text())
+    except Exception as exc:
+        return False, f"json 로드 실패: {exc}"
+
+    if data.get("version") != 4:
+        return False, f"version={data.get('version')} != 4"
+    if data.get("n_features") != EXPECTED_N_FEATURES:
+        return False, f"n_features={data.get('n_features')}"
+
+    for net_key in ("online", "target"):
+        if net_key not in data:
+            return False, f"key '{net_key}' 없음"
+        try:
+            net = DQNetwork()
+            net.from_dict(data[net_key])
+        except Exception as exc:
+            return False, f"{net_key} from_dict 실패: {exc}"
+        if not net.shape_ok():
+            return False, f"{net_key} shape_ok=False"
+        # forward smoke
+        try:
+            q = net.forward(np.zeros(N_FEATURES, dtype=np.float32))
+        except Exception as exc:
+            return False, f"{net_key} forward 실패: {exc}"
+        if q.shape != (N_ACTIONS,):
+            return False, f"{net_key} forward shape {q.shape} != ({N_ACTIONS},)"
+        if not np.all(np.isfinite(q)):
+            return False, f"{net_key} forward NaN/Inf 포함"
+    return True, "OK"
+
+
 def convert(in_path: Path, out_path: Optional[Path] = None,
             *, dry_run: bool = False) -> dict:
     """
@@ -190,6 +239,17 @@ def convert(in_path: Path, out_path: Optional[Path] = None,
         except OSError:
             pass
         raise
+
+    # 변환 결과를 RLBossBot 로 실제 로드해 검증 — 실패 시 파일 삭제하고 예외
+    # (서빙으로 잘못된 가중치 가는 것을 차단하는 안전망)
+    ok, msg = _verify_numpy_weights(out_path)
+    if not ok:
+        try:
+            out_path.unlink()
+        except OSError:
+            pass
+        raise RuntimeError(f"변환 후 검증 실패: {msg} (출력 파일 삭제됨)")
+    logger.info("변환 검증 통과: %s", msg)
 
     return numpy_json
 
