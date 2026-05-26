@@ -62,6 +62,29 @@ from bots.battle_royale.camper import CamperBot
 
 
 # ---------------------------------------------------------------------------
+# 테스트 격리 fixture
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _isolate_default_weights(monkeypatch, tmp_path):
+    """RLBossBot 의 _DEFAULT_WEIGHTS_PATH 를 tmp 로 격리.
+    on_episode_done() 등이 인자 없이 save_weights() 호출 시 실제 production
+    trained_weights.json 을 덮어쓰는 부작용 방지."""
+    monkeypatch.setattr(
+        "bots.boss.rl_boss_bot._DEFAULT_WEIGHTS_PATH",
+        tmp_path / "_isolated_weights.json",
+    )
+    try:
+        import bots.boss.rl_boss_bot_torch  # noqa: F401
+        monkeypatch.setattr(
+            "bots.boss.rl_boss_bot_torch._DEFAULT_WEIGHTS_PATH",
+            tmp_path / "_isolated_weights_torch.pt",
+        )
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # 공용 헬퍼
 # ---------------------------------------------------------------------------
 
