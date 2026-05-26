@@ -241,14 +241,14 @@ export default function QuickRefPanel({ mode }: { mode: Mode }) {
       >
         <span style={{
           writingMode: 'vertical-rl', textOrientation: 'mixed',
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-          color: '#374151', userSelect: 'none',
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
+          color: '#9CA3AF', userSelect: 'none',
           transition: 'color .15s',
         }}
-          onMouseEnter={e => ((e.target as HTMLElement).style.color = '#6B7280')}
-          onMouseLeave={e => ((e.target as HTMLElement).style.color = '#374151')}
+          onMouseEnter={e => ((e.target as HTMLElement).style.color = '#E5E7EB')}
+          onMouseLeave={e => ((e.target as HTMLElement).style.color = '#9CA3AF')}
         >
-          REF ‹
+          REF ↑
         </span>
       </button>
     </aside>

@@ -3,9 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK } from '../dev/mock'
 import BotCodeInput from '../components/BotCodeInput'
+import { BR2_API_BASE } from '../br2'
 
-// BR2(연속 2D 배틀로얄) 백엔드. 기존 그리드 배틀로얄(/battleroyale)을 제자리 교체.
-const API_BASE = import.meta.env.VITE_BR2_API_BASE ?? 'http://localhost:8080/battleroyale2'
+// BR2(연속 2D 배틀로얄) 백엔드. VITE_API_BASE(.../battleroyale) → /battleroyale2 파생.
+const API_BASE = BR2_API_BASE
 
 const MAX_CODE_BYTES = 50 * 1024 // 50KB
 
@@ -253,7 +254,7 @@ export default function GameNewPage() {
     // ── mock mode ──────────────────────────────────────────────
     if (MOCK) {
       await new Promise((r) => setTimeout(r, 600))
-      navigate(`/godot-test?match=dev`)
+      navigate(`/games/dev/battleroyale/watch`)
       return
     }
     // ──────────────────────────────────────────────────────────
@@ -281,8 +282,7 @@ export default function GameNewPage() {
       }
 
       const game = await res.json()
-      // C4 에서 /games/{id}/watch 를 Godot iframe 으로 교체 예정. 현재는 동작하는 godot-test 로 이동.
-      navigate(`/godot-test?match=${encodeURIComponent(game.game_id)}`)
+      navigate(`/games/${encodeURIComponent(game.game_id)}/battleroyale/watch`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '게임 생성에 실패했습니다.')
       setSubmitting(false)
