@@ -66,7 +66,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             <h3 className="font-semibold mb-2">🎮 게임 개요</h3>
             <p className="text-gray-300 leading-relaxed">
               200턴 동안 초기 자본 1억 원으로 15개 종목에 투자해 최고 수익률을 목표로 합니다.
-              매 틱 <code className="text-green-400">action(state)</code>를 호출하며 딕셔너리를 반환합니다.
+              <br/>매 틱 <code className="text-green-400">action(state)</code>를 호출하며 딕셔너리를 반환합니다.
             </p>
           </div>
           <div>
@@ -104,8 +104,8 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             <h3 className="font-semibold mb-2">📰 뉴스 & Gemini AI</h3>
             <p className="text-gray-300 leading-relaxed">
               10~20턴마다 Gemini AI가 실시간으로 뉴스를 생성합니다.
-              <span className="text-green-400 font-semibold"> [G]</span> 접두사가 붙은 뉴스는 AI가 생성한 것입니다.
-              뉴스는 해당 종목의 주가에 5~10턴 동안 영향을 줍니다.
+              <span className="text-green-400 font-semibold"> [G]</span> 접두사가 붙은 뉴스는 
+              <br/>AI가 생성한 것입니다. 뉴스는 해당 종목의 주가에 5~10턴 동안 영향을 줍니다.
             </p>
           </div>
           <div>
@@ -221,10 +221,14 @@ export default function MockStocksNewPage() {
 
   return (
     <div className="min-h-screen text-white" style={{
+      position: 'relative',
       background: '#0D0F14',
       backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
       backgroundSize: '24px 24px',
     }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: 'radial-gradient(ellipse 60% 70% at 50% 40%, rgba(245,166,36,.18) 0%, transparent 70%)',
+      }} />
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
