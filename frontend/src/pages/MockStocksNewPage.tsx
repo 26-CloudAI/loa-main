@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BotCodeInput from '../components/BotCodeInput'
+import TutorialBanner from '../components/TutorialBanner'
+import QuickRefPanel from '../components/QuickRefPanel'
 
 const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 const MAX_CODE_BYTES = 50 * 1024
@@ -180,7 +182,7 @@ export default function MockStocksNewPage() {
   const codeOverLimit = codeBytes > MAX_CODE_BYTES
   const canSubmit = !submitting && newsReady && code.trim().length > 0 && !codeOverLimit
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
@@ -226,8 +228,8 @@ export default function MockStocksNewPage() {
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games/new')} className="text-gray-400 hover:text-white text-sm transition-colors">
-          ◀ 모드 선택
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm transition-colors">
+          ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
         <span className="font-bold">📈 모의주식 — 새 게임</span>
@@ -243,6 +245,7 @@ export default function MockStocksNewPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <TutorialBanner mode="stocks" />
           {/* 게임 이름 */}
           <section className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-300">
@@ -282,12 +285,17 @@ export default function MockStocksNewPage() {
                 {codeOverLimit && ' — 초과'}
               </span>
             </div>
-            <BotCodeInput
-              value={code}
-              onChange={setCode}
-              hasError={codeOverLimit}
-              accentColor="gold"
-            />
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <BotCodeInput
+                  value={code}
+                  onChange={setCode}
+                  hasError={codeOverLimit}
+                  accentColor="gold"
+                />
+              </div>
+              <QuickRefPanel mode="stocks" />
+            </div>
           </section>
 
           {/* 게임 옵션 */}

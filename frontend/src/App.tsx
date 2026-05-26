@@ -17,6 +17,7 @@ import RankingPage from './pages/RankingPage'
 import UserBotDetailPage from './pages/UserBotDetailPage'
 import MyPage from './pages/MyPage'
 import GodotTestPage from './pages/GodotTestPage'
+import TutorialPage from './pages/TutorialPage'
 
 function LoadingScreen() {
   return (
@@ -102,6 +103,7 @@ function AppRoutes() {
       <Route path="/mypage" element={<MyPage />} />
       {/* 기본 진입점 */}
       <Route path="/godot-test" element={<GodotTestPage />} />
+      <Route path="/tutorial/:mode" element={<TutorialPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
