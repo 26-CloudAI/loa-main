@@ -126,7 +126,7 @@ interface Step {
 const BR_STEPS: Step[] = [
   {
     badge: 'Step 1', title: '봇의 기본 구조', subtitle: '함수 하나면 충분합니다',
-    description: '엔진은 매 틱마다 action(state) 함수를 호출하고, 반환된 문자열 하나를 봇의 행동으로 실행합니다.',
+    description: '엔진은 매 틱마다 action(state) 함수를 호출하고, \n반환된 문자열 하나를 봇의 행동으로 실행합니다.',
     tips: [
       { icon: '⚡', text: 'action(state) 함수 하나면 봇이 됩니다' },
       { icon: '📦', text: 'state 딕셔너리에 모든 게임 정보가 담겨 있습니다' },
@@ -146,7 +146,7 @@ const BR_STEPS: Step[] = [
   },
   {
     badge: 'Step 2', title: '내 봇 상태 읽기', subtitle: '나를 알아야 살아남습니다',
-    description: 'state["my_bot"]에 내 위치, 에너지, 점수가 담겨 있습니다. 에너지가 0이 되면 즉시 사망합니다.',
+    description: 'state["my_bot"]에 내 위치, 에너지, 점수가 \n담겨 있습니다. 에너지가 0이 되면 즉시 사망합니다.',
     tips: [
       { icon: '📍', text: 'position은 [x, y] 형식. 좌상단이 [0, 0]' },
       { icon: '❤️', text: '에너지 20 이하는 위험 신호, SHIELD를 쓰세요' },
@@ -183,9 +183,9 @@ const BR_STEPS: Step[] = [
   },
   {
     badge: 'Step 3', title: '8방향 이동', subtitle: '맵을 탐색하며 기회를 찾으세요',
-    description: '봇은 매 틱 8방향 중 하나로 이동할 수 있습니다. 이동할 때마다 에너지가 2씩 줄어듭니다.',
+    description: '봇은 매 틱 8방향 중 하나로 이동할 수 있습니다. \n이동할 때마다 에너지가 2씩 줄어듭니다.',
     tips: [
-      { icon: '🗺️', text: '맵은 100×100 격자. MOVE_UP은 y 감소, MOVE_DOWN은 y 증가' },
+      { icon: '🗺️', text: '맵은 100×100 격자. MOVE_UP은 y 감소, \nMOVE_DOWN은 y 증가' },
       { icon: '↗️', text: '대각선 이동도 에너지 소모는 −2로 동일합니다' },
       { icon: '🎯', text: '목적 없는 랜덤 이동은 에너지 낭비입니다' },
     ],
@@ -213,7 +213,7 @@ def action(state: dict) -> str:
   },
   {
     badge: 'Step 4', title: '광물 채굴하기', subtitle: '점수의 핵심, 광물을 노려라',
-    description: 'vision.grid는 내 주변 5×5 시야. 중심 grid[2][2]가 내 위치이고, 광물 위로 이동한 다음 틱에 MINE을 반환하면 채굴됩니다.',
+    description: 'vision.grid는 내 주변 5×5 시야입니다. \n중심 grid[2][2]가 내 위치이고, 광물 위로 이동한 다음 \n틱에 MINE을 반환하면 채굴됩니다.',
     tips: [
       { icon: '⛏️', text: '일반 광물 +5점, 희귀 광물 +20점 & 에너지 +25' },
       { icon: '⏱️', text: 'MINE은 광물 위에 올라선 다음 틱에 써야 합니다' },
@@ -248,7 +248,7 @@ def action(state: dict) -> str:
   },
   {
     badge: 'Step 5', title: '자기장 생존', subtitle: '존 밖은 매 틱 에너지가 닳습니다',
-    description: '76틱부터 자기장이 수축합니다. zone_bounds 바깥에 있으면 매 틱 에너지 −3. 151틱부터는 수축 속도가 2배입니다.',
+    description: '76틱부터 자기장이 수축합니다. \nzone_bounds 바깥에 있으면 매 틱 에너지 −3. \n151틱부터는 수축 속도가 2배입니다.',
     tips: [
       { icon: '🌀', text: 'zone_bounds = (min_x, min_y, max_x, max_y) 형식' },
       { icon: '🏃', text: '존 밖에서는 채굴보다 복귀가 절대 우선입니다' },
@@ -308,7 +308,7 @@ def action(state: dict) -> str:
 const BOSS_STEPS: Step[] = [
   {
     badge: 'Step 1', title: '보스전 기본 구조', subtitle: '1대1, 더 치열한 싸움입니다',
-    description: '배틀로얄과 동일한 action(state) 함수를 씁니다. 차이는 단 하나 — 상대가 강화학습으로 훈련된 보스 봇 하나뿐입니다.',
+    description: '배틀로얄과 동일한 action(state) 함수를 씁니다. \n차이는 단 하나 — 상대가 강화학습으로 훈련된 \n보스 봇 하나뿐입니다.',
     tips: [
       { icon: '🤖', text: '보스는 훈련된 RL 봇입니다. 랜덤하게 움직이지 않습니다' },
       { icon: '⚡', text: 'action(state) 반환값은 배틀로얄과 동일한 문자열' },
@@ -340,7 +340,7 @@ const BOSS_STEPS: Step[] = [
     badge: 'Step 2', title: '보스 위치 파악', subtitle: '시야로 보스를 추적하세요',
     description: 'vision.grid의 "bot_enemy" 셀로 보스의 상대 위치를 알 수 있습니다. 보스가 시야에 들어오면 그 방향을 계산할 수 있습니다.',
     tips: [
-      { icon: '👁️', text: 'grid[row][col] == "bot_enemy" 이면 그 위치에 보스가 있습니다' },
+      { icon: '👁️', text: 'grid[row][col] == "bot_enemy" 이면 \n그 위치에 보스가 있습니다' },
       { icon: '📐', text: 'grid 인덱스 (2,2)가 내 위치. (row-2, col-2)가 상대적 거리' },
       { icon: '📡', text: '보스가 시야 밖이면 other_bots 리스트로도 확인 가능' },
     ],
@@ -376,7 +376,7 @@ const BOSS_STEPS: Step[] = [
     badge: 'Step 3', title: '공격 타이밍', subtitle: '인접하면 바로 공격하세요',
     description: '보스가 인접(상하좌우 1칸)해 있으면 ATTACK_* 액션으로 공격합니다. 에너지 −5이지만 보스에게 25 피해를 줍니다.',
     tips: [
-      { icon: '⚔️', text: 'ATTACK_UP/DOWN/LEFT/RIGHT로 인접 칸을 공격합니다' },
+      { icon: '⚔️', text: 'ATTACK_UP/DOWN/LEFT/RIGHT로 \n인접 칸을 공격합니다' },
       { icon: '↖️', text: '대각선 ATTACK_UP_LEFT 등도 사용 가능합니다' },
       { icon: '🛡️', text: '보스가 SHIELD를 쓰면 공격이 무효화됩니다. 타이밍이 중요' },
     ],
@@ -470,7 +470,7 @@ const BOSS_STEPS: Step[] = [
   },
   {
     badge: 'Step 5', title: '완성 전략', subtitle: '공격·방어·생존을 조합하세요',
-    description: '에너지 관리, 자기장 대응, 보스 추격을 조합하면 됩니다. 보스가 강할수록 SHIELD 타이밍이 승패를 가릅니다.',
+    description: '에너지 관리, 자기장 대응, 보스 추격을 조합하면 됩니다. \n보스가 강할수록 SHIELD 타이밍이 승패를 가릅니다.',
     tips: [
       { icon: '🏆', text: '보스를 쓰러뜨리면 즉시 게임 종료. 생존만으로도 점수가 됩니다' },
       { icon: '🔄', text: '보스는 패턴이 있습니다. 몇 번 관전하며 패턴을 파악하세요' },
@@ -531,7 +531,7 @@ def action(state: dict) -> str:
 const STOCKS_STEPS: Step[] = [
   {
     badge: 'Step 1', title: '봇의 기본 구조', subtitle: '반환값이 dict인 점이 다릅니다',
-    description: '배틀로얄과 달리 action()은 문자열이 아니라 딕셔너리를 반환합니다. 200턴 동안 주식을 사고팔아 총 자산을 최대화하는 게 목표입니다.',
+    description: '배틀로얄과 달리 action()은 문자열이 아니라 딕셔너리를 \n반환합니다. 200턴 동안 주식을 사고팔아 총 자산을 \n최대화하는 게 목표입니다.',
     tips: [
       { icon: '💰', text: '초기 자본 1억 원. 200턴 후 총 자산이 가장 높은 봇이 우승' },
       { icon: '📋', text: '{"action": "HOLD"} 를 반환하면 아무것도 하지 않습니다' },
@@ -552,10 +552,10 @@ const STOCKS_STEPS: Step[] = [
   },
   {
     badge: 'Step 2', title: '시장 정보 읽기', subtitle: '주가와 뉴스가 핵심 데이터입니다',
-    description: 'state["market"]["stocks"]에 15개 종목의 현재가·등락률이, state["market"]["news"]에 이번 틱 뉴스가 담겨 있습니다.',
+    description: 'state["market"]["stocks"]에 15개 종목의 \n현재가·등락률이, state["market"]["news"]에 \n이번 틱 뉴스가 담겨 있습니다.',
     tips: [
-      { icon: '📊', text: 'stocks는 리스트입니다. symbol, price, change_pct 키를 확인하세요' },
-      { icon: '📰', text: 'news는 매 10~20턴마다 생성됩니다. headline, symbol 키가 있습니다' },
+      { icon: '📊', text: 'stocks는 리스트입니다. \nsymbol, price, change_pct 키를 확인하세요' },
+      { icon: '📰', text: 'news는 매 10~20턴마다 생성됩니다. \nheadline, symbol 키가 있습니다' },
       { icon: '🤖', text: '[G] 접두사 뉴스는 Gemini AI가 생성한 것입니다' },
     ],
     code: `def action(state: dict) -> dict:
@@ -600,7 +600,7 @@ const STOCKS_STEPS: Step[] = [
   },
   {
     badge: 'Step 3', title: '매수 / 매도', subtitle: '타이밍이 수익을 결정합니다',
-    description: 'BUY로 매수하고 SELL로 매도합니다. 수량과 종목을 지정해야 합니다. 보유 현금과 수량 범위를 넘으면 자동으로 무시됩니다.',
+    description: 'BUY로 매수하고 SELL로 매도합니다. 수량과 종목을 \n지정해야 합니다. 보유 현금과 수량 범위를 넘으면 \n자동으로 무시됩니다.',
     tips: [
       { icon: '💳', text: 'BUY: 현금 내에서만 체결됩니다. 수수료 0.2% 발생' },
       { icon: '📤', text: 'SELL: 보유 수량을 초과하면 무시됩니다' },
@@ -642,9 +642,9 @@ const STOCKS_STEPS: Step[] = [
   },
   {
     badge: 'Step 4', title: '포트폴리오 관리', subtitle: '손절과 익절 기준을 만드세요',
-    description: 'my_bot.portfolio에 보유 종목별 수량·평균단가·수익률(pnl_pct)이 담겨 있습니다. 이를 기반으로 손절·익절 전략을 짭니다.',
+    description: 'my_bot.portfolio에 보유 종목별 수량·평균단가·수익률(pnl_pct)이 담겨 있습니다. \n이를 기반으로 손절·익절 전략을 짭니다.',
     tips: [
-      { icon: '📊', text: 'portfolio는 dict. 키가 종목 심볼, 값에 quantity·pnl_pct 등' },
+      { icon: '📊', text: 'portfolio는 dict. \n키는 종목 심볼, 값은 quantity·pnl_pct 등' },
       { icon: '🔴', text: '−15% 이하면 손절 매도로 더 큰 손실을 막으세요' },
       { icon: '🟢', text: '+20% 이상이면 절반 익절로 이익을 실현하세요' },
     ],
@@ -676,7 +676,7 @@ const STOCKS_STEPS: Step[] = [
   },
   {
     badge: 'Step 5', title: '뉴스 기반 전략', subtitle: '정보가 수익을 만듭니다',
-    description: '뉴스 키워드로 호재·악재를 판단해 매수·매도 결정을 내립니다. [G] 뉴스는 AI가 생성한 신뢰도 높은 시그널입니다.',
+    description: '뉴스 키워드로 호재·악재를 판단해 매수·매도를 결정합니다. [G] 뉴스는 AI가 생성한 신뢰도 높은 시그널입니다.',
     tips: [
       { icon: '📰', text: '"계약", "실적", "파트너십"은 보통 호재 신호입니다' },
       { icon: '⚠️', text: '"리콜", "적자", "소송"은 악재 신호. 보유 시 매도 검토' },
@@ -879,13 +879,13 @@ export default function TutorialPage() {
               <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>{cur.subtitle}</p>
             </div>
 
-            <p style={{ fontSize: 14, color: '#D1D5DB', lineHeight: 1.7, margin: 0 }}>{cur.description}</p>
+            <p style={{ fontSize: 14, color: '#D1D5DB', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>{cur.description}</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
               {cur.tips.map((tip, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 16, lineHeight: 1 }}>{tip.icon}</span>
-                  <p style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.6, margin: 0 }}>{tip.text}</p>
+                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 16, lineHeight: 1, width: 22, flexShrink: 0 }}>{tip.icon}</span>
+                  <p style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-line' }}>{tip.text}</p>
                 </div>
               ))}
             </div>
