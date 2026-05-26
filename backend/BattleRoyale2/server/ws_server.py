@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import time
 import uuid
 from typing import Any
@@ -38,6 +39,8 @@ TARGET_BOT_COUNT = 4          # 유저 봇 + AI 채움으로 맞출 기본 총 �
 # game_id → 유저 봇 코드 목록 [{bot_id, name, code}]. POST /api/games 에서 저장,
 # WS MATCH_CONFIG 빌드 시 조회. (인메모리 — 서버 재시작 시 소실, v0.1 단순화)
 _GAME_CODE: dict[str, list[dict]] = {}
+# game_id → 총 봇 수 (내 봇 + AI 채움). POST /api/games 에서 저장.
+_GAME_BOT_COUNT: dict[str, int] = {}
 
 # AI 채움용 봇 종류 (유저 봇 외 빈 슬롯). 순서대로 순환.
 _AI_FILLERS: list[tuple[str, type[BattleRoyale2DBot]]] = [
@@ -175,7 +178,8 @@ class MatchSession:
 
     def _assemble_bots(self, seed: int) -> tuple[dict[str, BattleRoyale2DBot], list[tuple[str, str]]]:
         """이 매치(game_id) 의 유저 제출 봇 + AI 채움 봇 구성.
-        유저 코드가 없으면 기본 AI 3종(DEFAULT_BOT_FACTORY)으로 폴백."""
+        유저 코드가 없으면 기본 AI 3종(DEFAULT_BOT_FACTORY)으로 폴백.
+        AI 채움은 초식/미친개/존버 중 랜덤 선택, 총 봇 수는 _GAME_BOT_COUNT 기준."""
         user_bots = _GAME_CODE.get(self.match_id, [])
         if not user_bots:
             bots = _build_bots(list(DEFAULT_BOT_FACTORY), seed=seed)
@@ -189,12 +193,16 @@ class MatchSession:
             bots[bid] = InProcessBot2(bid, entry.get("code", ""))
             spec.append((bid, name))
 
-        # AI 로 TARGET_BOT_COUNT 까지 채움
-        fill_n = max(0, TARGET_BOT_COUNT - len(spec))
+        target = _GAME_BOT_COUNT.get(self.match_id, TARGET_BOT_COUNT)
+        target = max(len(spec), min(8, target))   # 유저봇 수 이상, 최대 8
+        rng = random.Random(seed)
+        type_counts: dict[str, int] = {}
+        fill_n = max(0, target - len(spec))
         for i in range(fill_n):
-            label, cls = _AI_FILLERS[i % len(_AI_FILLERS)]
+            label, cls = rng.choice(_AI_FILLERS)   # 랜덤 종류
+            type_counts[label] = type_counts.get(label, 0) + 1
             bid = "ai_%d" % i
-            name = "%s %d" % (label, i + 1)
+            name = "%s %d" % (label, type_counts[label])
             bots[bid] = cls(bid, seed=seed + 100 + i)
             spec.append((bid, name))
         return bots, spec
@@ -357,7 +365,17 @@ def create_app() -> FastAPI:
         if user_bots:
             _GAME_CODE[game_id] = user_bots
 
-        total_bots = max(TARGET_BOT_COUNT, len(user_bots)) if user_bots else len(DEFAULT_BOT_FACTORY)
+        # 봇 수 (내 봇 + AI 채움). 2~8 클램프. 유저봇 수보다는 커야 함.
+        req_count = body.get("bot_count") if isinstance(body, dict) else None
+        try:
+            bot_count = int(req_count) if req_count is not None else TARGET_BOT_COUNT
+        except (TypeError, ValueError):
+            bot_count = TARGET_BOT_COUNT
+        bot_count = max(max(2, len(user_bots)), min(8, bot_count))
+        if user_bots:
+            _GAME_BOT_COUNT[game_id] = bot_count
+
+        total_bots = bot_count if user_bots else len(DEFAULT_BOT_FACTORY)
 
         repo = _get_game_repo()
         if repo is None:

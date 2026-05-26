@@ -220,27 +220,6 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
   )
 }
 
-// ── Bot icon options ───────────────────────────────────────────────────
-
-const BOT_ICONS: { emoji: string; label: string }[] = [
-  { emoji: '⭐', label: '별'     },
-  { emoji: '🔥', label: '불꽃'   },
-  { emoji: '⚡', label: '번개'   },
-  { emoji: '💎', label: '다이아' },
-  { emoji: '👑', label: '왕관'   },
-  { emoji: '🚀', label: '로켓'   },
-  { emoji: '🎯', label: '타겟'   },
-  { emoji: '⚔️', label: '검'     },
-  { emoji: '🦁', label: '사자'   },
-  { emoji: '🦅', label: '독수리' },
-]
-
-function saveBotIconPref(botId: string, icon: string) {
-  try {
-    localStorage.setItem('loa_bot_icon', JSON.stringify({ botId, icon }))
-  } catch { /* localStorage 비활성화 환경 대응 */ }
-}
-
 export default function GameNewPage() {
   const { token } = useAuth()
   const navigate = useNavigate()
@@ -248,11 +227,11 @@ export default function GameNewPage() {
 
   const [gameName, setGameName] = useState('')
   const [botId, setBotId] = useState('')
-  const [botIcon, setBotIcon] = useState('⭐')
   const [code, setCode] = useState<string>(
     (location.state as { templateCode?: string } | null)?.templateCode ?? DEFAULT_CODE
   )
   const [isPublic, setIsPublic] = useState(true)
+  const [botCount, setBotCount] = useState(4)   // 총 봇 수 (내 봇 1 + AI 채움)
   const [seed, setSeed] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
@@ -274,7 +253,6 @@ export default function GameNewPage() {
     // ── mock mode ──────────────────────────────────────────────
     if (MOCK) {
       await new Promise((r) => setTimeout(r, 600))
-      saveBotIconPref(myBotId, botIcon)
       navigate(`/godot-test?match=dev`)
       return
     }
@@ -283,6 +261,7 @@ export default function GameNewPage() {
     try {
       const body: Record<string, unknown> = {
         bots: [{ bot_id: myBotId, name: myBotId, code, is_public: isPublic }],
+        bot_count: botCount,
         seed: seed !== '' ? parseInt(seed, 10) : null,
         name: gameName.trim() || undefined,
       }
@@ -302,7 +281,6 @@ export default function GameNewPage() {
       }
 
       const game = await res.json()
-      saveBotIconPref(myBotId, botIcon)
       // C4 에서 /games/{id}/watch 를 Godot iframe 으로 교체 예정. 현재는 동작하는 godot-test 로 이동.
       navigate(`/godot-test?match=${encodeURIComponent(game.game_id)}`)
     } catch (err) {
@@ -354,49 +332,19 @@ export default function GameNewPage() {
             />
           </section>
 
-          {/* 봇 이름 + 아이콘 */}
-          <section className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-300">
-                봇 이름 <span className="text-gray-500 font-normal">(게임 내 표시 ID)</span>
-              </label>
-              <input
-                type="text"
-                value={botId}
-                onChange={(e) => setBotId(e.target.value)}
-                placeholder="my_bot"
-                maxLength={32}
-                className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
-              />
-            </div>
-
-            <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <span className="text-4xl leading-none">{botIcon}</span>
-                <div>
-                  <p className="text-sm font-medium text-white">내 봇 아이콘</p>
-                  <p className="text-xs text-gray-500 mt-0.5">관전 화면에서 내 봇을 식별할 아이콘</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-10 gap-1.5">
-                {BOT_ICONS.map(({ emoji, label }) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    title={label}
-                    onClick={() => setBotIcon(emoji)}
-                    className={[
-                      'flex flex-col items-center justify-center rounded-lg py-2 text-xl leading-none',
-                      'border-2 transition-colors',
-                      botIcon === emoji ? 'border-yellow-400 bg-yellow-400/10' : 'border-gray-600 bg-gray-700/60 hover:border-gray-400',
-                    ].join(' ')}
-                  >
-                    {emoji}
-                    <span className="text-[9px] text-gray-500 mt-1 leading-none">{label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* 봇 이름 */}
+          <section className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-300">
+              봇 이름 <span className="text-gray-500 font-normal">(게임 내 표시 ID)</span>
+            </label>
+            <input
+              type="text"
+              value={botId}
+              onChange={(e) => setBotId(e.target.value)}
+              placeholder="my_bot"
+              maxLength={32}
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
+            />
           </section>
 
           {/* 코드 입력 */}
@@ -431,12 +379,28 @@ export default function GameNewPage() {
               </button>
             </div>
 
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-white">AI로 빈 슬롯 채우기</p>
-                <p className="text-xs text-gray-500">내 봇 외 나머지는 AI 봇(초식/미친개/존버)으로 자동 채워집니다 (총 4봇)</p>
+            {/* 봇 수 */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white">봇 수</p>
+                  <p className="text-xs text-gray-500">내 봇 1 + 나머지는 AI(초식/미친개/존버) 랜덤 채움</p>
+                </div>
+                <span className="text-sm text-indigo-400 font-mono">{botCount}봇</span>
               </div>
-              <span className="text-xs text-indigo-300 font-mono shrink-0 mt-0.5">자동</span>
+              <input
+                type="range"
+                min={2}
+                max={8}
+                step={1}
+                value={botCount}
+                onChange={(e) => setBotCount(parseInt(e.target.value, 10))}
+                className="w-full accent-indigo-500"
+              />
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>2봇</span>
+                <span>8봇</span>
+              </div>
             </div>
 
             <div className="flex items-center justify-between">
