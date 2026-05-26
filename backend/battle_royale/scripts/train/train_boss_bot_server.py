@@ -30,8 +30,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
-from core.config import DEFAULT_CONFIG
 from core.engine import GameEngine
+from src.arena.server.boss.config import boss_battle_config
 from core.vision import build_leaderboard
 from bots.battle_royale.herbivore import HerbivoreBot
 from bots.battle_royale.mad_dog import MadDogBot
@@ -42,7 +42,7 @@ from bots.boss.rl_boss_bot import RLBossBot
 # 상수
 # ---------------------------------------------------------------------------
 
-BOSS_BOT_ID   = "boss_rl"
+BOSS_BOT_ID   = "AI_보스"
 OPPONENTS = [
     (HerbivoreBot, "초식"),
     (MadDogBot,    "미친개"),
@@ -146,7 +146,7 @@ async def run_training(ws: WebSocket, n_episodes: int, n_bots: int,
             opponents.append(cls(bot_id=f"{label}_{i:02d}", seed=ep_seed + i))
 
         all_bots = [boss_bot] + opponents
-        engine   = GameEngine(all_bots, config=DEFAULT_CONFIG, seed=ep_seed)
+        engine   = GameEngine(all_bots, config=boss_battle_config(), seed=ep_seed)
 
         await _send(ws, {
             "type":    "episode_start",
