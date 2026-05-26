@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import uuid
 from typing import Any
 
 from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot
 from BattleRoyale2.server.inprocess_bot import InProcessBot2
@@ -314,6 +316,18 @@ class MatchSession:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="BattleRoyale2 WS Server")
+
+    # 마운트된 서브앱은 자체 미들웨어 스택을 가지므로 CORS 를 여기서 직접 추가.
+    # CORS_ORIGINS 환경변수(콤마구분) 사용, 없으면 전체 허용. 쿠키 미사용이라 credentials=False.
+    _cors_raw = os.environ.get("CORS_ORIGINS", "")
+    origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] if _cors_raw else ["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/health")
     def health() -> dict[str, str]:  # noqa: D401 — 짧은 헬스체크 응답
