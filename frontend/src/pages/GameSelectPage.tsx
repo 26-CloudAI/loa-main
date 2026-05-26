@@ -101,6 +101,15 @@ export default function GameSelectPage() {
               <ModeCard key={mode.id} mode={mode} onClick={() => mode.route && navigate(mode.route)} />
             ))}
           </div>
+
+          <button
+            onClick={() => navigate('/tutorial')}
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-400 transition-colors border border-gray-700/50 hover:border-indigo-500/40 rounded-xl px-5 py-2.5"
+          >
+            <span>📖</span>
+            <span>처음이신가요? 봇 코딩 튜토리얼 보기</span>
+            <span className="text-gray-600">→</span>
+          </button>
         </div>
         <div className="flex-2" />
       </main>
