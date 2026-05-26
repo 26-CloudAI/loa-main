@@ -90,6 +90,7 @@ def test_healthz_degraded_when_both_dbs_down():
 # ── /livez ────────────────────────────────────────────────────────────────────
 
 def test_livez_always_200():
+    # /livez는 프로세스 생존만 본다 — DB가 죽었어도 항상 200
     client = TestClient(_build_test_app(br_db_ok=False, ms_db_ok=False))
     resp = client.get("/livez")
     assert resp.status_code == 200

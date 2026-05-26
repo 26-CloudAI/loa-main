@@ -17,6 +17,8 @@ AI Arena — 환경변수 기반 설정
   DB_CONNECT_TIMEOUT       DB 연결 timeout 초 (기본: 10)
   DB_STATEMENT_TIMEOUT_MS  PostgreSQL statement timeout ms (기본: 30000)
   DB_LOCK_TIMEOUT_MS       PostgreSQL lock timeout ms (기본: 5000)
+  DB_INIT_TIMEOUT_SEC      startup DB init 1회 시도 wall-clock timeout 초 (기본: 35)
+  DB_RETRY_INTERVAL_SEC    startup DB init 실패 후 백그라운드 재시도 간격 초 (기본: 10)
 """
 
 from __future__ import annotations
@@ -67,6 +69,8 @@ DB_PASSWORD: str = os.environ.get("DB_PASSWORD", "")
 DB_CONNECT_TIMEOUT: int = int(os.environ.get("DB_CONNECT_TIMEOUT", "10"))
 DB_STATEMENT_TIMEOUT_MS: int = int(os.environ.get("DB_STATEMENT_TIMEOUT_MS", "30000"))
 DB_LOCK_TIMEOUT_MS: int = int(os.environ.get("DB_LOCK_TIMEOUT_MS", "5000"))
+DB_INIT_TIMEOUT_SEC: float = float(os.environ.get("DB_INIT_TIMEOUT_SEC", "35"))
+DB_RETRY_INTERVAL_SEC: float = float(os.environ.get("DB_RETRY_INTERVAL_SEC", "10"))
 
 # ── 환경 ────────────────────────────────────────
 ENV: str = os.environ.get("ENV", "production")  # "production" | "development"
