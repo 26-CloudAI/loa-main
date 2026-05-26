@@ -95,6 +95,7 @@ function AppRoutes() {
       <Route path="/games/:game_id/watch" element={<WatchPage />} />
       <Route path="/games/new/mock-stocks" element={<MockStocksNewPage />} />
       <Route path="/games/:game_id/mock-stocks/watch" element={<MockStocksWatchPage />} />
+      <Route path="/games/:game_id/battleroyale/watch" element={<GodotTestPage />} />
       <Route path="/games/:game_id/mock-stocks/result" element={<MockStocksResultPage />} />
       <Route path="/games/:game_id/replay" element={<BattleRoyaleReplayPage />} />
       <Route path="/games/:game_id/mock-stocks/replay" element={<MockStocksReplayPage />} />

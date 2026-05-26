@@ -254,7 +254,7 @@ export default function GameNewPage() {
     // ── mock mode ──────────────────────────────────────────────
     if (MOCK) {
       await new Promise((r) => setTimeout(r, 600))
-      navigate(`/godot-test?match=dev`)
+      navigate(`/games/dev/battleroyale/watch`)
       return
     }
     // ──────────────────────────────────────────────────────────
@@ -282,8 +282,7 @@ export default function GameNewPage() {
       }
 
       const game = await res.json()
-      // C4 에서 /games/{id}/watch 를 Godot iframe 으로 교체 예정. 현재는 동작하는 godot-test 로 이동.
-      navigate(`/godot-test?match=${encodeURIComponent(game.game_id)}`)
+      navigate(`/games/${encodeURIComponent(game.game_id)}/battleroyale/watch`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '게임 생성에 실패했습니다.')
       setSubmitting(false)
