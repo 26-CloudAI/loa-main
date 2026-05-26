@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GodotGame from '../game/GodotGame'
+import { BR2_WS_BASE } from '../br2'
 
 // Godot(iframe) → postMessage 로 받는 메시지 타입
 interface LbRow { name: string; score: number; alive: boolean }
@@ -102,7 +103,7 @@ export default function GodotTestPage() {
         className="relative rounded-xl overflow-hidden ring-1 ring-gray-800 shadow-2xl h-full shrink-0"
         style={{ aspectRatio: '1 / 1', maxWidth: '100%' }}
       >
-        <GodotGame matchId={matchId || undefined} />
+        <GodotGame matchId={matchId || undefined} wsBase={BR2_WS_BASE} />
       </div>
 
       {/* 패널 — 게임 바로 옆 (그룹이 함께 중앙 정렬) */}
