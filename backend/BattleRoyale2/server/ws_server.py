@@ -54,6 +54,30 @@ def _get_game_repo():
         _GAME_REPO = None
     return _GAME_REPO
 
+
+# 리플레이/라이브 프레임 저장소 (기존 battle_royale StateStore 재활용).
+# v0.1 은 InMemoryStateStore. 통합 서버에서 virtual 'src' → battle_royale/src 매핑.
+_STATE_STORE = None
+_STATE_STORE_TRIED = False
+
+# match_id → 권위 세션의 id(). 첫 WS 연결이 권위. (PROTOCOL.md §3.13)
+_AUTHORITATIVE: dict[str, int] = {}
+
+
+def _get_state_store():
+    global _STATE_STORE, _STATE_STORE_TRIED
+    if _STATE_STORE_TRIED:
+        return _STATE_STORE
+    _STATE_STORE_TRIED = True
+    try:
+        from src.arena.server.redis_manager import InMemoryStateStore  # type: ignore
+        _STATE_STORE = InMemoryStateStore()
+        logger.info("[BR2] InMemoryStateStore 사용 (프레임 기록 활성)")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[BR2] StateStore 로드 실패 — 프레임 기록 비활성 (%s)", e)
+        _STATE_STORE = None
+    return _STATE_STORE
+
 # bot_id → 봇 클래스 매핑. ws_server 는 이 매핑으로 인스턴스 생성.
 BOT_CLASS_BY_ID: dict[str, type[BattleRoyale2DBot]] = {
     "bot_a": HerbivoreBot,
@@ -114,6 +138,7 @@ class MatchSession:
         self.started = False
         self.ended = False
         self.match_info: dict[str, Any] = {}
+        self.authoritative = False   # 첫 연결만 True — FRAME 기록 권위
 
     async def send(self, payload: dict[str, Any]) -> None:
         await self.ws.send_text(json.dumps(payload, separators=(",", ":")))
@@ -282,6 +307,15 @@ def create_app() -> FastAPI:
             logger.exception("[BR2] create_game 실패")
             return {"game_id": game_id, "persisted": False}
 
+    @app.get("/api/games/{game_id}/replay")
+    async def get_replay(game_id: str):
+        """기록된 프레임(FRAME_INIT + FRAME 누적) 반환. 리플레이/라이브 따라보기 공용."""
+        store = _get_state_store()
+        if store is None:
+            return {"game_id": game_id, "total_frames": 0, "frames": []}
+        frames = await store.get_replay_frames(game_id)
+        return {"game_id": game_id, "total_frames": len(frames), "frames": frames}
+
     # 통합 서버에 /battleroyale2 로 mount 되므로 여기선 prefix 없이 /match/{id}.
     # 최종 경로: ws://<host>/battleroyale2/match/{match_id}
     # (단독 실행 시 BattleRoyale2.run_server 도 동일 앱을 그대로 띄움)
@@ -289,7 +323,11 @@ def create_app() -> FastAPI:
     async def match_ws(ws: WebSocket, match_id: str) -> None:
         await ws.accept()
         session = MatchSession(ws, match_id)
-        logger.info("[match=%s] WS connected", match_id)
+        # 첫 연결이 권위 (시뮬·기록 담당). 이후 연결은 관전 역할 → FRAME 무시.
+        if match_id not in _AUTHORITATIVE:
+            _AUTHORITATIVE[match_id] = id(session)
+            session.authoritative = True
+        logger.info("[match=%s] WS connected (authoritative=%s)", match_id, session.authoritative)
 
         try:
             while True:
@@ -358,6 +396,23 @@ def create_app() -> FastAPI:
                     logger.info("[match=%s tick=%d] EVENT %s actor=%s target=%s",
                                 match_id, tick, ev.get("event"), ev.get("actor_id"), ev.get("target_id"))
 
+                elif mtype == "FRAME_INIT":
+                    # 정적 월드 스냅샷. 권위 세션만 기록.
+                    if session.authoritative:
+                        store = _get_state_store()
+                        if store is not None:
+                            await store.append_replay_frame(
+                                match_id, {"kind": "init", "data": data if isinstance(data, dict) else {}})
+
+                elif mtype == "FRAME":
+                    # 매 틱 동적 상태 + 델타. 권위 세션만 기록.
+                    if session.authoritative:
+                        store = _get_state_store()
+                        if store is not None:
+                            await store.append_replay_frame(
+                                match_id, {"kind": "frame", "tick": tick,
+                                           "data": data if isinstance(data, dict) else {}})
+
                 elif mtype == "MATCH_END":
                     session.handle_match_end(data if isinstance(data, dict) else {})
                     logger.info("[match=%s] MATCH_END received", match_id)
@@ -371,6 +426,9 @@ def create_app() -> FastAPI:
         except Exception:  # noqa: BLE001
             logger.exception("[match=%s] unexpected error", match_id)
         finally:
+            # 권위 세션이 끊기면 레지스트리에서 해제 (다음 연결이 권위 승계 가능)
+            if session.authoritative and _AUTHORITATIVE.get(match_id) == id(session):
+                _AUTHORITATIVE.pop(match_id, None)
             try:
                 await ws.close()
             except Exception:
