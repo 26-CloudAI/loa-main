@@ -931,7 +931,7 @@ export default function TutorialPage() {
           </button>
 
           <button onClick={goNext} style={{
-            padding: '10px 28px', borderRadius: 12,
+            padding: '10px 18px 10px 18px', borderRadius: 12,
             fontSize: 14, fontWeight: 700, cursor: 'pointer', border: 'none',
             background: isLast
               ? `linear-gradient(135deg, ${cfg.accent}, ${cfg.accent}bb)`
