@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import GodotGame from '../game/GodotGame'
 import { BR2_WS_BASE } from '../br2'
 
@@ -29,6 +29,7 @@ const BOT_PALETTE = ['#f87171', '#4ade80', '#facc15', '#fb923c', '#60a5fa', '#c0
  */
 export default function GodotTestPage() {
   const navigate = useNavigate()
+  const { game_id } = useParams()
   const [time, setTime] = useState(180)
   const [phase, setPhase] = useState(1)
   const [alive, setAlive] = useState(0)
@@ -78,7 +79,8 @@ export default function GodotTestPage() {
   const mm = String(Math.floor(time / 60)).padStart(2, '0')
   const ss = String(time % 60).padStart(2, '0')
 
-  const matchId = new URLSearchParams(window.location.search).get('match') ?? ''
+  // 라우트 경로 /games/:game_id/battleroyale/watch 우선, 없으면 /godot-test?match= 폴백(개발용)
+  const matchId = game_id ?? new URLSearchParams(window.location.search).get('match') ?? ''
   const shortId = matchId ? matchId.slice(0, 8) : ''
 
   return (
