@@ -37,6 +37,15 @@ def test_make_user_bot_refuses_inprocess_in_production(monkeypatch):
         ws._make_user_bot("b", _CODE)
 
 
+def test_make_user_bot_refuses_inprocess_when_required_unset(monkeypatch):
+    # secure-by-default: production + BOT_RUNNER_REQUIRED 미설정 → fail-closed.
+    monkeypatch.delenv("BOT_RUNNER_URL", raising=False)
+    monkeypatch.delenv("BOT_RUNNER_REQUIRED", raising=False)
+    monkeypatch.setenv("ENV", "production")
+    with pytest.raises(RuntimeError):
+        ws._make_user_bot("b", _CODE)
+
+
 def test_make_user_bot_inprocess_allowed_in_dev(monkeypatch):
     monkeypatch.delenv("BOT_RUNNER_URL", raising=False)
     monkeypatch.setenv("ENV", "development")

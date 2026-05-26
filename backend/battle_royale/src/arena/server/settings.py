@@ -78,4 +78,8 @@ ENV: str = os.environ.get("ENV", "production")  # "production" | "development"
 # ── Bot Runner ──────────────────────────────────
 BOT_RUNNER_URL: str = os.environ.get("BOT_RUNNER_URL", "")
 BOT_RUNNER_TIMEOUT_SEC: float = float(os.environ.get("BOT_RUNNER_TIMEOUT_SEC", "0.5"))
-BOT_RUNNER_REQUIRED: bool = os.environ.get("BOT_RUNNER_REQUIRED", "false").lower() in ("true", "1", "yes")
+# Secure by default: in production, a missing BOT_RUNNER_URL fails closed (503)
+# rather than silently falling back to in-process exec of untrusted bot code.
+# A deployment that intentionally runs in-process (e.g. Cloud Run, which has no
+# bot-runner sidecar) must opt out explicitly with BOT_RUNNER_REQUIRED=false.
+BOT_RUNNER_REQUIRED: bool = os.environ.get("BOT_RUNNER_REQUIRED", "true").lower() in ("true", "1", "yes")

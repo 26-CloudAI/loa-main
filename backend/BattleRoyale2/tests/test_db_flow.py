@@ -43,6 +43,10 @@ def _fresh_repo() -> GameRepository:
 def repo(monkeypatch):
     r = _fresh_repo()
     monkeypatch.setattr(ws, "_get_game_repo", lambda: r)
+    # 로컬 테스트는 dev 컨텍스트 — _make_user_bot이 InProcessBot2를 쓰도록
+    # (secure-by-default fail-closed는 ENV=production에서만 적용).
+    monkeypatch.setenv("ENV", "development")
+    monkeypatch.delenv("BOT_RUNNER_URL", raising=False)
     # 인메모리 스펙 캐시 초기화 (테스트 격리)
     ws._GAME_CODE.clear()
     ws._GAME_BOT_COUNT.clear()

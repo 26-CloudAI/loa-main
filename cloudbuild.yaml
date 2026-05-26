@@ -86,9 +86,12 @@ steps:
       - 'FIREBASE_CREDENTIALS_JSON=firebase-service-account:latest,DB_PASSWORD=db-password:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest'
 
       # 환경변수 (CORS_ORIGINS 값에 콤마가 포함되므로 | 를 구분자로 사용)
+      # BOT_RUNNER_REQUIRED=false: Cloud Run에는 bot-runner 사이드카가 없어 봇을
+      # 의도적으로 in-process 실행한다. secure-by-default(fail-closed)에 대한 명시적
+      # opt-out (GKE는 대신 실제 BOT_RUNNER_URL을 설정해 격리 실행).
       - '--set-env-vars'
       - >-
-        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=10.114.0.3|DB_NAME=ai_arena|DB_USER=arena_user|ENV=production|BOSS_WEIGHTS_GCS_URI=${_BOSS_WEIGHTS_GCS_URI}
+        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=10.114.0.3|DB_NAME=ai_arena|DB_USER=arena_user|ENV=production|BOT_RUNNER_REQUIRED=false|BOSS_WEIGHTS_GCS_URI=${_BOSS_WEIGHTS_GCS_URI}
 
       - '--quiet'
 

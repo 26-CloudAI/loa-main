@@ -229,7 +229,9 @@ def _make_user_bot(bot_id: str, code: str) -> BattleRoyale2DBot:
             timeout = 0.5
         return RemoteBattleRoyale2BotAdapter(bot_id, code, runner_url, timeout)
     env = os.environ.get("ENV", "production")
-    required = os.environ.get("BOT_RUNNER_REQUIRED", "false").lower() in ("true", "1", "yes")
+    # Secure by default (mirrors settings.BOT_RUNNER_REQUIRED): in production a
+    # missing BOT_RUNNER_URL fails closed unless explicitly opted out.
+    required = os.environ.get("BOT_RUNNER_REQUIRED", "true").lower() in ("true", "1", "yes")
     if env == "production" and required:
         raise RuntimeError("Bot Runner is required but BOT_RUNNER_URL is not configured")
     # 개발/로컬 전용 폴백 (격리 아님). 프로덕션에선 위 가드로 도달 불가.
@@ -611,13 +613,15 @@ def create_app() -> FastAPI:
                 await ws.close(code=4401)
                 logger.info("[match=%s] WS 인증 실패 — 거부", match_id)
                 return
-            # owner 일치 검증: 토큰 사용자가 게임 owner와 다르면 거부.
+            # owner 일치 검증: owner 해석 실패(None)도 불일치와 동일하게 거부.
+            # 토큰 검증은 통과해도 user-service/DB 장애로 caller_id가 None이면
+            # 소유권을 확인할 수 없으므로 fail-closed 한다.
             if game.owner_user_id is not None:
                 caller_id = _resolve_owner_id(token)
-                if caller_id is not None and caller_id != game.owner_user_id:
+                if caller_id != game.owner_user_id:
                     await ws.close(code=4403)
                     logger.info(
-                        "[match=%s] WS owner 불일치 — 거부 (caller=%s owner=%s)",
+                        "[match=%s] WS owner 인증 실패 — 거부 (caller=%s owner=%s)",
                         match_id, caller_id, game.owner_user_id,
                     )
                     return

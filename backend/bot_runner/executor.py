@@ -50,6 +50,21 @@ _ALLOWED_BUILTINS = frozenset([
 ])
 
 
+# Modules user bot code may import. All pure-computation stdlib (no file/
+# network/process I/O). Classic battleroyale/stocks templates and BR2 bots
+# alike start with `import random`/`import math`. policy.check() blocks
+# dangerous modules (os/sys/...) at the AST layer before exec; this allowlist
+# is the matching runtime gate, and the only modules __import__ will load.
+_ALLOWED_MODULES = frozenset({"math", "random", "json", "collections", "heapq", "itertools"})
+
+
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
+    root = name.split(".")[0]
+    if root not in _ALLOWED_MODULES:
+        raise ImportError("import not allowed: %s" % name)
+    return __import__(name, globals, locals, fromlist, level)
+
+
 def _build_safe_builtins() -> dict:
     src = vars(_builtins_module)
     safe = {name: src[name] for name in _ALLOWED_BUILTINS if name in src}
@@ -57,6 +72,10 @@ def _build_safe_builtins() -> dict:
     for name, val in src.items():
         if isinstance(val, type) and issubclass(val, BaseException):
             safe[name] = val
+    # Whitelisted __import__ so `import math`/`import random` statements resolve.
+    # Direct __import__("os") calls are still rejected by policy.check() as a
+    # forbidden call, and _safe_import bounds loads to _ALLOWED_MODULES.
+    safe["__import__"] = _safe_import
     return safe
 
 
@@ -67,27 +86,13 @@ SAFE_BUILTINS: dict = _build_safe_builtins()
 # ── battleroyale2 (BR2) mode ────────────────────────────────────────────────
 # BR2 bots are `class Bot(BattleRoyale2DBot)` with get_action()/choose_spawn(),
 # returning a continuous-vector action dict — unlike the classic battleroyale
-# (string) / stocks (dict) contracts. BR2 bots also use math/random, so this
-# mode exposes a whitelisted __import__ on top of SAFE_BUILTINS. policy.check()
-# still blocks dangerous imports (os/sys/...) at the AST layer before exec.
+# (string) / stocks (dict) contracts. They share SAFE_BUILTINS (incl. the
+# whitelisted __import__); only the injected base class differs.
 BR2_ZERO_ACTION = {
     "move_dir": [0.0, 0.0], "aim_dir": [1.0, 0.0],
     "attack": False, "guard": False, "dash": False,
     "pickup": False, "use_potion": False,
 }
-
-_BR2_ALLOWED_MODULES = frozenset({"math", "random", "json", "collections", "heapq", "itertools"})
-
-
-def _br2_safe_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
-    root = name.split(".")[0]
-    if root not in _BR2_ALLOWED_MODULES:
-        raise ImportError("import not allowed: %s" % name)
-    return __import__(name, globals, locals, fromlist, level)
-
-
-_BR2_BUILTINS: dict = dict(SAFE_BUILTINS)
-_BR2_BUILTINS["__import__"] = _br2_safe_import
 
 
 class _BR2BotBase:
@@ -181,7 +186,7 @@ def _child_entry(
             # BR2: user defines `class Bot(BattleRoyale2DBot)`. Instantiate per
             # call (stateless across ticks — the runner spawns a fresh process
             # every request), then dispatch get_action / choose_spawn by phase.
-            ns = {"__builtins__": _BR2_BUILTINS, "__name__": "__bot__",
+            ns = {"__builtins__": SAFE_BUILTINS, "__name__": "__bot__",
                   "BattleRoyale2DBot": _BR2BotBase}
             exec(compiled, ns)  # noqa: S102
             bot_cls = ns.get("Bot")

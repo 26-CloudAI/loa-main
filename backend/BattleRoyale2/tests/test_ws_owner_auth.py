@@ -44,9 +44,10 @@ def auth_setup(monkeypatch):
     ws._GAME_BOT_COUNT.clear()
     ws._AUTHORITATIVE.clear()
 
-    # token "owner" → user_id 1 / "other" → user_id 2 / 그 외 → None
+    # token "owner" → user_id 1 / "other" → user_id 2
+    # "ghost" → 토큰은 유효(decode O)하나 owner 해석 실패(resolve None)
     def _fake_decode(tok):
-        if tok in ("owner", "other"):
+        if tok in ("owner", "other", "ghost"):
             return {"uid": tok}
         return None
 
@@ -84,6 +85,17 @@ def test_ws_wrong_owner_rejected(auth_setup):
     client, gid = auth_setup
     with pytest.raises((WebSocketDisconnect, Exception)) as exc_info:
         with client.websocket_connect(f"/match/{gid}?token=other"):
+            pass
+    ex = exc_info.value
+    if isinstance(ex, WebSocketDisconnect):
+        assert ex.code == 4403
+
+
+def test_ws_owner_resolution_failure_rejected(auth_setup):
+    """토큰은 유효하나 owner 해석이 None이면(user-service/DB 장애) fail-closed."""
+    client, gid = auth_setup
+    with pytest.raises((WebSocketDisconnect, Exception)) as exc_info:
+        with client.websocket_connect(f"/match/{gid}?token=ghost"):
             pass
     ex = exc_info.value
     if isinstance(ex, WebSocketDisconnect):

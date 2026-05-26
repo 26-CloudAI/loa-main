@@ -414,7 +414,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                     runner_url=_settings.BOT_RUNNER_URL,
                     timeout=_settings.BOT_RUNNER_TIMEOUT_SEC,
                 )
-            elif _settings.BOT_RUNNER_REQUIRED:
+            elif _settings.ENV == "production" and _settings.BOT_RUNNER_REQUIRED:
                 raise HTTPException(503, "Bot Runner is required but BOT_RUNNER_URL is not configured")
             else:
                 bot = InProcessBot(b.bot_id, b.code)

@@ -130,3 +130,43 @@ def test_try_except_and_common_builtins_still_work():
     data = _run("battleroyale", "sha256:builtins_bot", code, BR_STATE)
     assert data["ok"] is True
     assert data["action"] == "MINE"
+
+
+# --- classic-mode imports: templates start with `import random`/`import math` -
+
+def test_battleroyale_import_random_works():
+    code = (
+        "import random\n"
+        "def action(state):\n"
+        "    random.seed(0)\n"
+        "    return 'MINE'\n"
+    )
+    data = _run("battleroyale", "sha256:imp_random", code, BR_STATE)
+    assert data["ok"] is True
+    assert data["action"] == "MINE"
+
+
+def test_stocks_import_math_works():
+    code = (
+        "import math\n"
+        "def action(state):\n"
+        "    return {'action': 'BUY', 'symbol': 'APEX', 'quantity': int(math.floor(5.9))}\n"
+    )
+    data = _run("stocks", "sha256:imp_math", code, ST_STATE)
+    assert data["ok"] is True
+    assert data["action"] == {"action": "BUY", "symbol": "APEX", "quantity": 5}
+
+
+def test_battleroyale_forbidden_import_blocked():
+    code = "import os\ndef action(state): return 'STAY'\n"
+    data = _run("battleroyale", "sha256:imp_os", code, BR_STATE)
+    assert data["ok"] is False
+
+
+def test_battleroyale_non_allowlisted_import_blocked():
+    # base64 is not in policy's forbidden list, so it passes the AST check —
+    # the runtime _safe_import allowlist is what blocks it.
+    code = "import base64\ndef action(state): return 'STAY'\n"
+    data = _run("battleroyale", "sha256:imp_b64", code, BR_STATE)
+    assert data["ok"] is False
+    assert data["action"] == "STAY"
