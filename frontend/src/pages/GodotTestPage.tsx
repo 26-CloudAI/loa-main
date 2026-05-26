@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import GodotGame from '../game/GodotGame'
 import { BR2_WS_BASE } from '../br2'
+import { useAuth } from '../context/AuthContext'
 
 // Godot(iframe) → postMessage 로 받는 메시지 타입
 interface LbRow { name: string; score: number; alive: boolean }
@@ -30,6 +31,7 @@ const BOT_PALETTE = ['#f87171', '#4ade80', '#facc15', '#fb923c', '#60a5fa', '#c0
 export default function GodotTestPage() {
   const navigate = useNavigate()
   const { game_id } = useParams()
+  const { token } = useAuth()
   const [time, setTime] = useState(180)
   const [phase, setPhase] = useState(1)
   const [alive, setAlive] = useState(0)
@@ -105,7 +107,7 @@ export default function GodotTestPage() {
         className="relative rounded-xl overflow-hidden ring-1 ring-gray-800 shadow-2xl h-full shrink-0"
         style={{ aspectRatio: '1 / 1', maxWidth: '100%' }}
       >
-        <GodotGame matchId={matchId || undefined} wsBase={BR2_WS_BASE} />
+        <GodotGame matchId={matchId || undefined} wsBase={BR2_WS_BASE} token={token} />
       </div>
 
       {/* 패널 — 게임 바로 옆 (그룹이 함께 중앙 정렬) */}

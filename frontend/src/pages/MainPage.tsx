@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAMES } from '../dev/mock'
+import { BR2_API_BASE } from '../br2'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 const STOCKS_API_BASE = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
@@ -61,12 +62,14 @@ function timeAgo(dateStr: string | null | undefined): string {
 
 const MODE_LABEL: Record<string, string> = {
   'battle-royale': '배틀로얄',
+  'battleroyale2': '배틀로얄',
   'boss': '보스전',
   'mock-stocks': '모의주식',
 }
 
 const MODE_PILL: Record<string, { bg: string; color: string; border: string }> = {
   'battle-royale': { bg: 'rgba(232,51,74,.15)',  color: '#F05E70', border: 'rgba(232,51,74,.3)' },
+  'battleroyale2': { bg: 'rgba(232,51,74,.15)',  color: '#F05E70', border: 'rgba(232,51,74,.3)' },
   'boss':          { bg: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: 'rgba(155,89,245,.3)' },
   'mock-stocks':   { bg: 'rgba(245,166,36,.15)', color: '#FFC76A', border: 'rgba(245,166,36,.3)' },
 }
@@ -261,11 +264,13 @@ export default function MainPage() {
 
     Promise.allSettled([
       fetchJson<GameInfo[]>(`${API_BASE}/api/games`, { headers }),
+      fetchJson<GameInfo[]>(`${BR2_API_BASE}/api/games`, { headers }),
       fetchJson<GameInfo[]>(`${STOCKS_API_BASE}/api/games`, { headers }),
       fetchJson<GameInfo[]>(`${STOCKS_API_BASE}/api/games/history`, { headers }),
-    ]).then(([brRes, stocksRes, histRes]) => {
+    ]).then(([brRes, br2Res, stocksRes, histRes]) => {
       const merged: GameInfo[] = []
       if (brRes.status === 'fulfilled' && Array.isArray(brRes.value)) merged.push(...brRes.value)
+      if (br2Res.status === 'fulfilled' && Array.isArray(br2Res.value)) merged.push(...br2Res.value)
       if (stocksRes.status === 'fulfilled' && Array.isArray(stocksRes.value)) merged.push(...stocksRes.value)
       if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
         const seen = new Set(merged.map((g) => g.game_id))
@@ -439,9 +444,11 @@ export default function MainPage() {
                   function handleClick() {
                     if (game.status === 'finished') {
                       if (game.mode === 'mock-stocks') navigate(`/games/${game.game_id}/mock-stocks/result`)
+                      else if (game.mode === 'battleroyale2') navigate(`/games/${game.game_id}/battleroyale/result`)
                       else navigate(`/games/${game.game_id}/watch`)
                     } else {
                       if (game.mode === 'mock-stocks') navigate(`/games/${game.game_id}/mock-stocks/watch`)
+                      else if (game.mode === 'battleroyale2') navigate(`/games/${game.game_id}/battleroyale/watch`)
                       else navigate(`/games/${game.game_id}/watch`)
                     }
                   }
