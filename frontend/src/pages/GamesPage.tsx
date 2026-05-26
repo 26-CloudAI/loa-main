@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { MOCK, MOCK_GAMES } from '../dev/mock'
+import { BR2_API_BASE } from '../br2'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 const STOCKS_API_BASE = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
@@ -32,6 +33,7 @@ interface GameInfo {
 
 const MODE_BADGE: Record<string, { label: string; style: { background: string; color: string; border: string } }> = {
   'battle-royale': { label: '배틀로얄', style: { background: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: '1px solid rgba(155,89,245,.4)' } },
+  'battleroyale2': { label: '배틀로얄', style: { background: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: '1px solid rgba(155,89,245,.4)' } },
   'boss':          { label: '보스전',   style: { background: 'rgba(232,51,74,.15)',  color: '#F05E70', border: '1px solid rgba(232,51,74,.4)'  } },
   'mock-stocks':   { label: '모의주식', style: { background: 'rgba(245,166,36,.15)', color: '#FFC76A', border: '1px solid rgba(245,166,36,.4)' } },
 }
@@ -84,8 +86,11 @@ export default function GamesPage() {
       return
     }
     try {
-      const [brResult, stocksActive, stocksHistory] = await Promise.allSettled([
+      const [brResult, br2Result, stocksActive, stocksHistory] = await Promise.allSettled([
         fetchJson(`${API_BASE}/api/games`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetchJson(`${BR2_API_BASE}/api/games`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetchJson(`${STOCKS_API_BASE}/api/games`, {
@@ -99,6 +104,9 @@ export default function GamesPage() {
       const merged: GameInfo[] = []
       if (brResult.status === 'fulfilled' && Array.isArray(brResult.value)) {
         merged.push(...(brResult.value as GameInfo[]))
+      }
+      if (br2Result.status === 'fulfilled' && Array.isArray(br2Result.value)) {
+        merged.push(...(br2Result.value as GameInfo[]))
       }
       if (stocksActive.status === 'fulfilled' && Array.isArray(stocksActive.value)) {
         merged.push(...(stocksActive.value as GameInfo[]))
@@ -251,11 +259,14 @@ function GameCard({ game }: { game: GameInfo }) {
   const shortId = game.game_id.slice(0, 8)
   const modeBadge = game.mode ? MODE_BADGE[game.mode] : null
   const isStocks = game.mode === 'mock-stocks'
+  const isBR2 = game.mode === 'battleroyale2'
   const isFinished = game.status === 'finished'
 
   function handleWatch() {
     if (isStocks) {
       navigate(`/games/${game.game_id}/mock-stocks/watch`)
+    } else if (isBR2) {
+      navigate(`/games/${game.game_id}/battleroyale/watch`)
     } else {
       navigate(`/games/${game.game_id}/watch`)
     }
@@ -264,6 +275,8 @@ function GameCard({ game }: { game: GameInfo }) {
   function handleResult() {
     if (isStocks) {
       navigate(`/games/${game.game_id}/mock-stocks/result`)
+    } else if (isBR2) {
+      navigate(`/games/${game.game_id}/battleroyale/result`)
     } else {
       navigate(`/games/${game.game_id}/watch`)
     }
@@ -272,6 +285,9 @@ function GameCard({ game }: { game: GameInfo }) {
   function handleReplay() {
     if (isStocks) {
       navigate(`/games/${game.game_id}/mock-stocks/replay`)
+    } else if (isBR2) {
+      // 리플레이 영속화는 다음 작업 — 일단 결과 페이지로
+      navigate(`/games/${game.game_id}/battleroyale/result`)
     } else {
       navigate(`/games/${game.game_id}/replay`)
     }

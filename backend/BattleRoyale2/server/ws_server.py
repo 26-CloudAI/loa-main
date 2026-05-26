@@ -23,7 +23,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot
@@ -96,6 +96,98 @@ def _get_state_store():
         _STATE_STORE = None
     return _STATE_STORE
 
+
+# ---------- 인증 (토큰 → users.id). battle_royale 인프라 재사용 ----------
+_USER_SVC = None
+_USER_SVC_TRIED = False
+
+
+def _get_user_svc():
+    """FirebaseUserService 를 lazy 초기화. GameRepository 와 같은 conn 사용. 실패 시 None."""
+    global _USER_SVC, _USER_SVC_TRIED
+    if _USER_SVC_TRIED:
+        return _USER_SVC
+    _USER_SVC_TRIED = True
+    try:
+        from src.arena.db import init_db  # type: ignore
+        from src.arena.db.user_repo import UserRepository  # type: ignore
+        from src.arena.auth.auth_service import FirebaseUserService  # type: ignore
+        _USER_SVC = FirebaseUserService(UserRepository(init_db()))
+        logger.info("[BR2] FirebaseUserService 연결됨 (인증 활성)")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[BR2] 인증 서비스 로드 실패 (%s)", e)
+        _USER_SVC = None
+    return _USER_SVC
+
+
+def _decode_token(token: str) -> dict | None:
+    """Bearer 토큰 디코드. battle_royale verify_firebase_token_value 재사용. 실패 시 None."""
+    try:
+        from src.arena.auth.firebase_handler import verify_firebase_token_value  # type: ignore
+        return verify_firebase_token_value(token)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _bearer(req_or_headers) -> str | None:
+    auth = ""
+    try:
+        auth = req_or_headers.headers.get("Authorization", "") if hasattr(req_or_headers, "headers") else ""
+    except Exception:  # noqa: BLE001
+        auth = ""
+    if auth.startswith("Bearer "):
+        return auth[len("Bearer "):]
+    return None
+
+
+def _resolve_owner_id(token: str | None) -> int | None:
+    """토큰 → users.id(int). 토큰 없거나 검증 실패 시 None."""
+    if not token:
+        return None
+    decoded = _decode_token(token)
+    if decoded is None:
+        return None
+    svc = _get_user_svc()
+    if svc is None:
+        return None
+    try:
+        user = svc.get_or_create_user(decoded)
+        return user.id
+    except Exception:  # noqa: BLE001
+        logger.exception("[BR2] owner 해석 실패")
+        return None
+
+
+# ---------- 게임 스펙(유저 코드 + 봇 수) 영속: games.config_json ----------
+def _spec_config_json(user_bots: list[dict], bot_count: int) -> str:
+    return json.dumps({"user_bots": user_bots, "bot_count": bot_count}, separators=(",", ":"))
+
+
+def _load_game_spec(match_id: str) -> tuple[list[dict], int]:
+    """이 게임의 (user_bots, bot_count). 인메모리 캐시 우선, 없으면 DB config_json 에서 로드.
+    다중 인스턴스에서 POST 와 WS 가 다른 프로세스여도 DB 로 복원 가능."""
+    user_bots = _GAME_CODE.get(match_id)
+    bot_count = _GAME_BOT_COUNT.get(match_id)
+    if user_bots is not None and bot_count is not None:
+        return user_bots, bot_count
+    # DB 폴백 — games.config_json 직접 조회 (GameRecord dataclass 엔 config_json 미포함).
+    repo = _get_game_repo()
+    if repo is not None:
+        try:
+            cur = repo._execute("SELECT config_json FROM games WHERE id = ?", (match_id,))
+            row = cur.fetchone()
+            cfg = row["config_json"] if row else None
+            if cfg:
+                parsed = json.loads(cfg)
+                ub = parsed.get("user_bots") or []
+                bc = int(parsed.get("bot_count") or TARGET_BOT_COUNT)
+                _GAME_CODE[match_id] = ub
+                _GAME_BOT_COUNT[match_id] = bc
+                return ub, bc
+        except Exception:  # noqa: BLE001
+            logger.exception("[BR2] config_json 로드 실패: %s", match_id)
+    return (user_bots or []), (bot_count or TARGET_BOT_COUNT)
+
 # bot_id → 봇 클래스 매핑. ws_server 는 이 매핑으로 인스턴스 생성.
 BOT_CLASS_BY_ID: dict[str, type[BattleRoyale2DBot]] = {
     "bot_a": HerbivoreBot,
@@ -157,6 +249,7 @@ class MatchSession:
         self.ended = False
         self.match_info: dict[str, Any] = {}
         self.authoritative = False   # 첫 연결만 True — FRAME 기록 권위
+        self.user_bot_ids: set = set()   # 유저 제출 봇 id (participant is_ai_filler 구분용)
 
     async def send(self, payload: dict[str, Any]) -> None:
         await self.ws.send_text(json.dumps(payload, separators=(",", ":")))
@@ -179,22 +272,23 @@ class MatchSession:
     def _assemble_bots(self, seed: int) -> tuple[dict[str, BattleRoyale2DBot], list[tuple[str, str]]]:
         """이 매치(game_id) 의 유저 제출 봇 + AI 채움 봇 구성.
         유저 코드가 없으면 기본 AI 3종(DEFAULT_BOT_FACTORY)으로 폴백.
-        AI 채움은 초식/미친개/존버 중 랜덤 선택, 총 봇 수는 _GAME_BOT_COUNT 기준."""
-        user_bots = _GAME_CODE.get(self.match_id, [])
+        AI 채움은 초식/미친개/존버 중 랜덤 선택, 총 봇 수는 config_json/캐시 기준."""
+        user_bots, bot_count = _load_game_spec(self.match_id)
         if not user_bots:
             bots = _build_bots(list(DEFAULT_BOT_FACTORY), seed=seed)
             return bots, list(DEFAULT_BOT_FACTORY)
 
         bots: dict[str, BattleRoyale2DBot] = {}
         spec: list[tuple[str, str]] = []
+        self.user_bot_ids = set()
         for entry in user_bots:
             bid = entry["bot_id"]
             name = entry.get("name", bid)
             bots[bid] = InProcessBot2(bid, entry.get("code", ""))
             spec.append((bid, name))
+            self.user_bot_ids.add(bid)
 
-        target = _GAME_BOT_COUNT.get(self.match_id, TARGET_BOT_COUNT)
-        target = max(len(spec), min(8, target))   # 유저봇 수 이상, 최대 8
+        target = max(len(spec), min(8, bot_count))   # 유저봇 수 이상, 최대 8
         rng = random.Random(seed)
         type_counts: dict[str, int] = {}
         fill_n = max(0, target - len(spec))
@@ -214,30 +308,30 @@ class MatchSession:
 
     # ---------- DB 기록 (games / game_participants 재활용) ----------
     def _db_on_start(self) -> None:
-        """매치 시작 시: games 행 생성(없으면) + participants 추가 + running 표시."""
+        """매치 시작 시: 이미 생성된 game row 재사용 + participants 등록 + running 표시.
+        owner 없는 game 을 새로 만들지 않는다(생성은 인증된 POST /api/games 에서만).
+        참가자가 이미 등록돼 있으면(재접속/중복 MATCH_START) 다시 넣지 않는다."""
         repo = _get_game_repo()
         if repo is None:
             return
         try:
             game = repo.get_game(self.match_id)
             if game is None:
-                repo.create_game(
-                    game_id=self.match_id,
-                    owner_user_id=None,
-                    total_bots=len(self.bot_spec),
-                    seed=None,
-                    mode=GAME_MODE,
-                    name=None,
-                )
-            # 참가자 등록 (AI 봇)
-            for _bid, name in self.bot_spec:
-                repo.add_participant(self.match_id, bot_name=name, is_ai_filler=True)
+                # 인증 경로로 생성되지 않은 매치 (예: /godot-test?match=dev). 기록 생략.
+                logger.info("[match=%s] DB game 없음 — 기록 생략(비인증 데모)", self.match_id)
+                return
+            existing = repo.get_participants(self.match_id)
+            if not existing:
+                for bid, name in self.bot_spec:
+                    repo.add_participant(
+                        self.match_id, bot_name=name,
+                        is_ai_filler=(bid not in self.user_bot_ids))
             repo.update_game_started(self.match_id)
         except Exception:  # noqa: BLE001
             logger.exception("[match=%s] _db_on_start 실패", self.match_id)
 
     def _db_on_end(self, data: dict[str, Any]) -> None:
-        """매치 종료 시: games finished + 참가자 결과 갱신."""
+        """매치 종료 시: games finished + 참가자 결과 갱신. 이미 finished 면 스킵(중복 방지)."""
         repo = _get_game_repo()
         if repo is None:
             return
@@ -245,6 +339,12 @@ class MatchSession:
         duration = float(data.get("duration", 0.0)) if isinstance(data, dict) else 0.0
         reason = str(data.get("reason", "max_ticks")) if isinstance(data, dict) else "max_ticks"
         try:
+            game = repo.get_game(self.match_id)
+            if game is None:
+                return
+            if getattr(game, "status", None) == "finished":
+                logger.info("[match=%s] 이미 finished — MATCH_END 중복 무시", self.match_id)
+                return
             repo.update_game_finished(
                 game_id=self.match_id,
                 final_tick=int(duration * 10.0),
@@ -341,59 +441,124 @@ def create_app() -> FastAPI:
     def health() -> dict[str, str]:  # noqa: D401 — 짧은 헬스체크 응답
         return {"status": "ok", "protocol": PROTOCOL_VERSION}
 
-    @app.post("/api/games")
-    def create_game(body: dict[str, Any] = Body(default={})):  # noqa: B008
-        """새 BR2 게임 레코드 생성 → game_id 발급.
-        프론트: POST /battleroyale2/api/games → game_id → /games/{id}/watch (Godot match={id}).
-        실제 매치 진행/참가자 등록은 WS MATCH_START 시점에 보강된다.
-        """
-        game_id = uuid.uuid4().hex
+    @app.post("/api/games", status_code=201)
+    def create_game(request: Request, body: dict[str, Any] = Body(default={})):  # noqa: B008
+        """새 BR2 게임 생성 → game_id 발급. 인증 필수, owner 는 토큰으로 결정.
+        프론트: POST /battleroyale2/api/games → game_id → /games/{id}/battleroyale/watch.
+        유저 코드/봇수는 games.config_json 에 영속(다중 인스턴스 대응).
+        DB 불가 시 503 (fail-open 하지 않음)."""
+        # 1) 인증 — 토큰으로 owner 결정 (body.owner_user_id 는 무시)
+        owner_id = _resolve_owner_id(_bearer(request))
+        if owner_id is None:
+            raise HTTPException(401, "인증이 필요합니다.")
 
-        # 유저 봇 코드 저장 (인메모리). body.bots: [{bot_id, code, name?, is_public?}]
+        # 2) DB 필수 — 없으면 503 (게임 생성을 성공처럼 통과시키지 않음)
+        repo = _get_game_repo()
+        if repo is None:
+            raise HTTPException(503, "BattleRoyale2 DB를 사용할 수 없습니다.")
+
+        # 3) 유저 봇 코드 파싱. body.bots: [{bot_id, code, name?}]
         raw_bots = body.get("bots") if isinstance(body, dict) else None
         user_bots: list[dict] = []
         if isinstance(raw_bots, list):
             for i, b in enumerate(raw_bots):
                 if not isinstance(b, dict) or not b.get("code"):
                     continue
+                code = str(b["code"])
+                if len(code.encode("utf-8")) > 50 * 1024:
+                    raise HTTPException(400, "코드가 너무 큽니다 (최대 50KB).")
                 bid = str(b.get("bot_id") or ("user_%d" % i))
-                user_bots.append({
-                    "bot_id": bid,
-                    "name": str(b.get("name") or bid),
-                    "code": str(b["code"]),
-                })
-        if user_bots:
-            _GAME_CODE[game_id] = user_bots
+                user_bots.append({"bot_id": bid, "name": str(b.get("name") or bid), "code": code})
 
-        # 봇 수 (내 봇 + AI 채움). 2~8 클램프. 유저봇 수보다는 커야 함.
+        # 4) 봇 수 (2~8, 유저봇 수 이상)
         req_count = body.get("bot_count") if isinstance(body, dict) else None
         try:
             bot_count = int(req_count) if req_count is not None else TARGET_BOT_COUNT
         except (TypeError, ValueError):
             bot_count = TARGET_BOT_COUNT
         bot_count = max(max(2, len(user_bots)), min(8, bot_count))
-        if user_bots:
-            _GAME_BOT_COUNT[game_id] = bot_count
 
-        total_bots = bot_count if user_bots else len(DEFAULT_BOT_FACTORY)
-
-        repo = _get_game_repo()
-        if repo is None:
-            # DB 비활성 환경에서도 game_id 는 발급 (저장만 생략)
-            return {"game_id": game_id, "persisted": False}
+        # 5) 게임 생성 (owner=토큰 사용자, config_json 에 스펙 영속)
+        game_id = uuid.uuid4().hex
         try:
             repo.create_game(
                 game_id=game_id,
-                owner_user_id=body.get("owner_user_id"),
-                total_bots=total_bots,
+                owner_user_id=owner_id,
+                total_bots=bot_count if user_bots else len(DEFAULT_BOT_FACTORY),
                 seed=body.get("seed"),
+                config_json=_spec_config_json(user_bots, bot_count),
                 mode=GAME_MODE,
-                name=body.get("name"),
+                name=(body.get("name") or None),
             )
-            return {"game_id": game_id, "persisted": True}
         except Exception:  # noqa: BLE001
             logger.exception("[BR2] create_game 실패")
-            return {"game_id": game_id, "persisted": False}
+            raise HTTPException(500, "게임 생성에 실패했습니다.")
+
+        # 인메모리 캐시(동일 인스턴스 빠른 경로). 다른 인스턴스는 config_json 으로 복원.
+        if user_bots:
+            _GAME_CODE[game_id] = user_bots
+            _GAME_BOT_COUNT[game_id] = bot_count
+        return {"game_id": game_id, "persisted": True}
+
+    @app.get("/api/games")
+    def list_games(request: Request, limit: int = 50):
+        """내 BR2 게임 목록 (owner scoped). 토큰 필수."""
+        owner_id = _resolve_owner_id(_bearer(request))
+        if owner_id is None:
+            raise HTTPException(401, "인증이 필요합니다.")
+        repo = _get_game_repo()
+        if repo is None:
+            raise HTTPException(503, "BattleRoyale2 DB를 사용할 수 없습니다.")
+        out = []
+        for g in repo.list_games_by_owner(owner_id, limit=limit):
+            if getattr(g, "mode", None) != GAME_MODE:
+                continue
+            out.append({
+                "game_id": g.id,
+                "name": g.name,
+                "mode": GAME_MODE,
+                "status": g.status,
+                "total_bots": g.total_bots,
+                "created_at": getattr(g, "created_at", None),
+                "started_at": g.started_at,
+                "finished_at": g.finished_at,
+                "end_reason": g.end_reason,
+            })
+        return out
+
+    @app.get("/api/games/{game_id}/result")
+    def get_result(game_id: str, request: Request):
+        """매치 결과 상세 (순위/점수/킬/생존). 토큰 필수. 종료 전이면 status 만 반환."""
+        owner_id = _resolve_owner_id(_bearer(request))
+        if owner_id is None:
+            raise HTTPException(401, "인증이 필요합니다.")
+        repo = _get_game_repo()
+        if repo is None:
+            raise HTTPException(503, "BattleRoyale2 DB를 사용할 수 없습니다.")
+        g = repo.get_game(game_id)
+        if g is None or getattr(g, "mode", None) != GAME_MODE:
+            raise HTTPException(404, "게임을 찾을 수 없습니다.")
+        rankings = []
+        for p in repo.get_participants(game_id):
+            rankings.append({
+                "rank": p.final_rank,
+                "bot_name": p.bot_name,
+                "is_ai_filler": p.is_ai_filler,
+                "score": p.final_score,
+                "kills": p.kills,
+                "minerals_mined": p.minerals_mined,
+                "survival_ticks": p.survival_ticks,
+            })
+        rankings.sort(key=lambda r: (r["rank"] is None, r["rank"] if r["rank"] is not None else 0))
+        return {
+            "game_id": g.id,
+            "name": g.name,
+            "status": g.status,
+            "end_reason": g.end_reason,
+            "finished_at": g.finished_at,
+            "final_tick": g.final_tick,
+            "rankings": rankings,
+        }
 
     @app.get("/api/games/{game_id}/replay")
     async def get_replay(game_id: str):
@@ -409,6 +574,24 @@ def create_app() -> FastAPI:
     # (단독 실행 시 BattleRoyale2.run_server 도 동일 앱을 그대로 띄움)
     @app.websocket("/match/{match_id}")
     async def match_ws(ws: WebSocket, match_id: str) -> None:
+        # 인증: 실제 DB 게임(인증된 POST 로 생성)이면 ?token= 검증 필수.
+        # DB game 이 없는 데모 매치(예: dev)는 토큰 없이 허용(로컬 개발).
+        repo = _get_game_repo()
+        game = None
+        if repo is not None:
+            try:
+                game = repo.get_game(match_id)
+            except Exception:  # noqa: BLE001
+                game = None
+        if game is not None:
+            token = ws.query_params.get("token")
+            valid = bool(token) and _decode_token(token) is not None
+            if not valid:
+                # 토큰 없음/무효 → 거부 (누구나 관전 가능하나 인증은 필요)
+                await ws.close(code=4401)
+                logger.info("[match=%s] WS 인증 실패 — 거부", match_id)
+                return
+
         await ws.accept()
         session = MatchSession(ws, match_id)
         # 첫 연결이 권위 (시뮬·기록 담당). 이후 연결은 관전 역할 → FRAME 무시.
