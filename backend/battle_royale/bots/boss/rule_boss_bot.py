@@ -29,20 +29,21 @@ _LASTBIT       = _ATTACK_DAMAGE  # 상대 에너지 이 이하면 한 방 처치
 
 # ── 에너지 임계값 ──────────────────────────────────────────────────────────────
 _EASY_ATTACK   = 60               # 하: 인접 적 공격 최소 에너지
-_EASY_HUNT     = 100              # 하: 적 추적 시작 에너지
-_EASY_EMERGENCY = 50              # 하: 긴급 채굴 에너지
+_EASY_HUNT     = 120              # 하: 적 추적 시작 에너지
+_EASY_EMERGENCY = 100             # 하: 긴급 채굴 에너지 (50→100: 광물 부족 전에 먼저 채굴)
 _EASY_TIMEOUT  = 5                # 하: 적 시야 이탈 후 추적 포기 틱
+_EASY_WANDER_INTERVAL = 30        # 하: 광물 없을 때 탐색 목표 갱신 주기
 
 _MED_ATTACK    = 40               # 중: 인접 적 공격 최소 에너지
 _MED_HUNT      = 70               # 중: 적 추적 시작 에너지
 _MED_EMERGENCY = 40               # 중: 긴급 채굴 에너지
 _MED_TIMEOUT   = 10               # 중: 적 시야 이탈 후 추적 포기 틱
 
-# ── 자기장 예측 (ZoneConfig 기준) ─────────────────────────────────────────────
-_ZONE_P2_START    = 76
-_ZONE_P3_START    = 151
-_ZONE_P2_INTERVAL = 4
-_ZONE_P3_INTERVAL = 2
+# ── 자기장 예측 (boss_battle_config 기준) ─────────────────────────────────────
+_ZONE_P2_START    = 151  # phase1_end=150
+_ZONE_P3_START    = 321  # phase2_end=320
+_ZONE_P2_INTERVAL = 8    # phase2_shrink_interval=8
+_ZONE_P3_INTERVAL = 5    # phase3_shrink_interval=5
 _ZONE_BUFFER      = 2   # 경계에서 N칸 이내면 미리 중앙으로
 
 # ── 광물 메모리 만료 ───────────────────────────────────────────────────────────
@@ -145,6 +146,10 @@ def _emergency_mine(
     grid: list, pos_x: int, pos_y: int, mem: dict, foot: str
 ) -> str:
     """에너지 위기: 가장 가까운 광물로 이동. 없으면 STAY(비용 1 절약)."""
+    # 현재 위치가 광물 메모리에 있으면 채굴 (그리드에선 "ME"로 보임)
+    if (pos_x, pos_y) in mem:
+        mem.pop((pos_x, pos_y), None)
+        return Action.MINE.value
     if foot in _MINERALS:
         return Action.MINE.value
     for adx, ady, mv, _ in ADJACENT_DIRS:
@@ -210,23 +215,31 @@ class RuleBossEasyBot(BotInterface):
         self._mineral_mem: dict[tuple[int, int], tuple[str, int]] = {}
         self._last_enemy_pos: Optional[tuple[int, int]] = None
         self._enemy_lost_ticks = 0
+        self._wander_target: Optional[tuple[int, int]] = None
+        self._wander_set_tick: int = -_EASY_WANDER_INTERVAL
+        self._pending_mine: bool = False  # 인접 광물로 이동한 다음 틱에 채굴
 
     @property
     def bot_id(self) -> str:
         return self._bot_id
 
     def choose_spawn(self, map_info: dict) -> Optional[tuple[int, int]]:
-        """맵 중앙 광물 밀집 구역 근처에 스폰."""
+        """희귀 광물 군락 근처에 스폰 (중 보스보다 약간 멀리 — 3~7칸)."""
         w, h = map_info["width"], map_info["height"]
-        minerals = [(m["x"], m["y"]) for m in map_info["minerals"]]
-        if not minerals:
-            return None
-        cx, cy = w // 2, h // 2
-        minerals.sort(key=lambda m: abs(m[0] - cx) + abs(m[1] - cy))
-        tx, ty = minerals[min(3, len(minerals) - 1)]
+        rare = [(m["x"], m["y"]) for m in map_info["minerals"] if m["rare"]]
+        if not rare:
+            # 희귀 광물 없으면 맵 중앙 근처
+            return (w // 2 + self._rng.randint(-5, 5), h // 2 + self._rng.randint(-5, 5))
+        # 주변에 희귀 광물이 가장 많은 군락 중심 선택
+        best = max(
+            rare,
+            key=lambda r: sum(1 for ox, oy in rare if abs(ox - r[0]) + abs(oy - r[1]) <= 8),
+        )
+        dist = self._rng.randint(3, 7)  # 중 보스(2~5)보다 조금 멀리
+        dx, dy = self._rng.choice([(dist, 0), (-dist, 0), (0, dist), (0, -dist)])
         return (
-            max(3, min(w - 4, tx + self._rng.randint(-4, 4))),
-            max(3, min(h - 4, ty + self._rng.randint(-4, 4))),
+            max(3, min(w - 4, best[0] + dx)),
+            max(3, min(h - 4, best[1] + dy)),
         )
 
     def get_action(self, state: dict) -> str:
@@ -242,6 +255,18 @@ class RuleBossEasyBot(BotInterface):
 
         zone = state.get("zone_bounds", (0, 0, 99, 99))
         pos_to_e = {(b["position"][0], b["position"][1]): b["energy"] for b in other_bots}
+
+        # ── 0. 직전 틱에 광물 위로 이동했으면 채굴 ────────────────────────────
+        if self._pending_mine:
+            self._pending_mine = False
+            # 현재 위치가 메모리에 있었다면 즉시 채굴, 아니면 주변 확인
+            if (pos_x, pos_y) in self._mineral_mem or any(
+                grid[CY + dy][CX + dx] in _MINERALS
+                for dx, dy, _, _ in ADJACENT_DIRS
+                if 0 <= CX + dx < 5 and 0 <= CY + dy < 5
+            ):
+                return Action.MINE.value
+            # 직전 이동 목적지에 광물이 없었을 수도 있음 (재생 전) → 계속 진행
 
         # ── 1. 자기장 탈출 / 예측 이동 ────────────────────────────────────────
         if _needs_zone_retreat(pos_x, pos_y, zone, tick):
@@ -291,13 +316,21 @@ class RuleBossEasyBot(BotInterface):
                     return move_toward(edx, edy)
             self._last_enemy_pos = None
 
-        # ── 7. 발 아래 광물 채굴 ────────────────────────────────────────────
-        if foot in _MINERALS:
+        # ── 7. 현재 위치 광물 채굴 (메모리 기반 — 그리드는 "ME"로 표시됨) ──────
+        if (pos_x, pos_y) in self._mineral_mem:
+            self._mineral_mem.pop((pos_x, pos_y), None)
             return Action.MINE.value
 
         # ── 8. 시야 내 광물 접근 ────────────────────────────────────────────
         if best_mineral:
-            return move_toward(*best_mineral, on_spot=Action.MINE.value)
+            rdx, rdy = best_mineral
+            dist = abs(rdx) + abs(rdy)
+            if dist == 0:
+                return Action.MINE.value
+            if dist == 1:
+                # 인접 — 이동 후 다음 틱 채굴
+                self._pending_mine = True
+            return move_toward(rdx, rdy)
 
         # ── 9. 기억 속 광물 추적 ────────────────────────────────────────────
         if self._mineral_mem:
@@ -305,14 +338,25 @@ class RuleBossEasyBot(BotInterface):
                 self._mineral_mem,
                 key=lambda m: abs(m[0] - pos_x) + abs(m[1] - pos_y),
             )
-            return move_toward(closest[0] - pos_x, closest[1] - pos_y,
-                               on_spot=Action.MINE.value)
+            cdx, cdy = closest[0] - pos_x, closest[1] - pos_y
+            if abs(cdx) + abs(cdy) == 1:
+                self._pending_mine = True
+            return move_toward(cdx, cdy, on_spot=Action.MINE.value)
 
-        # ── 10. 자기장 중앙 탐색 ────────────────────────────────────────────
-        zx, zy = _zone_center(zone)
-        if abs(zx - pos_x) + abs(zy - pos_y) > 4:
-            return move_toward(zx - pos_x, zy - pos_y)
-        return self._rng.choice(MOVE_ACTIONS)
+        # ── 10. 맵 탐색 이동 (광물 없을 때 새 구역 스윕) ──────────────────────
+        min_x, min_y, max_x, max_y = zone
+        at_target = (
+            self._wander_target is not None
+            and abs(self._wander_target[0] - pos_x) + abs(self._wander_target[1] - pos_y) < 5
+        )
+        if (self._wander_target is None
+                or at_target
+                or tick - self._wander_set_tick > _EASY_WANDER_INTERVAL):
+            tx = self._rng.randint(min_x + 5, max(min_x + 6, max_x - 5))
+            ty = self._rng.randint(min_y + 5, max(min_y + 6, max_y - 5))
+            self._wander_target = (tx, ty)
+            self._wander_set_tick = tick
+        return move_toward(self._wander_target[0] - pos_x, self._wander_target[1] - pos_y)
 
 
 # ── 중 난이도 ──────────────────────────────────────────────────────────────────
@@ -400,7 +444,10 @@ class RuleBossMediumBot(BotInterface):
                 if abs(edx) + abs(edy) > 0:
                     return move_toward(edx, edy)
 
-        # ── 5. 발 아래 광물 채굴 ────────────────────────────────────────────
+        # ── 5. 현재 위치 광물 채굴 (메모리 기반) ────────────────────────────
+        if (pos_x, pos_y) in self._mineral_mem:
+            self._mineral_mem.pop((pos_x, pos_y), None)
+            return Action.MINE.value
         if foot in _MINERALS:
             return Action.MINE.value
 
@@ -414,7 +461,11 @@ class RuleBossMediumBot(BotInterface):
 
         # ── 7. 시야 내 광물 파밍 ────────────────────────────────────────────
         if best_mineral:
-            return move_toward(*best_mineral, on_spot=Action.MINE.value)
+            rdx, rdy = best_mineral
+            if abs(rdx) + abs(rdy) == 1:
+                # 인접 → 이동 후 다음 틱 즉시 채굴을 위해 메모리 기반으로 처리
+                pass  # move_toward 후 step 5에서 잡힘
+            return move_toward(rdx, rdy, on_spot=Action.MINE.value)
 
         # ── 8. 기억 속 희귀 광물 우선 파밍 ─────────────────────────────────
         if self._mineral_mem:

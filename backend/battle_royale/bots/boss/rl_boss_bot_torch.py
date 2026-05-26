@@ -64,7 +64,7 @@ N_HIDDEN2    = 128
 LR           = 0.0005       # Adam 학습률
 GAMMA        = 0.95
 BATCH_SIZE   = 128          # GPU 활용을 위해 배치 크기 증가
-BUFFER_SIZE  = 50000        # 더 큰 리플레이 버퍼
+BUFFER_SIZE  = 30000        # B 트랙: 50k→30k 축소 (상대 분포 변화에 대응, forgetting 가속)
 TARGET_UPDATE_FREQ = 200    # target network 동기화 주기
 MIN_BUFFER_LEARN   = 1000   # 학습 시작 최소 버퍼 크기
 WEIGHT_SYNC_FREQ   = 10     # 병렬 학습 시 weight sync 주기 (episode 단위)
@@ -602,6 +602,12 @@ class RLBossBotTorch(BotInterface):
         """병렬 학습 시 worker가 최신 가중치를 받아올 때 사용."""
         self._online.load_state_dict({k: v.to(self._device) for k, v in d["online"].items()})
         self._target.load_state_dict({k: v.to(self._device) for k, v in d["target"].items()})
+        if "optimizer" in d:
+            self._optimizer.load_state_dict(d["optimizer"])
+        else:
+            # 다른 worker 가중치를 덮어쓸 때 기존 모멘트는 새 파라미터와 불일치 —
+            # 리셋해서 불안정 학습 방지
+            self._optimizer = optim.Adam(self._online.parameters(), lr=LR)
         self._step_count    = d.get("step_count", self._step_count)
         self._episode_count = d.get("episode_count", self._episode_count)
         if self._epsilon_override is None:

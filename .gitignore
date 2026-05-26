@@ -33,6 +33,8 @@ venv/
 *.pfx
 *service-account*.json
 *service_account*.json
+*serviceAccount*.json
+*ServiceAccount*.json
 *-credentials.json
 *_credentials.json
 *-key.json
@@ -40,6 +42,7 @@ venv/
 firebase-adminsdk*.json
 gcloud-key*.json
 gemini_key.py
+# 모든 깊이의 secrets/ 디렉토리 무시 (root, backend/secrets 등 모두 커버). example 만 추적.
 **/secrets/*
 !**/secrets/*.example.json
 !**/secrets/*.example.py

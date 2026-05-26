@@ -3,6 +3,10 @@ import { useRef } from 'react'
 interface Props {
   /** public/godot/index.html 기준 경로. 기본은 라이브 데모 빌드. */
   src?: string
+  /** 매치 식별자. Godot 이 {wsBase}{matchId} 로 연결. 없으면 게임이 'dev' 사용. */
+  matchId?: string
+  /** WS 매치 베이스(끝 /match/). 배포 백엔드 주소를 Godot 에 주입. 없으면 Godot 내부 기본(localhost). */
+  wsBase?: string
   width?: number | string
   height?: number | string
 }
@@ -14,12 +18,19 @@ interface Props {
  *   서버가 없으면 내부 데모 AI 로 폴백
  * - Phase A: 라이브 데모 임베드 검증용. game_id/리플레이 연동은 Phase B 이후.
  */
-export default function GodotGame({ src = '/godot/index.html', width = '100%', height = '100%' }: Props) {
+export default function GodotGame({ src = '/godot/index.html', matchId, wsBase, width = '100%', height = '100%' }: Props) {
   const ref = useRef<HTMLIFrameElement | null>(null)
+  // 쿼리(?) 대신 해시(#) 사용 — Godot HTML5 정적 파일 로딩(.pck/.wasm) 경로 해석을 방해하지 않음
+  // match + ws 를 해시 파라미터로 전달 (ws 는 배포 백엔드 주소 주입용)
+  let fullSrc = src
+  const params: string[] = []
+  if (matchId) params.push(`match=${encodeURIComponent(matchId)}`)
+  if (wsBase) params.push(`ws=${encodeURIComponent(wsBase)}`)
+  if (params.length) fullSrc = `${src}#${params.join('&')}`
   return (
     <iframe
       ref={ref}
-      src={src}
+      src={fullSrc}
       title="LOA Battle Royale (Godot)"
       width={width}
       height={height}

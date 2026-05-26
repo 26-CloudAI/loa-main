@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAME_ID } from '../dev/mock'
 import BotCodeInput from '../components/BotCodeInput'
+import TutorialBanner from '../components/TutorialBanner'
+import QuickRefPanel from '../components/QuickRefPanel'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 
@@ -92,7 +94,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   상: {
     label: '상',
     sub: '어려움',
-    desc: '수천 판 학습한 DQN 강화학습 보스.\n매일 유저 코드를 학습해 점점 강해집니다.',
+    desc: '수천 판 학습한 DQN 강화학습 보스.\n유저 코드를 학습해 점점 강해집니다.',
     color: 'text-red-300',
     border: 'border-red-700',
     selected: 'border-red-400 bg-red-950/40',
@@ -250,7 +252,7 @@ export default function BossBattlePage() {
   const anyOverLimit = bots.some((b) => byteSize(b.code) > MAX_CODE_BYTES)
   const canSubmit = !submitting && bots.every((b) => b.code.trim().length > 0) && !anyOverLimit
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
@@ -300,16 +302,20 @@ export default function BossBattlePage() {
 
   return (
     <div className="min-h-screen text-white" style={{
+      position: 'relative',
       background: '#0D0F14',
       backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
       backgroundSize: '24px 24px',
     }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: 'radial-gradient(ellipse 60% 70% at 50% 40%, rgba(232,51,74,.18) 0%, transparent 70%)',
+      }} />
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
-          onClick={() => navigate('/games/new')}
+          onClick={() => navigate(-1)}
           className="text-gray-400 hover:text-white text-sm transition-colors"
         >
-          ◀ 모드 선택
+          ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
         <span className="font-bold">👾 보스전</span>
@@ -318,6 +324,7 @@ export default function BossBattlePage() {
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
 
+          <TutorialBanner mode="boss" />
           <BossInfoBanner difficulty={difficulty} />
 
           {/* 난이도 선택 */}
@@ -341,37 +348,40 @@ export default function BossBattlePage() {
           </div>
 
           {/* 봇 목록 */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-white text-sm">
-                내 봇
-                <span className="text-gray-500 font-normal ml-2">
-                  ({bots.length}/{MAX_BOTS}) — 팀으로 보스에 도전
-                </span>
-              </h3>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div className="flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-white text-sm">
+                  내 봇
+                  <span className="text-gray-500 font-normal ml-2">
+                    ({bots.length}/{MAX_BOTS}) — 팀으로 보스에 도전
+                  </span>
+                </h3>
+              </div>
+
+              {bots.map((bot, idx) => (
+                <BotCard
+                  key={idx}
+                  index={idx}
+                  total={bots.length}
+                  bot={bot}
+                  onUpdate={(field, value) => updateBot(idx, field, value)}
+                  onRemove={() => removeBot(idx)}
+                />
+              ))}
+
+              {bots.length < MAX_BOTS && (
+                <button
+                  type="button"
+                  onClick={addBot}
+                  className="flex items-center justify-center gap-2 border border-dashed border-gray-600 hover:border-red-600 rounded-xl py-3 text-sm text-gray-500 hover:text-red-400 transition-colors"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  봇 추가 ({bots.length}/{MAX_BOTS})
+                </button>
+              )}
             </div>
-
-            {bots.map((bot, idx) => (
-              <BotCard
-                key={idx}
-                index={idx}
-                total={bots.length}
-                bot={bot}
-                onUpdate={(field, value) => updateBot(idx, field, value)}
-                onRemove={() => removeBot(idx)}
-              />
-            ))}
-
-            {bots.length < MAX_BOTS && (
-              <button
-                type="button"
-                onClick={addBot}
-                className="flex items-center justify-center gap-2 border border-dashed border-gray-600 hover:border-red-600 rounded-xl py-3 text-sm text-gray-500 hover:text-red-400 transition-colors"
-              >
-                <span className="text-lg leading-none">+</span>
-                봇 추가 ({bots.length}/{MAX_BOTS})
-              </button>
-            )}
+            <QuickRefPanel mode="boss" />
           </div>
 
           {/* 게임 옵션 */}

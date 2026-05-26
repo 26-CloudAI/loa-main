@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BotCodeInput from '../components/BotCodeInput'
+import TutorialBanner from '../components/TutorialBanner'
+import QuickRefPanel from '../components/QuickRefPanel'
 
 const STOCKS_API = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 const MAX_CODE_BYTES = 50 * 1024
@@ -64,7 +66,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             <h3 className="font-semibold mb-2">🎮 게임 개요</h3>
             <p className="text-gray-300 leading-relaxed">
               200턴 동안 초기 자본 1억 원으로 15개 종목에 투자해 최고 수익률을 목표로 합니다.
-              매 틱 <code className="text-green-400">action(state)</code>를 호출하며 딕셔너리를 반환합니다.
+              <br/>매 틱 <code className="text-green-400">action(state)</code>를 호출하며 딕셔너리를 반환합니다.
             </p>
           </div>
           <div>
@@ -102,8 +104,8 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             <h3 className="font-semibold mb-2">📰 뉴스 & Gemini AI</h3>
             <p className="text-gray-300 leading-relaxed">
               10~20턴마다 Gemini AI가 실시간으로 뉴스를 생성합니다.
-              <span className="text-green-400 font-semibold"> [G]</span> 접두사가 붙은 뉴스는 AI가 생성한 것입니다.
-              뉴스는 해당 종목의 주가에 5~10턴 동안 영향을 줍니다.
+              <span className="text-green-400 font-semibold"> [G]</span> 접두사가 붙은 뉴스는 
+              <br/>AI가 생성한 것입니다. 뉴스는 해당 종목의 주가에 5~10턴 동안 영향을 줍니다.
             </p>
           </div>
           <div>
@@ -180,7 +182,7 @@ export default function MockStocksNewPage() {
   const codeOverLimit = codeBytes > MAX_CODE_BYTES
   const canSubmit = !submitting && newsReady && code.trim().length > 0 && !codeOverLimit
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
@@ -219,15 +221,19 @@ export default function MockStocksNewPage() {
 
   return (
     <div className="min-h-screen text-white" style={{
+      position: 'relative',
       background: '#0D0F14',
       backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
       backgroundSize: '24px 24px',
     }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: 'radial-gradient(ellipse 60% 70% at 50% 40%, rgba(245,166,36,.18) 0%, transparent 70%)',
+      }} />
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games/new')} className="text-gray-400 hover:text-white text-sm transition-colors">
-          ◀ 모드 선택
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm transition-colors">
+          ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
         <span className="font-bold">📈 모의주식 — 새 게임</span>
@@ -243,6 +249,7 @@ export default function MockStocksNewPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <TutorialBanner mode="stocks" />
           {/* 게임 이름 */}
           <section className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-300">
@@ -282,12 +289,17 @@ export default function MockStocksNewPage() {
                 {codeOverLimit && ' — 초과'}
               </span>
             </div>
-            <BotCodeInput
-              value={code}
-              onChange={setCode}
-              hasError={codeOverLimit}
-              accentColor="gold"
-            />
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <BotCodeInput
+                  value={code}
+                  onChange={setCode}
+                  hasError={codeOverLimit}
+                  accentColor="gold"
+                />
+              </div>
+              <QuickRefPanel mode="stocks" />
+            </div>
           </section>
 
           {/* 게임 옵션 */}

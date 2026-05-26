@@ -115,23 +115,26 @@ interface ModeCardProps {
   pillColor: string
   pillBorder: string
   onClick: () => void
+  tutorialRoute: string
 }
 
-function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnColor, pillBg, pillColor, pillBorder, onClick }: ModeCardProps) {
+function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnColor, pillBg, pillColor, pillBorder, onClick, tutorialRoute }: ModeCardProps) {
+  const navigate = useNavigate()
   function onEnter(e: React.MouseEvent<HTMLDivElement>) {
     const el = e.currentTarget
     el.style.transform = 'translateY(-4px)'
     el.style.borderColor = borderColor.replace('.25', '.5')
+    el.style.boxShadow = `0 0 56px ${glowColor.replace('.15', '.28').replace('.12', '.22')}`
   }
   function onLeave(e: React.MouseEvent<HTMLDivElement>) {
     const el = e.currentTarget
     el.style.transform = 'translateY(0)'
     el.style.borderColor = borderColor
+    el.style.boxShadow = `0 0 40px ${glowColor}`
   }
 
   return (
     <div
-      onClick={onClick}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       style={{
@@ -139,7 +142,6 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
         border: `1px solid ${borderColor}`,
         borderRadius: 14,
         padding: 24,
-        cursor: 'pointer',
         boxShadow: `0 0 40px ${glowColor}`,
         transition: 'transform .25s ease, box-shadow .25s ease, border-color .25s ease',
       }}
@@ -158,15 +160,42 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
       </div>
       <h3 style={{ fontFamily: FONT, fontSize: 26, margin: '0 0 4px', color: '#F0EBFF' }}>{title}</h3>
       <p style={{ fontWeight: 300, color: MUTED, fontSize: 12, margin: '0 0 20px' }}>{desc}</p>
-      <button
-        style={{
-          width: '100%', padding: '10px 0', borderRadius: 8,
-          background: btnBg, color: btnColor,
-          border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500,
-        }}
-      >
-        시작하기 →
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button
+          onClick={onClick}
+          style={{
+            width: '100%', padding: '10px 0', borderRadius: 8,
+            background: btnBg, color: btnColor,
+            border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500,
+            transition: 'filter .15s, transform .15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.filter = 'brightness(1.15)'
+            e.currentTarget.style.transform = 'translateY(-1px)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.filter = 'brightness(1)'
+            e.currentTarget.style.transform = 'translateY(0)'
+          }}
+        >
+          시작하기 →
+        </button>
+        <button
+          onClick={() => navigate(tutorialRoute)}
+          style={{
+            width: '100%', padding: '7px 0', borderRadius: 8,
+            background: 'transparent',
+            border: `1px solid ${pillBorder}`,
+            color: pillColor, fontSize: 12, cursor: 'pointer',
+            opacity: 0.75,
+            transition: 'opacity .15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '0.75')}
+        >
+          📖 튜토리얼 보기
+        </button>
+      </div>
     </div>
   )
 }
@@ -365,6 +394,7 @@ export default function MainPage() {
             btnBg="#9B59F5" btnColor="#fff"
             pillBg="rgba(155,89,245,.15)" pillColor="#C8A8FF" pillBorder="rgba(155,89,245,.3)"
             onClick={() => navigate('/games/new/battle-royale')}
+            tutorialRoute="/tutorial/battle-royale"
           />
           <ModeCard
             mode="GAME MODE 02" icon="◉" title="보스전" desc="거대한 적을 쓰러뜨려라"
@@ -372,6 +402,7 @@ export default function MainPage() {
             btnBg="#E8334A" btnColor="#fff"
             pillBg="rgba(232,51,74,.15)" pillColor="#F05E70" pillBorder="rgba(232,51,74,.3)"
             onClick={() => navigate('/games/new/boss-battle')}
+            tutorialRoute="/tutorial/boss"
           />
           <ModeCard
             mode="GAME MODE 03" icon="▲" title="모의주식" desc="알고리즘으로 시장을 지배하라"
@@ -379,6 +410,7 @@ export default function MainPage() {
             btnBg="#F5A624" btnColor="#000"
             pillBg="rgba(245,166,36,.15)" pillColor="#FFC76A" pillBorder="rgba(245,166,36,.3)"
             onClick={() => navigate('/games/new/mock-stocks')}
+            tutorialRoute="/tutorial/stocks"
           />
         </div>
 
