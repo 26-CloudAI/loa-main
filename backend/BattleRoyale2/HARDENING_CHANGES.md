@@ -41,3 +41,21 @@ Pod에서 직접 `exec`(in-process)하던 RCE 경로를, 기존 배틀로얄/모
 ### 검증
 - `bot_runner/tests` 100 passed, `BattleRoyale2/tests` 10 passed.
 - 라이브 round-trip: 정상 봇 → 검증된 액션, 악성 봇(`open('/etc/passwd')`) → policy 차단 + ZERO 폴백(게임 지속).
+
+---
+
+## Phase 2 — BR2 WS owner 인증 (2026-05-27)
+
+Phase 1 이후 WS `/match/{id}`는 유효한 토큰이면 아무 로그인 사용자나 연결 가능했다.
+Phase 2는 게임 생성자(owner)만 자신의 매치 WS에 접속할 수 있도록 owner 일치 검사를 추가한다.
+
+### 수정 파일
+- `backend/BattleRoyale2/server/ws_server.py`
+  — `match_ws` 인증 블록에 owner 일치 검사 추가:
+    토큰 유효 후 `_resolve_owner_id(token) != game.owner_user_id`이면 4403으로 WS 거부.
+    (4401 = 미인증, 4403 = owner 불일치)
+- `backend/BattleRoyale2/tests/test_ws_owner_auth.py`
+  — WS 인증 시나리오 4종(토큰없음→4401, 무효토큰, wrong owner→4403, owner 토큰 수락).
+
+### 검증
+- `BattleRoyale2/tests` 14 passed (+4 신규).

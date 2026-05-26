@@ -607,12 +607,20 @@ def create_app() -> FastAPI:
                 game = None
         if game is not None:
             token = ws.query_params.get("token")
-            valid = bool(token) and _decode_token(token) is not None
-            if not valid:
-                # 토큰 없음/무효 → 거부 (누구나 관전 가능하나 인증은 필요)
+            if not (bool(token) and _decode_token(token) is not None):
                 await ws.close(code=4401)
                 logger.info("[match=%s] WS 인증 실패 — 거부", match_id)
                 return
+            # owner 일치 검증: 토큰 사용자가 게임 owner와 다르면 거부.
+            if game.owner_user_id is not None:
+                caller_id = _resolve_owner_id(token)
+                if caller_id is not None and caller_id != game.owner_user_id:
+                    await ws.close(code=4403)
+                    logger.info(
+                        "[match=%s] WS owner 불일치 — 거부 (caller=%s owner=%s)",
+                        match_id, caller_id, game.owner_user_id,
+                    )
+                    return
 
         await ws.accept()
         session = MatchSession(ws, match_id)
