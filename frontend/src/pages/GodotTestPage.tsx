@@ -77,14 +77,32 @@ export default function GodotTestPage() {
   const mm = String(Math.floor(time / 60)).padStart(2, '0')
   const ss = String(time % 60).padStart(2, '0')
 
+  const matchId = new URLSearchParams(window.location.search).get('match') ?? ''
+  const shortId = matchId ? matchId.slice(0, 8) : ''
+
   return (
     <div className="fixed inset-0 bg-gray-950 flex items-center justify-center gap-4 p-6">
+      {/* 좌측 상단 바 — 나가기 / 모드 / 매치ID */}
+      <div className="absolute top-3 left-4 z-50 flex items-center gap-2 rounded-xl bg-gray-900/85 backdrop-blur px-3 py-1.5 ring-1 ring-gray-700 text-sm">
+        <button
+          onClick={() => navigate('/games')}
+          className="flex items-center gap-1 text-gray-300 hover:text-white transition-colors font-medium"
+        >
+          ◀ 나가기
+        </button>
+        <span className="text-gray-600">|</span>
+        <span className="flex items-center gap-1.5 font-semibold text-indigo-300">
+          ⚔️ 배틀로얄 2D
+          {shortId && <span className="text-gray-500 font-mono text-xs">#{shortId}</span>}
+        </span>
+      </div>
+
       {/* 게임 화면 — 높이에 맞춘 정사각형 */}
       <div
         className="relative rounded-xl overflow-hidden ring-1 ring-gray-800 shadow-2xl h-full shrink-0"
         style={{ aspectRatio: '1 / 1', maxWidth: '100%' }}
       >
-        <GodotGame matchId={new URLSearchParams(window.location.search).get('match') ?? undefined} />
+        <GodotGame matchId={matchId || undefined} />
       </div>
 
       {/* 패널 — 게임 바로 옆 (그룹이 함께 중앙 정렬) */}

@@ -17,19 +17,37 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import random
 import time
 import uuid
 from typing import Any
 
 from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot
+from BattleRoyale2.server.inprocess_bot import InProcessBot2
 from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 
 logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = "0.1"
 GAME_MODE = "battleroyale2"   # games.mode 값 (기존 'battle-royale' 과 구분)
+TARGET_BOT_COUNT = 4          # 유저 봇 + AI 채움으로 맞출 기본 총 봇 수
+
+# game_id → 유저 봇 코드 목록 [{bot_id, name, code}]. POST /api/games 에서 저장,
+# WS MATCH_CONFIG 빌드 시 조회. (인메모리 — 서버 재시작 시 소실, v0.1 단순화)
+_GAME_CODE: dict[str, list[dict]] = {}
+# game_id → 총 봇 수 (내 봇 + AI 채움). POST /api/games 에서 저장.
+_GAME_BOT_COUNT: dict[str, int] = {}
+
+# AI 채움용 봇 종류 (유저 봇 외 빈 슬롯). 순서대로 순환.
+_AI_FILLERS: list[tuple[str, type[BattleRoyale2DBot]]] = [
+    ("초식봇", HerbivoreBot),
+    ("미친개봇", MadDogBot),
+    ("존버봇", CamperBot),
+]
 
 # 기존 battle_royale 의 GameRepository 재활용 (games / game_participants 테이블 공유).
 # 통합 서버(run_server.py)에서 virtual 'src' 패키지가 battle_royale/src 를 가리키므로
@@ -144,7 +162,7 @@ class MatchSession:
         await self.ws.send_text(json.dumps(payload, separators=(",", ":")))
 
     async def send_match_config(self, seed: int = 0) -> None:
-        self.bots = _build_bots(self.bot_spec, seed=seed)
+        self.bots, self.bot_spec = self._assemble_bots(seed)
         await self.send({
             "type": "MATCH_CONFIG",
             "data": {
@@ -157,6 +175,37 @@ class MatchSession:
                 ],
             },
         })
+
+    def _assemble_bots(self, seed: int) -> tuple[dict[str, BattleRoyale2DBot], list[tuple[str, str]]]:
+        """이 매치(game_id) 의 유저 제출 봇 + AI 채움 봇 구성.
+        유저 코드가 없으면 기본 AI 3종(DEFAULT_BOT_FACTORY)으로 폴백.
+        AI 채움은 초식/미친개/존버 중 랜덤 선택, 총 봇 수는 _GAME_BOT_COUNT 기준."""
+        user_bots = _GAME_CODE.get(self.match_id, [])
+        if not user_bots:
+            bots = _build_bots(list(DEFAULT_BOT_FACTORY), seed=seed)
+            return bots, list(DEFAULT_BOT_FACTORY)
+
+        bots: dict[str, BattleRoyale2DBot] = {}
+        spec: list[tuple[str, str]] = []
+        for entry in user_bots:
+            bid = entry["bot_id"]
+            name = entry.get("name", bid)
+            bots[bid] = InProcessBot2(bid, entry.get("code", ""))
+            spec.append((bid, name))
+
+        target = _GAME_BOT_COUNT.get(self.match_id, TARGET_BOT_COUNT)
+        target = max(len(spec), min(8, target))   # 유저봇 수 이상, 최대 8
+        rng = random.Random(seed)
+        type_counts: dict[str, int] = {}
+        fill_n = max(0, target - len(spec))
+        for i in range(fill_n):
+            label, cls = rng.choice(_AI_FILLERS)   # 랜덤 종류
+            type_counts[label] = type_counts.get(label, 0) + 1
+            bid = "ai_%d" % i
+            name = "%s %d" % (label, type_counts[label])
+            bots[bid] = cls(bid, seed=seed + 100 + i)
+            spec.append((bid, name))
+        return bots, spec
 
     async def send_match_start(self) -> None:
         self.started = True
@@ -276,6 +325,18 @@ class MatchSession:
 def create_app() -> FastAPI:
     app = FastAPI(title="BattleRoyale2 WS Server")
 
+    # 마운트된 서브앱은 자체 미들웨어 스택을 가지므로 CORS 를 여기서 직접 추가.
+    # CORS_ORIGINS 환경변수(콤마구분) 사용, 없으면 전체 허용. 쿠키 미사용이라 credentials=False.
+    _cors_raw = os.environ.get("CORS_ORIGINS", "")
+    origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] if _cors_raw else ["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     @app.get("/health")
     def health() -> dict[str, str]:  # noqa: D401 — 짧은 헬스체크 응답
         return {"status": "ok", "protocol": PROTOCOL_VERSION}
@@ -286,21 +347,48 @@ def create_app() -> FastAPI:
         프론트: POST /battleroyale2/api/games → game_id → /games/{id}/watch (Godot match={id}).
         실제 매치 진행/참가자 등록은 WS MATCH_START 시점에 보강된다.
         """
-        repo = _get_game_repo()
         game_id = uuid.uuid4().hex
+
+        # 유저 봇 코드 저장 (인메모리). body.bots: [{bot_id, code, name?, is_public?}]
+        raw_bots = body.get("bots") if isinstance(body, dict) else None
+        user_bots: list[dict] = []
+        if isinstance(raw_bots, list):
+            for i, b in enumerate(raw_bots):
+                if not isinstance(b, dict) or not b.get("code"):
+                    continue
+                bid = str(b.get("bot_id") or ("user_%d" % i))
+                user_bots.append({
+                    "bot_id": bid,
+                    "name": str(b.get("name") or bid),
+                    "code": str(b["code"]),
+                })
+        if user_bots:
+            _GAME_CODE[game_id] = user_bots
+
+        # 봇 수 (내 봇 + AI 채움). 2~8 클램프. 유저봇 수보다는 커야 함.
+        req_count = body.get("bot_count") if isinstance(body, dict) else None
+        try:
+            bot_count = int(req_count) if req_count is not None else TARGET_BOT_COUNT
+        except (TypeError, ValueError):
+            bot_count = TARGET_BOT_COUNT
+        bot_count = max(max(2, len(user_bots)), min(8, bot_count))
+        if user_bots:
+            _GAME_BOT_COUNT[game_id] = bot_count
+
+        total_bots = bot_count if user_bots else len(DEFAULT_BOT_FACTORY)
+
+        repo = _get_game_repo()
         if repo is None:
             # DB 비활성 환경에서도 game_id 는 발급 (저장만 생략)
             return {"game_id": game_id, "persisted": False}
         try:
-            owner = body.get("owner_user_id")
-            name = body.get("name")
             repo.create_game(
                 game_id=game_id,
-                owner_user_id=owner,
-                total_bots=len(DEFAULT_BOT_FACTORY),
+                owner_user_id=body.get("owner_user_id"),
+                total_bots=total_bots,
                 seed=body.get("seed"),
                 mode=GAME_MODE,
-                name=name,
+                name=body.get("name"),
             )
             return {"game_id": game_id, "persisted": True}
         except Exception:  # noqa: BLE001
