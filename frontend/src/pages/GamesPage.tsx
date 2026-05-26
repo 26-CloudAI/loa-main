@@ -204,7 +204,7 @@ export default function GamesPage() {
           <h2 className="text-xl font-medium">게임 목록</h2>
           <button
             onClick={() => navigate('/games/new')}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg px-4 transition-colors" style={{ paddingTop: 7, paddingBottom: 10 }}
           >
             + 새 게임 만들기
           </button>
@@ -287,7 +287,7 @@ function GameCard({ game }: { game: GameInfo }) {
       <div className="flex items-center shrink-0">
         <div className="w-20 flex items-center justify-center">
           {modeBadge && (
-            <span className="text-xs leading-none rounded-full px-2 font-medium" style={{ ...modeBadge.style, paddingTop: '2px', paddingBottom: '4px' }}>
+            <span className="text-xs leading-none rounded-full px-2 font-medium" style={{ ...modeBadge.style, paddingTop: '3px', paddingBottom: '3px' }}>
               {modeBadge.label}
             </span>
           )}
@@ -325,7 +325,7 @@ function GameCard({ game }: { game: GameInfo }) {
             </button>
             <button
               onClick={handleReplay}
-              className="flex items-center gap-1 text-sm rounded-lg transition-colors bg-indigo-700 hover:bg-indigo-600 text-white"
+              className="flex items-center gap-0.5 text-sm rounded-lg transition-colors bg-indigo-700 hover:bg-indigo-600 text-white"
               style={{ paddingTop: '4px', paddingBottom: '6px', paddingLeft: '8px', paddingRight: '12px' }}
             >
               <span>🎬</span><span>리플레이</span>
