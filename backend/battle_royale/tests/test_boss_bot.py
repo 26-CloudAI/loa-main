@@ -48,7 +48,8 @@ from bots.boss.rl_boss_bot import (
     MAX_TICKS,
     N_ACTIONS,
     N_FEATURES,
-    N_HIDDEN,
+    N_HIDDEN1,
+    N_HIDDEN2,
     DQNetwork,
     ReplayBuffer,
     RewardCalculator,
@@ -117,22 +118,26 @@ class TestInitAndCheckpoint:
         assert boss.bot_id == "boss_rl"
         d = boss.get_weights()
         assert isinstance(d, dict)
-        assert np.array(d["W1"]).shape == (N_FEATURES, N_HIDDEN)
-        assert np.array(d["b1"]).shape == (N_HIDDEN,)
-        assert np.array(d["W2"]).shape == (N_HIDDEN, N_ACTIONS)
-        assert np.array(d["b2"]).shape == (N_ACTIONS,)
+        # B 트랙: 3층 MLP (43 → 256 → 128 → 19)
+        assert np.array(d["W1"]).shape == (N_FEATURES, N_HIDDEN1)
+        assert np.array(d["b1"]).shape == (N_HIDDEN1,)
+        assert np.array(d["W2"]).shape == (N_HIDDEN1, N_HIDDEN2)
+        assert np.array(d["b2"]).shape == (N_HIDDEN2,)
+        assert np.array(d["W3"]).shape == (N_HIDDEN2, N_ACTIONS)
+        assert np.array(d["b3"]).shape == (N_ACTIONS,)
 
     def test_initial_weights_nonzero(self):
-        """Xavier 초기화로 가중치는 전부 0이 아니어야 함."""
+        """He 초기화로 가중치는 전부 0이 아니어야 함."""
         boss = _make_boss()
         d = boss.get_weights()
         assert np.any(np.array(d["W1"]) != 0.0)
         assert np.any(np.array(d["W2"]) != 0.0)
+        assert np.any(np.array(d["W3"]) != 0.0)
 
     def test_set_and_get_weights_roundtrip(self):
         boss = _make_boss()
         d = boss.get_weights()
-        d["W1"] = [[0.0] * N_HIDDEN for _ in range(N_FEATURES)]
+        d["W1"] = [[0.0] * N_HIDDEN1 for _ in range(N_FEATURES)]
         d["W1"][0][0] = 9.99
         boss.set_weights(d)
         got = boss.get_weights()
@@ -161,9 +166,12 @@ class TestInitAndCheckpoint:
         save_path = tmp_path / "w.json"
         boss.save_weights(save_path)
         data = json.loads(save_path.read_text())
-        assert data["n_features"] == N_FEATURES
-        assert data["n_hidden"] == N_HIDDEN
-        assert data["n_actions"] == N_ACTIONS
+        # B 트랙: v4 schema (n_hidden 단일 → n_hidden1/n_hidden2)
+        assert data["version"]     == 4
+        assert data["n_features"]  == N_FEATURES
+        assert data["n_hidden1"]   == N_HIDDEN1
+        assert data["n_hidden2"]   == N_HIDDEN2
+        assert data["n_actions"]   == N_ACTIONS
         assert "online" in data
         assert "target" in data
 
@@ -253,31 +261,27 @@ class TestDQNetwork:
         q = net.forward(phi)
         assert q.shape == (N_ACTIONS,)
 
-    def test_forward_zero_input_equals_b2(self):
-        """phi=0이면 은닉층도 0이므로 Q = b2 (초기값 0)."""
+    def test_forward_zero_input_equals_b3(self):
+        """phi=0이면 두 은닉층 모두 0이므로 Q = b3 (마지막 layer bias, 초기값 0)."""
         net = DQNetwork(seed=0)
         phi = np.zeros(N_FEATURES, dtype=np.float32)
         q = net.forward(phi)
-        assert np.allclose(q, net.b2)
+        assert np.allclose(q, net.b3)
 
-    def test_update_batch_changes_weights(self):
+    def test_update_batch_deprecated_noop(self):
+        """B 트랙: numpy 학습 deprecate. update_batch 는 가중치 변경 안 함, 0.0 반환."""
         net = DQNetwork(seed=0)
         B = 4
         phis = np.ones((B, N_FEATURES), dtype=np.float32)
         actions = np.array([IDX_MINE] * B, dtype=np.int32)
         targets = np.ones(B, dtype=np.float32)
         w2_before = net.W2.copy()
-        net.update_batch(phis, actions, targets, ALPHA)
-        assert not np.allclose(net.W2, w2_before)
-
-    def test_update_batch_returns_loss(self):
-        net = DQNetwork(seed=0)
-        B = 4
-        phis = np.ones((B, N_FEATURES), dtype=np.float32)
-        actions = np.array([IDX_MINE] * B, dtype=np.int32)
-        targets = np.ones(B, dtype=np.float32)
+        w3_before = net.W3.copy()
         loss = net.update_batch(phis, actions, targets, ALPHA)
-        assert loss >= 0.0
+        assert loss == 0.0
+        # 가중치 변경 없음 (deprecated)
+        assert np.array_equal(net.W2, w2_before)
+        assert np.array_equal(net.W3, w3_before)
 
     def test_copy_from_syncs_weights(self):
         a = DQNetwork(seed=0)
@@ -286,6 +290,8 @@ class TestDQNetwork:
         b.copy_from(a)
         assert np.allclose(a.W1, b.W1)
         assert np.allclose(a.W2, b.W2)
+        assert np.allclose(a.W3, b.W3)
+        assert np.allclose(a.b3, b.b3)
 
     def test_serialize_roundtrip(self):
         a = DQNetwork(seed=0)
@@ -294,6 +300,7 @@ class TestDQNetwork:
         b.from_dict(d)
         assert np.allclose(a.W1, b.W1)
         assert np.allclose(a.W2, b.W2)
+        assert np.allclose(a.W3, b.W3)
         assert b.shape_ok()
 
 
@@ -530,6 +537,11 @@ class TestBossBotScenarios:
 # ---------------------------------------------------------------------------
 
 class TestTrainingImprovement:
+    @pytest.mark.skip(reason=(
+        "B 트랙: numpy 학습 deprecate. 학습은 torch 학습기(train_boss_parallel.py)가 "
+        "담당하고 convert_torch_to_numpy 로 numpy 가중치 갱신. 이 통합 테스트는 "
+        "더 이상 적용 안 됨."
+    ))
     def test_weights_diverge_after_training(self):
         """여러 에피소드 훈련 후 online network 가중치가 초기값과 달라야 한다."""
         rng = random.Random(0)
@@ -541,7 +553,6 @@ class TestTrainingImprovement:
         )
         initial_w1 = np.array(boss.get_weights()["W1"], dtype=np.float32).copy()
 
-        # 여러 에피소드: 버퍼가 MIN_BUFFER_LEARN(500)을 넘어서야 실제 학습 발생
         for ep in range(6):
             ep_seed = rng.randint(0, 10000)
             opponents = [

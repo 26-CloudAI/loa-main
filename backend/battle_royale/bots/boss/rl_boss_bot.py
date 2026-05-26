@@ -129,7 +129,8 @@ def _move_idx_toward(ddx: int, ddy: int) -> int:
 
 # DQN 하이퍼파라미터
 N_FEATURES        = 43
-N_HIDDEN          = 64
+N_HIDDEN1         = 256   # B 트랙: torch 학습기와 구조 일치 (43→256→128→19)
+N_HIDDEN2         = 128
 ALPHA             = 0.001
 GAMMA             = 0.95
 BATCH_SIZE        = 64
@@ -142,64 +143,79 @@ EPSILON_DECAY     = 0.992
 EXPLOIT_GUIDE_PROB = 0.25
 GCS_UPLOAD_INTERVAL = 5
 
+# numpy 학습 deprecate flag (B 트랙: torch 학습기 train_boss_parallel.py 만 사용)
+# True 로 바꾸면 update_batch 가 NotImplementedError 발생.
+# 서빙·평가 시에는 _NUMPY_TRAINING_ENABLED=False 유지 → _learn() no-op.
+_NUMPY_TRAINING_ENABLED = False
+
 
 # ---------------------------------------------------------------------------
-# DQNetwork — numpy 2층 MLP
+# DQNetwork — numpy 3층 MLP (43 → 256 → 128 → 19)
+# torch 학습기와 동일 구조. 학습은 torch 가 담당, 여기는 추론 전용.
+# 가중치 변환: scripts/tools/convert_torch_to_numpy.py
 # ---------------------------------------------------------------------------
 
 class DQNetwork:
     def __init__(self, seed: Optional[int] = None):
         rng = np.random.default_rng(seed)
-        self.W1 = rng.standard_normal((N_FEATURES, N_HIDDEN)).astype(np.float32) \
+        # He init (ReLU)
+        self.W1 = rng.standard_normal((N_FEATURES, N_HIDDEN1)).astype(np.float32) \
                   * np.sqrt(2.0 / N_FEATURES)
-        self.b1 = np.zeros(N_HIDDEN, dtype=np.float32)
-        self.W2 = rng.standard_normal((N_HIDDEN, N_ACTIONS)).astype(np.float32) \
-                  * np.sqrt(2.0 / N_HIDDEN)
-        self.b2 = np.zeros(N_ACTIONS, dtype=np.float32)
+        self.b1 = np.zeros(N_HIDDEN1, dtype=np.float32)
+        self.W2 = rng.standard_normal((N_HIDDEN1, N_HIDDEN2)).astype(np.float32) \
+                  * np.sqrt(2.0 / N_HIDDEN1)
+        self.b2 = np.zeros(N_HIDDEN2, dtype=np.float32)
+        self.W3 = rng.standard_normal((N_HIDDEN2, N_ACTIONS)).astype(np.float32) \
+                  * np.sqrt(2.0 / N_HIDDEN2)
+        self.b3 = np.zeros(N_ACTIONS, dtype=np.float32)
 
     def forward(self, phi: np.ndarray) -> np.ndarray:
-        h = np.maximum(0.0, phi @ self.W1 + self.b1)
-        return h @ self.W2 + self.b2
+        h1 = np.maximum(0.0, phi @ self.W1 + self.b1)
+        h2 = np.maximum(0.0, h1  @ self.W2 + self.b2)
+        return h2 @ self.W3 + self.b3
 
     def update_batch(self, phis: np.ndarray, actions: np.ndarray,
                      td_targets: np.ndarray, alpha: float) -> float:
-        B = len(phis)
-        h = np.maximum(0.0, phis @ self.W1 + self.b1)
-        q = h @ self.W2 + self.b2
-        q_a = q[np.arange(B), actions]
-        deltas = td_targets - q_a
-        total_loss = float(np.mean(deltas ** 2))
-
-        scale = (alpha / B) * deltas
-        dh = deltas[:, None] * self.W2[:, actions].T
-        np.add.at(self.W2.T, actions, scale[:, None] * h)
-        np.add.at(self.b2, actions, scale)
-        dh_relu = dh * (h > 0.0)
-        self.W1 += (alpha / B) * phis.T @ dh_relu
-        self.b1 += (alpha / B) * dh_relu.mean(axis=0)
-        return total_loss
+        """numpy 학습은 B 트랙에서 deprecate.
+        torch 학습기(train_boss_parallel.py)가 학습 → convert_torch_to_numpy 로 변환."""
+        if _NUMPY_TRAINING_ENABLED:
+            raise NotImplementedError(
+                "numpy 학습은 deprecate됨. 3층 MLP backprop 필요 시 직접 구현하거나 "
+                "torch 학습기(train_boss_parallel.py)를 사용하세요."
+            )
+        # 서빙·평가 컨텍스트: 호출되어도 조용히 통과 (loss=0 반환)
+        return 0.0
 
     def copy_from(self, other: "DQNetwork") -> None:
         self.W1 = other.W1.copy()
         self.b1 = other.b1.copy()
         self.W2 = other.W2.copy()
         self.b2 = other.b2.copy()
+        self.W3 = other.W3.copy()
+        self.b3 = other.b3.copy()
 
     def to_dict(self) -> dict:
-        return {"W1": self.W1.tolist(), "b1": self.b1.tolist(),
-                "W2": self.W2.tolist(), "b2": self.b2.tolist()}
+        return {
+            "W1": self.W1.tolist(), "b1": self.b1.tolist(),
+            "W2": self.W2.tolist(), "b2": self.b2.tolist(),
+            "W3": self.W3.tolist(), "b3": self.b3.tolist(),
+        }
 
     def from_dict(self, d: dict) -> None:
         self.W1 = np.array(d["W1"], dtype=np.float32)
         self.b1 = np.array(d["b1"], dtype=np.float32)
         self.W2 = np.array(d["W2"], dtype=np.float32)
         self.b2 = np.array(d["b2"], dtype=np.float32)
+        self.W3 = np.array(d["W3"], dtype=np.float32)
+        self.b3 = np.array(d["b3"], dtype=np.float32)
 
     def shape_ok(self) -> bool:
-        return (self.W1.shape == (N_FEATURES, N_HIDDEN)
-                and self.b1.shape == (N_HIDDEN,)
-                and self.W2.shape == (N_HIDDEN, N_ACTIONS)
-                and self.b2.shape == (N_ACTIONS,))
+        return (self.W1.shape == (N_FEATURES, N_HIDDEN1)
+                and self.b1.shape == (N_HIDDEN1,)
+                and self.W2.shape == (N_HIDDEN1, N_HIDDEN2)
+                and self.b2.shape == (N_HIDDEN2,)
+                and self.W3.shape == (N_HIDDEN2, N_ACTIONS)
+                and self.b3.shape == (N_ACTIONS,))
 
 
 # ---------------------------------------------------------------------------
@@ -345,16 +361,17 @@ class ReplayBuffer:
 
 class RewardCalculator:
     """
-    보상 설계:
-      - 킬 (kill_delta)       : +50.0 × delta  (직접 kills 필드 사용)
-      - 일반 채굴 (score_delta): +0.3 / 점
+    보상 설계 (v4, 2026-05-26):
+      - 킬 (kill_delta)       : +100.0 × delta  (직접 kills 필드 사용)
+      - 일반 채굴 (score_delta): +0.15 / 점     (v3 0.3 → 반감, mining 편향 완화)
       - 에너지 회복           : +0.02 / 에너지
       - 에너지 위험           : -1.0 (LOW) / -3.0 (CRITICAL)
       - 자기장 내             : -4.0 / 틱
       - 유효 이동 (zone 안)   : +0.1
       - STAY                  : -0.4
       - 헛 SHIELD (적 미인접) : -0.5
-      - 에피소드 순위         : 1위 +50 / 2위 +15 / 3위 -5 / 4위+ -20×(rank-3)
+      - 에피소드 순위         : 1위 +150 / 2위 +15 / 3위 -10 / 4위+ -20×(rank-3)
+                                (v3 1위 +50 → +150: top2 편향 해소, win 추구 강화)
     """
 
     ENERGY_LOW_THR      = 80
@@ -377,7 +394,7 @@ class RewardCalculator:
             if score_delta >= 25:
                 reward += 100.0  # kill 휴리스틱
             elif score_delta > 0:
-                reward += score_delta * 0.3
+                reward += score_delta * 0.15
 
         # ── 에너지 변화 ────────────────────────────────────────────────
         energy_delta = curr_my["energy"] - prev_my["energy"]
@@ -417,7 +434,7 @@ class RewardCalculator:
 
     @staticmethod
     def compute_episode_end(rank: int, n_bots: int) -> float:
-        table = {1: 50.0, 2: 15.0, 3: -5.0}
+        table = {1: 150.0, 2: 15.0, 3: -10.0}
         return table.get(rank, -20.0 * (rank - 3))
 
 
@@ -801,30 +818,19 @@ class RLBossBot(BotInterface):
     # -----------------------------------------------------------------------
 
     def _learn(self) -> None:
+        # B 트랙: numpy 학습 deprecate. 서빙·평가 시 매 step 호출되어도 no-op.
+        # 학습은 torch 학습기(train_boss_parallel.py)가 담당,
+        # 결과를 convert_torch_to_numpy 로 변환하여 trained_weights.json 갱신.
+        if not _NUMPY_TRAINING_ENABLED:
+            return
         if len(self._buffer) < MIN_BUFFER_LEARN:
             return
-
-        batch = self._buffer.sample(BATCH_SIZE)
-        phis      = np.array([e[0] for e in batch], dtype=np.float32)
-        actions   = np.array([e[1] for e in batch], dtype=np.int32)
-        rewards   = np.array([e[2] for e in batch], dtype=np.float32)
-        phis_next = np.array([e[3] for e in batch], dtype=np.float32)
-        dones     = np.array([e[4] for e in batch], dtype=np.float32)
-
-        # Double DQN
-        B = len(phis)
-        h_on  = np.maximum(0.0, phis_next @ self._online.W1 + self._online.b1)
-        q_on  = h_on @ self._online.W2 + self._online.b2
-        best_actions = np.argmax(q_on, axis=1)
-        h_tgt = np.maximum(0.0, phis_next @ self._target.W1 + self._target.b1)
-        q_tgt = h_tgt @ self._target.W2 + self._target.b2
-        td_targets = rewards + (1.0 - dones) * GAMMA * q_tgt[np.arange(B), best_actions]
-
-        self._online.update_batch(phis, actions, td_targets, ALPHA)
-        self._step_count += 1
-
-        if self._step_count % TARGET_UPDATE_FREQ == 0:
-            self._target.copy_from(self._online)
+        # 옛 2층 backprop 코드는 3층 구조와 호환되지 않으므로 여기서 raise.
+        # (실제로 도달하려면 _NUMPY_TRAINING_ENABLED=True 명시 + numpy 학습 재구현 필요)
+        raise NotImplementedError(
+            "numpy 학습 backprop 미구현 (3층 MLP). "
+            "torch 학습기(train_boss_parallel.py)를 사용하세요."
+        )
 
     # -----------------------------------------------------------------------
     # 에피소드 관리
@@ -893,9 +899,10 @@ class RLBossBot(BotInterface):
         save_path = Path(path) if path is not None else _DEFAULT_WEIGHTS_PATH
         save_path.parent.mkdir(parents=True, exist_ok=True)
         data = {
-            "version":       3,
+            "version":       4,
             "n_features":    N_FEATURES,
-            "n_hidden":      N_HIDDEN,
+            "n_hidden1":     N_HIDDEN1,
+            "n_hidden2":     N_HIDDEN2,
             "n_actions":     N_ACTIONS,
             "step_count":    self._step_count,
             "episode_count": self._episode_count,
@@ -932,11 +939,18 @@ class RLBossBot(BotInterface):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if data.get("version") != 3:
-                return  # 구버전 (N_FEATURES 변경으로 자동 무시)
-            if (data.get("n_features") != N_FEATURES
-                    or data.get("n_hidden") != N_HIDDEN
-                    or data.get("n_actions") != N_ACTIONS):
+            # B 트랙: v4 = 43→256→128→19 3층 MLP. v3 이하 구버전은 무시.
+            if data.get("version") != 4:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "RLBossBot: checkpoint version %s 무시 (v4 필요, 재학습으로 회복)",
+                    data.get("version"),
+                )
+                return
+            if (data.get("n_features")  != N_FEATURES
+                    or data.get("n_hidden1") != N_HIDDEN1
+                    or data.get("n_hidden2") != N_HIDDEN2
+                    or data.get("n_actions")  != N_ACTIONS):
                 return
             tmp_online = DQNetwork()
             tmp_target = DQNetwork()

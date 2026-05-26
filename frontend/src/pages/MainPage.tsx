@@ -124,16 +124,17 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
     const el = e.currentTarget
     el.style.transform = 'translateY(-4px)'
     el.style.borderColor = borderColor.replace('.25', '.5')
+    el.style.boxShadow = `0 0 56px ${glowColor.replace('.15', '.28').replace('.12', '.22')}`
   }
   function onLeave(e: React.MouseEvent<HTMLDivElement>) {
     const el = e.currentTarget
     el.style.transform = 'translateY(0)'
     el.style.borderColor = borderColor
+    el.style.boxShadow = `0 0 40px ${glowColor}`
   }
 
   return (
     <div
-      onClick={onClick}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       style={{
@@ -141,7 +142,6 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
         border: `1px solid ${borderColor}`,
         borderRadius: 14,
         padding: 24,
-        cursor: 'pointer',
         boxShadow: `0 0 40px ${glowColor}`,
         transition: 'transform .25s ease, box-shadow .25s ease, border-color .25s ease',
       }}
@@ -162,16 +162,26 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
       <p style={{ fontWeight: 300, color: MUTED, fontSize: 12, margin: '0 0 20px' }}>{desc}</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button
+          onClick={onClick}
           style={{
             width: '100%', padding: '10px 0', borderRadius: 8,
             background: btnBg, color: btnColor,
             border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500,
+            transition: 'filter .15s, transform .15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.filter = 'brightness(1.15)'
+            e.currentTarget.style.transform = 'translateY(-1px)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.filter = 'brightness(1)'
+            e.currentTarget.style.transform = 'translateY(0)'
           }}
         >
           시작하기 →
         </button>
         <button
-          onClick={e => { e.stopPropagation(); navigate(tutorialRoute) }}
+          onClick={() => navigate(tutorialRoute)}
           style={{
             width: '100%', padding: '7px 0', borderRadius: 8,
             background: 'transparent',

@@ -1,183 +1,144 @@
 import React, { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { MOCK, MOCK_GAME_ID } from '../dev/mock'
+import { MOCK } from '../dev/mock'
 import BotCodeInput from '../components/BotCodeInput'
-import TutorialBanner from '../components/TutorialBanner'
-import QuickRefPanel from '../components/QuickRefPanel'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+// BR2(연속 2D 배틀로얄) 백엔드. 기존 그리드 배틀로얄(/battleroyale)을 제자리 교체.
+const API_BASE = import.meta.env.VITE_BR2_API_BASE ?? 'http://localhost:8080/battleroyale2'
 
 const MAX_CODE_BYTES = 50 * 1024 // 50KB
 
-const DEFAULT_CODE = `import random
+// 유저 봇 기본 코드. 백엔드 BattleRoyale2/bots/user_template.py 와 동일 구조.
+// exec 네임스페이스에 BattleRoyale2DBot 이 주입되므로 import 불필요. get_action 은 action dict 반환.
+const DEFAULT_CODE = `import math
 
-# MINE은 봇이 서 있는 칸을 채굴합니다.
-# 광물 칸으로 이동한 다음 틱에 MINE을 실행해야 합니다.
-_on_mineral = False
+# class Bot(BattleRoyale2DBot) 을 정의하세요. get_action(state) 가 매 결정 틱(0.1s) 호출됩니다.
+# 허용 import: math, random, json, collections, heapq, itertools
+class Bot(BattleRoyale2DBot):
+    def choose_spawn(self, map_info):
+        # 매치 시작 시 1회. 희귀 코인/상자 클러스터 근처에서 시작 (None 이면 랜덤)
+        rc = map_info.get("rare_clusters") or map_info.get("chest_clusters") or []
+        if rc:
+            return (rc[0][0], rc[0][1])
+        return None
 
-def action(state: dict) -> str:
-    global _on_mineral
+    def get_action(self, state):
+        me = state["self"]
+        x, y = me["pos"]
+        vision = state["vision"]
+        zone = state.get("zone", {})
+        action = {
+            "move_dir": [0.0, 0.0], "aim_dir": [1.0, 0.0],
+            "attack": False, "guard": False, "dash": False,
+            "pickup": False, "use_potion": False,
+        }
 
-    my = state["my_bot"]
-    pos_x, pos_y = my["position"]
-    energy = my["energy"]
-    grid = state["vision"]["grid"]
-    zone_bounds = state.get("zone_bounds", (0, 0, 99, 99))
-    min_x, min_y, max_x, max_y = zone_bounds
+        # 1) HP 낮고 포션 보유 → 사용
+        if me.get("has_potion") and me["hp"] < 80:
+            action["use_potion"] = True
 
-    # 존 밖이면 중심으로 이동
-    in_zone = min_x <= pos_x <= max_x and min_y <= pos_y <= max_y
-    if not in_zone:
-        _on_mineral = False
-        cx = (min_x + max_x) // 2
-        cy = (min_y + max_y) // 2
-        dx, dy = cx - pos_x, cy - pos_y
-        if abs(dx) >= abs(dy):
-            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
-        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+        # 2) 자기장 밖이면 중심으로 이동
+        if zone.get("active") and zone.get("damage", 0) > 0:
+            cx, cy = zone["center"]
+            dx, dy = cx - x, cy - y
+            d = math.hypot(dx, dy)
+            if d > zone.get("radius", 0):
+                action["move_dir"] = [dx / d, dy / d]
+                action["aim_dir"] = [dx / d, dy / d]
+                return action
 
-    # 에너지 위험 시 방어
-    if energy <= 20:
-        _on_mineral = False
-        return "SHIELD"
+        # 3) 가까운 적 → 사거리(60) 안이면 공격, 아니면 접근
+        enemies = vision.get("enemies", [])
+        if enemies:
+            e = min(enemies, key=lambda en: (en["pos"][0]-x)**2 + (en["pos"][1]-y)**2)
+            dx, dy = e["pos"][0]-x, e["pos"][1]-y
+            d = math.hypot(dx, dy) or 1.0
+            action["aim_dir"] = [dx/d, dy/d]
+            if d <= 60:
+                action["attack"] = True
+            else:
+                action["move_dir"] = [dx/d, dy/d]
+            return action
 
-    # 지난 틱에 광물 칸으로 이동했으면 이번 틱에 채굴
-    if _on_mineral:
-        _on_mineral = False
-        return "MINE"
+        # 4) 코인 채집 (희귀 우선)
+        nodes = vision.get("nodes", [])
+        if nodes:
+            rare = [n for n in nodes if n.get("rare")]
+            pool = rare if rare else nodes
+            n = min(pool, key=lambda nd: (nd["pos"][0]-x)**2 + (nd["pos"][1]-y)**2)
+            dx, dy = n["pos"][0]-x, n["pos"][1]-y
+            d = math.hypot(dx, dy) or 1.0
+            action["move_dir"] = [dx/d, dy/d]
+            action["aim_dir"] = [dx/d, dy/d]
 
-    # 8방향 인접 적 공격
-    attack_dirs = [
-        (0,-1,"ATTACK_UP"),    (0,1,"ATTACK_DOWN"),
-        (-1,0,"ATTACK_LEFT"),  (1,0,"ATTACK_RIGHT"),
-        (-1,-1,"ATTACK_UP_LEFT"),  (1,-1,"ATTACK_UP_RIGHT"),
-        (-1,1,"ATTACK_DOWN_LEFT"), (1,1,"ATTACK_DOWN_RIGHT"),
-    ]
-    for dx, dy, atk in attack_dirs:
-        if grid[2 + dy][2 + dx] == "bot_enemy":
-            return atk
-
-    # 8방향 이동 목록
-    move_dirs = [
-        (0,-1,"MOVE_UP"),    (0,1,"MOVE_DOWN"),
-        (-1,0,"MOVE_LEFT"),  (1,0,"MOVE_RIGHT"),
-        (-1,-1,"MOVE_UP_LEFT"),  (1,-1,"MOVE_UP_RIGHT"),
-        (-1,1,"MOVE_DOWN_LEFT"), (1,1,"MOVE_DOWN_RIGHT"),
-    ]
-
-    # 인접 8칸에 광물이 있으면 그 칸으로 이동 후 다음 틱 MINE 예약 (희귀 우선)
-    for target_cell in ("mineral_rare", "mineral"):
-        for dx, dy, mv in move_dirs:
-            if grid[2 + dy][2 + dx] == target_cell:
-                _on_mineral = True
-                return mv
-
-    # 시야 내 광물 방향으로 이동 (8방향 최단, 희귀 우선)
-    best_move = None
-    best_score = -999
-    for row in range(5):
-        for col in range(5):
-            cell = grid[row][col]
-            if cell not in ("mineral", "mineral_rare"):
-                continue
-            ddx, ddy = col - 2, row - 2
-            dist = max(abs(ddx), abs(ddy))
-            score = (20 if cell == "mineral_rare" else 5) - dist
-            if score > best_score:
-                best_score = score
-                best_move = (ddx, ddy)
-
-    if best_move:
-        ddx, ddy = best_move
-        sx = (1 if ddx > 0 else -1) if ddx != 0 else 0
-        sy = (1 if ddy > 0 else -1) if ddy != 0 else 0
-        if grid[2 + sy][2 + sx] in ("mineral", "mineral_rare"):
-            _on_mineral = True
-        for dx, dy, mv in move_dirs:
-            if dx == sx and dy == sy:
-                return mv
-
-    # 랜덤 탐색 (8방향)
-    return random.choice([
-        "MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT",
-        "MOVE_UP_LEFT", "MOVE_UP_RIGHT", "MOVE_DOWN_LEFT", "MOVE_DOWN_RIGHT",
-    ])
+        return action
 `
 
 function byteSize(str: string) {
   return new TextEncoder().encode(str).length
 }
 
-// ── Rules Modal ────────────────────────────────────────────────────────
+// ── Rules Modal (BR2) ───────────────────────────────────────────────────
 
 function RulesModal({ onClose }: { onClose: () => void }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      onClick={onClose}
-    >
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-      {/* Window */}
       <div
         className="relative z-10 bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 shrink-0">
-          <h2 className="font-bold text-lg">📋 배틀로얄 룰 & 코드 가이드</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-white transition-colors text-xl leading-none"
-          >
-            ✕
-          </button>
+          <h2 className="font-bold text-lg">📋 배틀로얄 2D 룰 & 코드 가이드</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>
 
-        {/* Scrollable body */}
         <div className="overflow-y-auto px-6 py-5 flex flex-col gap-6 text-sm scrollbar-custom">
-
-          {/* 개요 */}
           <Section title="🎮 게임 개요">
             <p className="text-gray-300 leading-relaxed">
-              최대 100개의 AI 봇이 100×100 맵에서 경쟁합니다. 광물 채굴, 전투, 생존으로 점수를 쌓아 <br/>최고 점수를 기록하세요.
-              게임은 최대 <b>200틱</b>이며, 봇이 1개 남거나 모든 광물이 소진되면 종료됩니다.
+              연속 2D 맵(3000×3000)에서 봇들이 경쟁합니다. 코인·아이템 파밍, 근접/원거리 전투, 자기장 생존으로 점수를 쌓으세요.
+              <b> 한 목숨</b>이며(리스폰 없음), 매치는 최대 <b>180초</b>, 마지막 1명이 남으면 종료됩니다.
             </p>
           </Section>
 
-          {/* action 함수 */}
-          <Section title="⚙️ action 함수 구조">
-            <p className="text-gray-400 mb-2">매 틱마다 엔진이 <code className="text-green-400">action(state)</code> 를 호출합니다. 문자열 하나를 반환하세요.</p>
-            <CodeBlock>{`def action(state: dict) -> str:
-    my       = state["my_bot"]       # 내 봇 정보
-    vision   = state["vision"]       # 시야 정보
-    zone     = state.get("zone_bounds", (0,0,99,99))
-    bots     = state.get("other_bots", [])  # 시야 내 적 봇 목록
-    return "STAY"`}
-            </CodeBlock>
+          <Section title="⚙️ Bot 클래스 구조">
+            <p className="text-gray-400 mb-2"><code className="text-green-400">class Bot(BattleRoyale2DBot)</code> 를 정의하면 매 결정 틱(100ms)마다 <code className="text-green-400">get_action(state)</code> 가 호출됩니다. action <b>딕셔너리</b>를 반환하세요.</p>
+            <CodeBlock>{`class Bot(BattleRoyale2DBot):
+    def choose_spawn(self, map_info):   # 매치 시작 1회 (선택)
+        return None                      # (x, y) 또는 None(랜덤)
+
+    def get_action(self, state):
+        me = state["self"]
+        return {
+            "move_dir": [0.0, 0.0],   # 이동 방향(길이 0~1=속도비율)
+            "aim_dir":  [1.0, 0.0],   # 조준/바라보는 방향
+            "attack": False, "guard": False, "dash": False,
+            "pickup": False, "use_potion": False,
+        }`}</CodeBlock>
+            <p className="text-gray-500 text-xs mt-1">허용 import: <code className="text-indigo-300">math, random, json, collections, heapq, itertools</code></p>
           </Section>
 
-          {/* state 구조 */}
           <Section title="📦 state 객체 상세">
             <table className="w-full text-xs border-separate border-spacing-y-1">
               <thead>
-                <tr className="text-gray-500 text-left">
-                  <th className="w-44 pb-1">키</th>
-                  <th>설명</th>
-                </tr>
+                <tr className="text-gray-500 text-left"><th className="w-52 pb-1">키</th><th>설명</th></tr>
               </thead>
               <tbody className="text-gray-300">
                 {[
-                  ['my_bot.position', '[x, y] — 내 봇 현재 좌표'],
-                  ['my_bot.energy', '현재 에너지 (0 이하이면 사망)'],
-                  ['my_bot.score', '현재 누적 점수'],
-                  ['my_bot.alive', 'True / False'],
-                  ['vision.grid', '5×5 리스트. 중심(2,2)이 내 위치. 셀 값 ↓'],
-                  ['vision.grid 셀 값', '"empty" / "mineral" / "mineral_rare" / "bot_enemy" / "ME" / "wall"'],
-                  ['zone_bounds', '(min_x, min_y, max_x, max_y) — 안전 구역 범위'],
-                  ['other_bots', '시야 내 적 봇 리스트: [{id, position, energy}]'],
+                  ['self.pos', '[x, y] — 내 봇 좌표'],
+                  ['self.hp / max_hp', '체력 / 최대체력(200)'],
+                  ['self.atk / def / speed', '공격력 / 방어력 / 이동속도'],
+                  ['self.attack_cd / dash_cd / guard_cd', '각 쿨다운 잔여(초). 0이면 사용 가능'],
+                  ['self.has_potion / has_ranged', '포션 보유 / 원거리 무기 보유 여부'],
+                  ['self.guarding', '현재 가드 중 여부'],
+                  ['vision.enemies', '시야 내 적: [{id, pos, hp, guarding}]'],
+                  ['vision.nodes', '시야 내 코인: [{pos, rare}]'],
+                  ['vision.items', '시야 내 드롭 아이템: [{pos, type}]'],
+                  ['vision.chests', '시야 내 상자: [{pos}]'],
+                  ['vision.projectiles', '시야 내 투사체: [{pos, vel, owner_id}]'],
+                  ['zone', '{active, center:[x,y], radius, damage, phase}'],
+                  ['leaderboard', '상위 3명: [{id, score}]'],
                 ].map(([k, v]) => (
                   <tr key={k} className="bg-gray-800/40 rounded">
                     <td className="px-2 py-1 rounded-l font-mono text-indigo-300">{k}</td>
@@ -186,41 +147,39 @@ function RulesModal({ onClose }: { onClose: () => void }) {
                 ))}
               </tbody>
             </table>
+            <p className="text-gray-500 text-xs mt-1">시야 반경 200px. 그 안의 객체만 vision 에 들어옵니다.</p>
           </Section>
 
-          {/* 액션 목록 */}
-          <Section title="🕹️ 반환 가능한 액션">
+          <Section title="🕹️ action 딕셔너리">
             <div className="grid grid-cols-2 gap-2">
               {[
-                ['MOVE_UP / DOWN / LEFT / RIGHT', '4방향 이동 (에너지 -2)'],
-                ['MOVE_UP_LEFT / UP_RIGHT / DOWN_LEFT / DOWN_RIGHT', '대각선 이동 (에너지 -2)'],
-                ['MINE', '현재 위치 광물 채굴 (에너지 -3) ※ 광물 칸으로 이동한 다음 틱에 사용'],
-                ['ATTACK_UP / DOWN / LEFT / RIGHT', '4방향 공격 (에너지 -5, 피해 25)'],
-                ['ATTACK_UP_LEFT / UP_RIGHT / DOWN_LEFT / DOWN_RIGHT', '대각선 공격 (에너지 -5, 피해 25)'],
-                ['SHIELD', '이번 틱 공격 완전 방어 (에너지 -3)'],
-                ['STAY', '제자리 대기 (에너지 -1)'],
-              ].map(([action, desc]) => (
-                <div key={action} className="bg-gray-800/50 rounded-lg px-3 py-2">
-                  <p className="font-mono text-green-400 text-xs">{action}</p>
+                ['move_dir [x,y]', '이동 방향 벡터. 길이 0~1 = 속도비율'],
+                ['aim_dir [x,y]', '조준/정면 방향 단위벡터 (공격·가드 기준)'],
+                ['attack', '근접 부채꼴(60px,90°) 또는 원거리 발사(보유 시). 쿨다운 0.5/0.7s'],
+                ['guard', '1초 가드 발동(쿨10s). 정면 ±60° 100% 차단 + 공격자 1초 경직'],
+                ['dash', '0.2초 순간이동(600px/s). 쿨다운 5s'],
+                ['pickup', '인접 상자 열기 (1초 유지)'],
+                ['use_potion', '보유 포션 사용 (HP +50, 즉시)'],
+              ].map(([a, desc]) => (
+                <div key={a} className="bg-gray-800/50 rounded-lg px-3 py-2">
+                  <p className="font-mono text-green-400 text-xs">{a}</p>
                   <p className="text-gray-400 text-xs mt-0.5">{desc}</p>
                 </div>
               ))}
             </div>
           </Section>
 
-          {/* 점수 체계 */}
           <Section title="🏆 점수 체계">
             <table className="w-full text-xs border-separate border-spacing-y-1">
               <tbody className="text-gray-300">
                 {[
-                  ['⛏️ 일반 광물 채굴', '+5점'],
-                  ['💎 희귀 광물 채굴', '+20점'],
-                  ['⚔️ 킬 (적 처치)', '+30점'],
-                  ['🛡️ 방어 성공 (SHIELD)', '+10점'],
-                  ['⏱️ 생존 틱', '매 틱 +0.1점'],
-                  ['🥇 최장 생존 1위', '+100점 (게임 종료 시)'],
-                  ['🥈 최장 생존 2위', '+50점'],
-                  ['🥉 최장 생존 3위', '+25점'],
+                  ['🪙 일반 코인', '+5점'],
+                  ['💎 희귀 코인', '+20점'],
+                  ['⚔️ 적 처치', '+100점'],
+                  ['🛡️ 가드 성공', '+10점'],
+                  ['⏱️ 생존 1초', '+0.1점'],
+                  ['🥇 최종 생존 1위', '+100점'],
+                  ['🥈 2위 / 🥉 3위', '+50 / +25점'],
                 ].map(([item, pts]) => (
                   <tr key={item} className="bg-gray-800/40">
                     <td className="px-2 py-1 rounded-l">{item}</td>
@@ -231,14 +190,13 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             </table>
           </Section>
 
-          {/* 자기장 */}
-          <Section title="🌀 자기장 (Zone)">
+          <Section title="🌀 자기장 (배그 스타일)">
             <p className="text-gray-300 leading-relaxed">
-              76틱부터 자기장이 수축합니다. 안전 구역 밖에 있으면 매 틱 <b className="text-red-400">에너지 -3</b>.
-              151틱 이후 수축 속도가 2배로 빨라집니다. <code className="text-indigo-300">zone_bounds</code>를 확인해 항상 안전 구역 안에 있으세요.
+              0~60초는 안전. 이후 60~100s / 100~140s / 140~180s 3단계로 중심이 옮겨가며 좁아집니다.
+              자기장 밖은 단계별 <b className="text-red-400">2 → 3 → 5 dmg/s</b>. <code className="text-indigo-300">state.zone</code> 의 center/radius 로 항상 안전권 안에 있으세요.
+              <code className="text-indigo-300"> map_info</code> 로 첫 자기장(zone1) 위치를 미리 알 수 있어 스폰 전략에 활용 가능합니다.
             </p>
           </Section>
-
         </div>
       </div>
     </div>
@@ -262,28 +220,6 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
   )
 }
 
-// ── Bot icon options ───────────────────────────────────────────────────
-
-const BOT_ICONS: { emoji: string; label: string }[] = [
-  { emoji: '⭐', label: '별'     },
-  { emoji: '🔥', label: '불꽃'   },
-  { emoji: '⚡', label: '번개'   },
-  { emoji: '💎', label: '다이아' },
-  { emoji: '👑', label: '왕관'   },
-  { emoji: '🚀', label: '로켓'   },
-  { emoji: '🎯', label: '타겟'   },
-  { emoji: '⚔️', label: '검'     },
-  { emoji: '🦁', label: '사자'   },
-  { emoji: '🦅', label: '독수리' },
-]
-
-/** 게임 생성 시 선택한 아이콘을 WatchPage에서 꺼내 쓸 수 있도록 저장 */
-function saveBotIconPref(botId: string, icon: string) {
-  try {
-    localStorage.setItem('loa_bot_icon', JSON.stringify({ botId, icon }))
-  } catch { /* localStorage 비활성화 환경 대응 */ }
-}
-
 export default function GameNewPage() {
   const { token } = useAuth()
   const navigate = useNavigate()
@@ -291,14 +227,11 @@ export default function GameNewPage() {
 
   const [gameName, setGameName] = useState('')
   const [botId, setBotId] = useState('')
-  const [botIcon, setBotIcon] = useState('⭐')
   const [code, setCode] = useState<string>(
     (location.state as { templateCode?: string } | null)?.templateCode ?? DEFAULT_CODE
   )
   const [isPublic, setIsPublic] = useState(true)
-  const [fillWithAi, setFillWithAi] = useState(true)
-  const [minBots, setMinBots] = useState<number | ''>(4)
-  const [tickInterval, setTickInterval] = useState(0.05)
+  const [botCount, setBotCount] = useState(4)   // 총 봇 수 (내 봇 1 + AI 채움)
   const [seed, setSeed] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
@@ -315,21 +248,20 @@ export default function GameNewPage() {
     setSubmitting(true)
     setError('')
 
+    const myBotId = botId.trim() || 'my_bot'
+
     // ── mock mode ──────────────────────────────────────────────
     if (MOCK) {
       await new Promise((r) => setTimeout(r, 600))
-      saveBotIconPref(botId.trim() || 'my_bot', botIcon)
-      navigate(`/games/${MOCK_GAME_ID}/watch`)
+      navigate(`/godot-test?match=dev`)
       return
     }
     // ──────────────────────────────────────────────────────────
 
     try {
       const body: Record<string, unknown> = {
-        bots: [{ bot_id: botId.trim() || 'my_bot', code, is_public: isPublic }],
-        tick_interval: tickInterval,
-        fill_with_ai: fillWithAi,
-        min_bots: minBots || 2,
+        bots: [{ bot_id: myBotId, name: myBotId, code, is_public: isPublic }],
+        bot_count: botCount,
         seed: seed !== '' ? parseInt(seed, 10) : null,
         name: gameName.trim() || undefined,
       }
@@ -349,8 +281,8 @@ export default function GameNewPage() {
       }
 
       const game = await res.json()
-      saveBotIconPref(botId.trim() || 'my_bot', botIcon)
-      navigate(`/games/${game.game_id}/watch`)
+      // C4 에서 /games/{id}/watch 를 Godot iframe 으로 교체 예정. 현재는 동작하는 godot-test 로 이동.
+      navigate(`/godot-test?match=${encodeURIComponent(game.game_id)}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '게임 생성에 실패했습니다.')
       setSubmitting(false)
@@ -368,16 +300,11 @@ export default function GameNewPage() {
         background: 'radial-gradient(ellipse 60% 70% at 50% 40%, rgba(155,89,245,.18) 0%, transparent 70%)',
       }} />
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
-      {/* 헤더 */}
+
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button
-          onClick={() => navigate(-1)}
-          className="text-gray-400 hover:text-white text-sm transition-colors"
-        >
-          ◀ 뒤로
-        </button>
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm transition-colors">◀ 뒤로</button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">새 게임 만들기</span>
+        <span className="font-bold">새 게임 만들기 — 배틀로얄 2D</span>
         <button
           type="button"
           onClick={() => setShowRules(true)}
@@ -390,8 +317,6 @@ export default function GameNewPage() {
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
 
-          <TutorialBanner mode="battle-royale" />
-
           {/* 게임 이름 */}
           <section className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-300">
@@ -401,177 +326,83 @@ export default function GameNewPage() {
               type="text"
               value={gameName}
               onChange={(e) => setGameName(e.target.value)}
-              placeholder="새 배틀로얄 1"
+              placeholder="새 배틀로얄 2D 1"
               maxLength={40}
               className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
             />
           </section>
 
-          {/* 봇 이름 + 아이콘 */}
-          <section className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-300">
-                봇 이름 <span className="text-gray-500 font-normal">(게임 내 표시 ID)</span>
-              </label>
-              <input
-                type="text"
-                value={botId}
-                onChange={(e) => setBotId(e.target.value)}
-                placeholder="my_bot"
-                maxLength={32}
-                className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
-              />
-            </div>
-
-            {/* 내 봇 아이콘 선택 */}
-            <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <span className="text-4xl leading-none">{botIcon}</span>
-                <div>
-                  <p className="text-sm font-medium text-white">내 봇 아이콘</p>
-                  <p className="text-xs text-gray-500 mt-0.5">관전 화면에서 내 봇을 식별할 아이콘을 선택하세요</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-10 gap-1.5">
-                {BOT_ICONS.map(({ emoji, label }) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    title={label}
-                    onClick={() => setBotIcon(emoji)}
-                    className={[
-                      'flex flex-col items-center justify-center rounded-lg py-2 text-xl leading-none',
-                      'border-2 transition-colors',
-                      botIcon === emoji
-                        ? 'border-yellow-400 bg-yellow-400/10'
-                        : 'border-gray-600 bg-gray-700/60 hover:border-gray-400',
-                    ].join(' ')}
-                  >
-                    {emoji}
-                    <span className="text-[9px] text-gray-500 mt-1 leading-none">{label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* 봇 이름 */}
+          <section className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-300">
+              봇 이름 <span className="text-gray-500 font-normal">(게임 내 표시 ID)</span>
+            </label>
+            <input
+              type="text"
+              value={botId}
+              onChange={(e) => setBotId(e.target.value)}
+              placeholder="my_bot"
+              maxLength={32}
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
+            />
           </section>
 
-          {/* 코드 입력 (직접입력 / 파일 업로드) */}
+          {/* 코드 입력 */}
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-300">봇 코드 (Python)</label>
-              <span
-                className={`text-xs font-mono ${
-                  codeOverLimit ? 'text-red-400' : 'text-gray-500'
-                }`}
-              >
+              <label className="text-sm font-medium text-gray-300">봇 코드 (Python · class Bot)</label>
+              <span className={`text-xs font-mono ${codeOverLimit ? 'text-red-400' : 'text-gray-500'}`}>
                 {(codeBytes / 1024).toFixed(1)} KB / 50 KB
                 {codeOverLimit && ' — 초과'}
               </span>
             </div>
-            <div className="flex gap-3 items-start">
-              <div className="flex-1 min-w-0 flex flex-col gap-2">
-                <BotCodeInput
-                  value={code}
-                  onChange={setCode}
-                  hasError={codeOverLimit}
-                  accentColor="indigo"
-                />
-                {codeOverLimit && (
-                  <p className="text-red-400 text-xs">코드가 50KB를 초과합니다. 줄여주세요.</p>
-                )}
-              </div>
-              <QuickRefPanel mode="battle-royale" />
-            </div>
+            <BotCodeInput value={code} onChange={setCode} hasError={codeOverLimit} accentColor="indigo" />
+            {codeOverLimit && <p className="text-red-400 text-xs">코드가 50KB를 초과합니다. 줄여주세요.</p>}
+            <p className="text-xs text-gray-500">우측 상단 <b>📋 룰 확인</b> 에서 state/action 스키마를 확인하세요.</p>
           </section>
 
           {/* 게임 옵션 */}
           <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
 
-            {/* 봇 코드 공개 여부 */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-white">봇 코드 공개</p>
-                <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
+                <p className="text-xs text-gray-500">다른 유저가 내 봇 코드를 볼 수 있습니다</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsPublic((v) => !v)}
                 className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-indigo-600' : 'bg-gray-700'}`}
               >
-                <span
-                  className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    isPublic ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
+                <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </div>
 
-            {/* AI 채우기 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">AI로 빈 슬롯 채우기</p>
-                <p className="text-xs text-gray-500">내 봇 외 나머지를 AI 봇으로 채웁니다</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFillWithAi((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${fillWithAi ? 'bg-indigo-600' : 'bg-gray-700'}`}
-              >
-                <span
-                  className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    fillWithAi ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* 최소 봇 수 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">최소 봇 수</p>
-                <p className="text-xs text-gray-500">2 ~ 100</p>
-              </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={minBots}
-                onChange={(e) => {
-                  const raw = e.target.value.replace(/[^0-9]/g, '')
-                  if (raw === '') { setMinBots(''); return }
-                  setMinBots(Math.min(100, Number(raw)))
-                }}
-                onBlur={() => setMinBots((v) => (v === '' || v < 2 ? 2 : v))}
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 w-16 text-center"
-              />
-            </div>
-
-            {/* 틱 간격 */}
+            {/* 봇 수 */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-white">틱 간격 (속도)</p>
-                  <p className="text-xs text-gray-500">값이 작을수록 빠름</p>
+                  <p className="text-sm text-white">봇 수</p>
+                  <p className="text-xs text-gray-500">내 봇 1 + 나머지는 AI(초식/미친개/존버) 랜덤 채움</p>
                 </div>
-                <span className="text-sm text-indigo-400 font-mono">{tickInterval.toFixed(2)}s</span>
+                <span className="text-sm text-indigo-400 font-mono">{botCount}봇</span>
               </div>
               <input
                 type="range"
-                min={0.01}
-                max={1.0}
-                step={0.01}
-                value={tickInterval}
-                onChange={(e) => setTickInterval(parseFloat(e.target.value))}
+                min={2}
+                max={8}
+                step={1}
+                value={botCount}
+                onChange={(e) => setBotCount(parseInt(e.target.value, 10))}
                 className="w-full accent-indigo-500"
               />
               <div className="flex justify-between text-xs text-gray-600">
-                <span>0.01s (빠름)</span>
-                <span>1.0s (느림)</span>
+                <span>2봇</span>
+                <span>8봇</span>
               </div>
             </div>
 
-            {/* 시드 */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-white">시드 (재현용, 선택)</p>
@@ -589,14 +420,10 @@ export default function GameNewPage() {
             </div>
           </section>
 
-          {/* 에러 */}
           {error && (
-            <div className="text-sm text-red-400 bg-red-500/10 rounded-lg px-4 py-3">
-              {error}
-            </div>
+            <div className="text-sm text-red-400 bg-red-500/10 rounded-lg px-4 py-3">{error}</div>
           )}
 
-          {/* 제출 버튼 */}
           <button
             type="submit"
             disabled={!canSubmit}
