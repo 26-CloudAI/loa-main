@@ -3,9 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK } from '../dev/mock'
 import BotCodeInput from '../components/BotCodeInput'
+import { BR2_API_BASE } from '../br2'
 
-// BR2(연속 2D 배틀로얄) 백엔드. 기존 그리드 배틀로얄(/battleroyale)을 제자리 교체.
-const API_BASE = import.meta.env.VITE_BR2_API_BASE ?? 'http://localhost:8080/battleroyale2'
+// BR2(연속 2D 배틀로얄) 백엔드. VITE_API_BASE(.../battleroyale) → /battleroyale2 파생.
+const API_BASE = BR2_API_BASE
 
 const MAX_CODE_BYTES = 50 * 1024 // 50KB
 
