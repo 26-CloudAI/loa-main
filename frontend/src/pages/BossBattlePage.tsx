@@ -300,10 +300,14 @@ export default function BossBattlePage() {
 
   return (
     <div className="min-h-screen text-white" style={{
+      position: 'relative',
       background: '#0D0F14',
       backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
       backgroundSize: '24px 24px',
     }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: 'radial-gradient(ellipse 60% 70% at 50% 40%, rgba(232,51,74,.18) 0%, transparent 70%)',
+      }} />
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
           onClick={() => navigate('/games/new')}
