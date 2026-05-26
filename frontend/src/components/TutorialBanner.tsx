@@ -45,7 +45,17 @@ export default function TutorialBanner({ mode }: { mode: Mode }) {
             background: 'rgba(99,102,241,.2)',
             border: '1px solid rgba(99,102,241,.4)',
             color: '#A5B4FC', fontSize: 12, fontWeight: 600,
-            cursor: 'pointer',
+            cursor: 'pointer', transition: 'all .15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(99,102,241,.35)'
+            e.currentTarget.style.borderColor = 'rgba(99,102,241,.7)'
+            e.currentTarget.style.color = '#C4B5FD'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'rgba(99,102,241,.2)'
+            e.currentTarget.style.borderColor = 'rgba(99,102,241,.4)'
+            e.currentTarget.style.color = '#A5B4FC'
           }}
         >
           튜토리얼 보기
