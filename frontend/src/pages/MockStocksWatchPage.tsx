@@ -550,7 +550,7 @@ export default function MockStocksWatchPage() {
         </div>
 
         {/* ── 우측 패널 ── */}
-        <div className="border-l border-gray-800 flex flex-col overflow-hidden">
+        <div className="border-l border-gray-800 flex flex-col overflow-hidden" style={{ background: '#0D0F14' }}>
 
           {/* 리더보드 */}
           <div className="p-3 border-b border-gray-800 shrink-0">
@@ -623,10 +623,10 @@ export default function MockStocksWatchPage() {
                 <div className="mb-2">
                   <p className="text-[10px] text-gray-500 mb-1">보유 종목</p>
                   {Object.entries(selectedBotInfo.portfolio).map(([sym, pos]) => (
-                    <div key={sym} className="flex justify-between items-center text-[11px] py-0.5 border-b border-gray-700/40">
-                      <span className="font-medium" style={{ color: stockColorMap[sym] ?? '#6366F1' }}>{sym}</span>
-                      <span className="text-gray-400">{pos.quantity}주</span>
-                      <span className="font-mono text-gray-300">₩{(pos.value / 1e6).toFixed(1)}M</span>
+                    <div key={sym} className="grid items-center text-[11px] py-0.5 border-b border-gray-700/40" style={{ gridTemplateColumns: '1fr 3rem 4rem' }}>
+                      <span className="font-medium truncate" style={{ color: stockColorMap[sym] ?? '#6366F1' }}>{sym}</span>
+                      <span className="text-gray-400 text-right">{pos.quantity}주</span>
+                      <span className="font-mono text-gray-300 text-right">₩{(pos.value / 1e6).toFixed(1)}M</span>
                     </div>
                   ))}
                 </div>
@@ -636,10 +636,10 @@ export default function MockStocksWatchPage() {
                 <div>
                   <p className="text-[10px] text-gray-500 mb-1">공매도 포지션</p>
                   {Object.entries(selectedBotInfo.short_positions).map(([sym, pos]) => (
-                    <div key={sym} className="flex justify-between items-center text-[11px] py-0.5 border-b border-gray-700/40">
-                      <span className="text-red-400">{sym}</span>
-                      <span className="text-gray-400">{pos.quantity}주</span>
-                      <span className="font-mono text-red-300">@{pos.avg_sell_price.toLocaleString()}</span>
+                    <div key={sym} className="grid items-center text-[11px] py-0.5 border-b border-gray-700/40" style={{ gridTemplateColumns: '1fr 3rem 4rem' }}>
+                      <span className="text-red-400 truncate">{sym}</span>
+                      <span className="text-gray-400 text-right">{pos.quantity}주</span>
+                      <span className="font-mono text-red-300 text-right">@{pos.avg_sell_price.toLocaleString()}</span>
                     </div>
                   ))}
                 </div>

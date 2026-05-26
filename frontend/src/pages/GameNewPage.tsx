@@ -140,7 +140,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
           {/* 개요 */}
           <Section title="🎮 게임 개요">
             <p className="text-gray-300 leading-relaxed">
-              최대 100개의 AI 봇이 100×100 맵에서 경쟁합니다. 광물 채굴, 전투, 생존으로 점수를 쌓아 최고 점수를 기록하세요.
+              최대 100개의 AI 봇이 100×100 맵에서 경쟁합니다. 광물 채굴, 전투, 생존으로 점수를 쌓아 <br/>최고 점수를 기록하세요.
               게임은 최대 <b>200틱</b>이며, 봇이 1개 남거나 모든 광물이 소진되면 종료됩니다.
             </p>
           </Section>
@@ -354,10 +354,14 @@ export default function GameNewPage() {
 
   return (
     <div className="min-h-screen text-white" style={{
+      position: 'relative',
       background: '#0D0F14',
       backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
       backgroundSize: '24px 24px',
     }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: 'radial-gradient(ellipse 60% 70% at 50% 40%, rgba(155,89,245,.18) 0%, transparent 70%)',
+      }} />
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       {/* 헤더 */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>

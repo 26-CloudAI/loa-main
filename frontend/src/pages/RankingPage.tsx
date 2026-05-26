@@ -58,12 +58,16 @@ export default function RankingPage() {
 
   return (
     <div style={{
+      position: 'relative',
       minHeight: '100vh',
       background: '#0D0F14',
       color: '#E8EAF0',
       backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
       backgroundSize: '24px 24px',
     }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: 'radial-gradient(ellipse 60% 70% at 50% 40%, rgba(99,102,241,.15) 0%, transparent 70%)',
+      }} />
       <nav style={{
         background: 'rgba(13,15,20,.92)',
         backdropFilter: 'blur(14px)',
