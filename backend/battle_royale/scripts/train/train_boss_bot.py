@@ -44,8 +44,8 @@ sys.path.insert(0, str(_PROJECT_ROOT.parent))
 from src.arena import gcs_weights  # noqa: E402
 
 from core.bot_interface import BotInterface  # noqa: E402
-from core.config import DEFAULT_CONFIG  # noqa: E402
 from core.engine import GameEngine  # noqa: E402
+from src.arena.server.boss.config import boss_battle_config  # noqa: E402
 
 from bots.battle_royale.camper import CamperBot  # noqa: E402
 from bots.battle_royale.herbivore import HerbivoreBot  # noqa: E402
@@ -280,7 +280,7 @@ def train(
         all_bots: list[BotInterface] = [boss] + opponents
 
         try:
-            engine = GameEngine(all_bots, config=DEFAULT_CONFIG, seed=ep_seed)
+            engine = GameEngine(all_bots, config=boss_battle_config(), seed=ep_seed)
             result = engine.run_full_game()
         except Exception:
             logger.error(

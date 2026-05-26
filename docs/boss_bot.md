@@ -1,7 +1,7 @@
 # 보스봇 설계 문서
 
 > AI Arena 보스전 시스템의 전체 설계, 구현 세부사항, 운영 가이드.  
-> 최종 수정: 2026-05-15
+> 최종 수정: 2026-05-25
 
 ---
 
@@ -180,6 +180,62 @@ Zone 수축 계산:
 | Medium: emergency mine이 인접 전투 차단 | 인접 전투 판단(라스트힛/flee)을 emergency보다 우선화 |
 | 허수아비 SHIELD (적 없을 때도 실드) | 인접 적 없는 SHIELD 차단, 마지막 수단만 허용 |
 
+### 주요 버그 수정 (2026-05-25)
+
+#### 하/중 보스 채굴 불가 버그 (CRITICAL)
+
+**원인**: 게임 엔진이 봇 자신의 위치를 grid에서 `"ME"` 로 표시하므로, 봇이 광물 위에 서 있어도 해당 셀이 `"mineral"` 이 아닌 `"ME"` 로 읽혔다.  
+이 때문에 발밑 광물을 인식 못 해 `MOVE_RIGHT ↔ MOVE_LEFT` 를 무한 반복하다 에너지가 고갈돼 자멸하는 현상이 발생했다.
+
+**수정**: `_pending_mine` 플래그 패턴 도입.
+
+```python
+# 광물 인접 셀로 이동하기 직전 틱에 플래그 설정
+self._pending_mine = True
+return move_action
+
+# 다음 틱 맨 처음에 플래그 소비
+if self._pending_mine:
+    self._pending_mine = False
+    return Action.MINE
+```
+
+| 봇 | 수정 위치 | 내용 |
+|----|-----------|------|
+| 하 (Easy) | `get_action()` Step 0, 8 | `_pending_mine` + 메모리 기반 발밑 채굴 |
+| 중 (Medium) | `get_action()` Step 5 | `_emergency_mine()` 에 메모리 기반 발밑 채굴 추가 |
+
+#### 하 보스 자멸 버그 (에너지 고갈)
+
+**원인**: 스폰 위치가 맵 중앙 부근이라 희귀 광물과 거리가 멀었고, 에너지 위기 임계값(50)이 낮아 채굴을 너무 늦게 시작했다.
+
+**수정**:
+
+| 항목 | 이전 | 수정 후 |
+|------|------|---------|
+| `choose_spawn` | 임의 위치 | 희귀 광물 군락 3~7칸 인접 스폰 |
+| `_EASY_EMERGENCY` | 50 | 100 (위기 임계 선제 상향) |
+| `_EASY_HUNT` | 100 | 120 (추적 개시 에너지 상향) |
+| 배회 전략 | 고정 중앙 이동 | 30틱마다 랜덤 목표점 갱신 |
+
+#### Zone 상수 불일치 수정
+
+보스봇 내 zone 판단 상수들이 `DEFAULT_CONFIG` 기준으로 하드코딩돼 있어 `boss_battle_config()` 와 맞지 않았다.
+
+```python
+# 수정 전 (DEFAULT_CONFIG 기준 — 틀림)
+_ZONE_P2_START = 76
+_ZONE_P3_START = 151
+
+# 수정 후 (boss_battle_config 기준)
+_ZONE_P2_START = 151   # phase1_end=150, 다음 틱부터 수축
+_ZONE_P3_START = 321   # phase2_end=320, 다음 틱부터 가속 수축
+_ZONE_P2_INTERVAL = 8
+_ZONE_P3_INTERVAL = 5
+```
+
+`rule_boss_bot.py` / `rl_boss_bot.py` / 학습 스크립트 3개(`train_boss_bot.py`, `train_boss_parallel.py`, `train_boss_bot_server.py`) 모두 수정.
+
 ### 공통 유틸 (`bots/rule_boss_bot.py` 모듈 레벨)
 
 ```python
@@ -245,7 +301,7 @@ _ADJ_MAP              # 모듈 레벨 캐시 (매 틱 dict 생성 방지)
 
 | 이벤트 | 보상 | 이유 |
 |--------|------|------|
-| 킬 | **+50** × kill_delta | 킬이 가장 중요한 전략적 행동 |
+| 킬 | **+100** × kill_delta | ← v3: 50→100, 공격 전략 강화 |
 | 채굴 점수 | +0.3 / 점 | 채굴 전략 장려 |
 | 에너지 회복 | +0.02 / 단위 | 생존 유지 인센티브 |
 | 에너지 위험 (≤40) | -3.0 | 위기 회피 학습 |
@@ -291,6 +347,23 @@ else:
 | 헛 SHIELD 패널티 없음 | **-0.5** 추가 |
 | 에피소드 종료 학습 4회 반복 | 2회 (과적합·분산 감소) |
 | 체크포인트 version=2 | version=3 (N_FEATURES 변경으로 구버전 자동 초기화) |
+
+### 주요 개선 사항 (v3, 2026-05-25)
+
+| 이전 | 개선 |
+|------|------|
+| kill 보상 +50 | **+100** (공격 전략 강화, 채굴 대비 킬 인센티브 2배) |
+| guided_action 공격 확률 50% | **80%** (인접 적 발견 시 더 적극적으로 공격) |
+| 누적 학습 ~935 에피소드 | **~1,235 에피소드**, step=359,634, ε=0.050 (최솟값 수렴) |
+
+**v3 성능 벤치마크** (ClaudeBot×2 + HerbivoreBot 상대, 100게임):
+
+| 지표 | v2 (개선 전) | v3 (개선 후) |
+|------|------------|------------|
+| 승률 (1위) | 17% | **27%** |
+| Top-2 진입률 | — | 42% |
+| 평균 순위 | ~3.0 | **2.26 / 5** |
+| 100게임 킬 수 | ~2 | **12** |
 
 ---
 
@@ -525,25 +598,30 @@ for r in result.rankings:
 ## 10. 파일 목록
 
 ```
-BattleRoyale/
+battle_royale/
 ├── src/arena/
 │   ├── config.py                     게임 설정 (DEFAULT_CONFIG + boss_battle_config())
 │   ├── engine.py                     게임 엔진 (config 파라미터 수용)
+│   ├── gcs_weights.py                GCS 업/다운로드 유틸 (upload_json, download_json 포함)
 │   └── server/
 │       └── app.py                    API 서버 (보스전 config 주입, 유저봇 1~3개)
 │
-├── bots/
+├── bots/boss/
 │   ├── rule_boss_bot.py              하/중 룰베이스 봇 (RuleBossEasyBot, RuleBossMediumBot)
 │   ├── rl_boss_bot.py                상 RL봇 numpy (N_FEATURES=43, 서빙용)
-│   └── rl_boss_bot_torch.py          상 RL봇 PyTorch (43→256→128→19, GPU 학습용)
+│   ├── rl_boss_bot_torch.py          상 RL봇 PyTorch (43→256→128→19, GPU 학습용)
+│   └── claude_bot.py                 테스트용 ClaudeBot (희귀광물·실드·라스트힛·zone 관리)
 │
 ├── scripts/
-│   └── export_quality_bots.py        서빙 VM cron: 품질 봇 → GCS 내보내기
+│   ├── export_quality_bots.py        서빙 VM cron: 품질 봇 → GCS 내보내기
+│   ├── train/
+│   │   ├── train_boss_bot.py         단일 프로세스 학습 스크립트 (레거시)
+│   │   ├── train_boss_parallel.py    병렬 학습 (비용 상한 + 스마트 스케줄링 + self-stop)
+│   │   └── train_boss_bot_server.py  서버 연동 학습
+│   └── sim/
+│       └── run_boss_claude.py        ClaudeBot vs RLBossBot 시뮬레이션 (성능 벤치마크용)
 │
-├── train_boss_bot.py                 단일 프로세스 학습 스크립트 (레거시)
-├── train_boss_parallel.py            병렬 학습 (비용 상한 + 스마트 스케줄링 + self-stop)
-├── gcs_weights.py                    GCS 업/다운로드 유틸 (upload_json, download_json 포함)
-└── BOSS_BOT.md                       이 문서
+└── docs/boss_bot.md                  이 문서
 ```
 
 ### 주요 설정값 요약

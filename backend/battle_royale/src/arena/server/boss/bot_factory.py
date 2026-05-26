@@ -10,6 +10,7 @@ app.py의 `_create_boss_bot`을 그대로 이동한 모듈.
 from __future__ import annotations
 
 import logging
+import time
 import threading
 from typing import Optional
 
@@ -43,11 +44,11 @@ def create_boss_bot(
 
     if difficulty == "하":
         from bots.boss.rule_boss_bot import RuleBossEasyBot
-        return RuleBossEasyBot(bot_id=bot_id, seed=42)
+        return RuleBossEasyBot(bot_id=bot_id, seed=int(time.time()) % 65536)
 
     if difficulty == "중":
         from bots.boss.rule_boss_bot import RuleBossMediumBot
-        return RuleBossMediumBot(bot_id=bot_id, seed=42)
+        return RuleBossMediumBot(bot_id=bot_id, seed=int(time.time()) % 65536)
 
     # 상 (기본값): RL 보스봇 + GCS 가중치 — 싱글톤 재사용
     # 학습은 PyTorch(.pt) 포맷, 서빙은 PyTorch가 있으면 동일 포맷을 사용해

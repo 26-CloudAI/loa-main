@@ -42,9 +42,10 @@ venv/
 firebase-adminsdk*.json
 gcloud-key*.json
 gemini_key.py
-secrets/*
-!secrets/*.example.json
-!secrets/*.example.py
+# 모든 깊이의 secrets/ 디렉토리 무시 (root, backend/secrets 등 모두 커버). example 만 추적.
+**/secrets/*
+!**/secrets/*.example.json
+!**/secrets/*.example.py
 
 # ── 학습 가중치 (GCS로 관리) ──────────────────────
 backend/battle_royale/bots/trained_weights.json
