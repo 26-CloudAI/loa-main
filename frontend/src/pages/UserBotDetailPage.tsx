@@ -122,7 +122,6 @@ export default function UserBotDetailPage() {
               }}>
                 {user.role}
               </span>
-              ▾
             </button>
           )}
           <button onClick={handleLogout} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>로그아웃</button>
