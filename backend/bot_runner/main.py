@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI
@@ -18,7 +19,14 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="BotRunner")
 
 ACTION_TIMEOUT_SEC = float(os.environ.get("BOT_ACTION_TIMEOUT_SEC", "0.1"))
-_thread_pool = ThreadPoolExecutor(max_workers=int(os.environ.get("BOT_RUNNER_WORKERS", "4")))
+_WORKERS = int(os.environ.get("BOT_RUNNER_WORKERS", "4"))
+_thread_pool = ThreadPoolExecutor(max_workers=_WORKERS)
+
+# Backpressure: cap in-flight executions at the worker count and shed excess
+# load with an immediate fallback. Without this, a flood of slow bots queues
+# unboundedly in the thread pool, backlogging unrelated games long after their
+# HTTP callers have timed out.
+_inflight = threading.BoundedSemaphore(_WORKERS)
 
 
 @app.get("/health")
@@ -33,8 +41,14 @@ def livez() -> dict:
 
 @app.post("/run", response_model=RunResponse)
 async def run_bot(req: RunRequest) -> RunResponse:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_thread_pool, _handle_run, req)
+    if not _inflight.acquire(blocking=False):
+        logger.warning("runner saturated, shedding bot_id=%s", req.bot_id)
+        return RunResponse(ok=False, action=_default_action(req.mode), error="runner saturated")
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_thread_pool, _handle_run, req)
+    finally:
+        _inflight.release()
 
 
 def _handle_run(req: RunRequest) -> RunResponse:
