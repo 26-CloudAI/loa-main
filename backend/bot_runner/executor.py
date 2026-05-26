@@ -52,7 +52,7 @@ STOCKS_VALID = frozenset(["BUY", "SELL", "SHORT", "COVER", "INQUIRY", "HOLD"])
 def _child_entry(
     source_code: str,
     state: dict,
-    result_queue: multiprocessing.Queue,
+    result_queue: multiprocessing.SimpleQueue,
     action_timeout_sec: float,
 ) -> None:
     """Runs inside an isolated child process. Never called directly in the parent."""
@@ -114,7 +114,7 @@ def run(
     default: Any = "STAY" if mode == "battleroyale" else {"action": "HOLD"}
     process_timeout = action_timeout_sec + 5.0
 
-    q: multiprocessing.Queue = _mp_ctx.Queue()
+    q: multiprocessing.SimpleQueue = _mp_ctx.SimpleQueue()
     proc = _mp_ctx.Process(
         target=_child_entry,
         args=(source_code, state, q, action_timeout_sec),
@@ -133,10 +133,9 @@ def run(
         if proc.exitcode != 0:
             return False, default, f"process exited with code {proc.exitcode}"
 
-        try:
-            status, value = q.get_nowait()
-        except Exception:
+        if q.empty():
             return False, default, "no result received from child process"
+        status, value = q.get()
 
         if status != "ok":
             return False, default, str(value)
