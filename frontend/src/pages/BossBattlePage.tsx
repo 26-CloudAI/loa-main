@@ -92,7 +92,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   상: {
     label: '상',
     sub: '어려움',
-    desc: '수천 판 학습한 DQN 강화학습 보스.\n매일 유저 코드를 학습해 점점 강해집니다.',
+    desc: '수천 판 학습한 DQN 강화학습 보스.\n유저 코드를 학습해 점점 강해집니다.',
     color: 'text-red-300',
     border: 'border-red-700',
     selected: 'border-red-400 bg-red-950/40',
