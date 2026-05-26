@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import PythonEditor from '../components/PythonEditor'
 
 type Mode = 'battle-royale' | 'boss' | 'stocks'
 
@@ -779,26 +780,6 @@ const MODE_CONFIG: Record<Mode, {
 
 // ── 코드 블록 ─────────────────────────────────────────────────────────────────
 
-function CodeBlock({ code }: { code: string }) {
-  return (
-    <pre style={{
-      background: '#030712',
-      border: '1px solid #1F2937',
-      borderRadius: 12,
-      padding: '16px 20px',
-      fontSize: 11.5,
-      color: '#86EFAC',
-      fontFamily: '"Fira Code","Cascadia Code","JetBrains Mono",monospace',
-      lineHeight: 1.65,
-      overflowX: 'auto',
-      margin: 0,
-      tabSize: 4,
-      whiteSpace: 'pre',
-    }}>
-      {code}
-    </pre>
-  )
-}
 
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 
@@ -857,9 +838,11 @@ export default function TutorialPage() {
           }} />
         </div>
 
-        <button onClick={() => navigate(cfg.returnRoute)} style={{ ...ghostBtn, color: '#6B7280' }}>
-          건너뛰기
-        </button>
+        {!isLast && (
+          <button onClick={() => navigate(cfg.returnRoute)} style={{ ...ghostBtn, color: '#6B7280' }}>
+            건너뛰기
+          </button>
+        )}
       </header>
 
       <main style={{
@@ -924,7 +907,12 @@ export default function TutorialPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <p style={{ fontSize: 11, color: '#4B5563', margin: 0 }}>이번 단계 코드</p>
-              <CodeBlock code={cur.code} />
+              <PythonEditor
+                value={cur.code}
+                onChange={() => {}}
+                readOnly
+                height={`${Math.min(Math.max(cur.code.split('\n').length * 21 + 19, 100), 280)}px`}
+              />
             </div>
           </div>
         </div>
