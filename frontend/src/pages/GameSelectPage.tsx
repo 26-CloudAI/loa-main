@@ -16,6 +16,7 @@ interface GameMode {
   symbol: string
   available: boolean
   route?: string
+  tutorialRoute?: string
   theme: ModeTheme
 }
 
@@ -28,6 +29,7 @@ const MODES: GameMode[] = [
     symbol: '◆',
     available: true,
     route: '/games/new/battle-royale',
+    tutorialRoute: '/tutorial/battle-royale',
     theme: {
       border:   'rgba(155,89,245,.35)',
       glow:     'rgba(155,89,245,.12)',
@@ -43,6 +45,7 @@ const MODES: GameMode[] = [
     symbol: '◉',
     available: true,
     route: '/games/new/boss-battle',
+    tutorialRoute: '/tutorial/boss',
     theme: {
       border:   'rgba(232,51,74,.35)',
       glow:     'rgba(232,51,74,.12)',
@@ -58,6 +61,7 @@ const MODES: GameMode[] = [
     symbol: '▲',
     available: true,
     route: '/games/new/mock-stocks',
+    tutorialRoute: '/tutorial/stocks',
     theme: {
       border:   'rgba(245,166,36,.35)',
       glow:     'rgba(245,166,36,.1)',
@@ -98,18 +102,14 @@ export default function GameSelectPage() {
 
           <div className="flex gap-6 flex-wrap justify-center">
             {MODES.map((mode) => (
-              <ModeCard key={mode.id} mode={mode} onClick={() => mode.route && navigate(mode.route)} />
+              <ModeCard
+                key={mode.id}
+                mode={mode}
+                onClick={() => mode.route && navigate(mode.route)}
+                onTutorial={() => mode.tutorialRoute && navigate(mode.tutorialRoute)}
+              />
             ))}
           </div>
-
-          <button
-            onClick={() => navigate('/tutorial')}
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-400 transition-colors border border-gray-700/50 hover:border-indigo-500/40 rounded-xl px-5 py-2.5"
-          >
-            <span>📖</span>
-            <span>처음이신가요? 봇 코딩 튜토리얼 보기</span>
-            <span className="text-gray-600">→</span>
-          </button>
         </div>
         <div className="flex-2" />
       </main>
@@ -117,11 +117,11 @@ export default function GameSelectPage() {
   )
 }
 
-function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
+function ModeCard({ mode, onClick, onTutorial }: { mode: GameMode; onClick: () => void; onTutorial: () => void }) {
   const { theme } = mode
 
   return (
-    <div className="relative w-64">
+    <div className="relative w-64 flex flex-col gap-2">
       <button
         onClick={mode.available ? onClick : undefined}
         className="w-full rounded-2xl p-6 flex flex-col gap-4 text-left transition-all duration-200"
@@ -159,6 +159,31 @@ function ModeCard({ mode, onClick }: { mode: GameMode; onClick: () => void }) {
           </span>
         )}
       </button>
+
+      {mode.available && mode.tutorialRoute && (
+        <button
+          onClick={onTutorial}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            background: 'rgba(255,255,255,.04)',
+            border: `1px solid ${theme.border}`,
+            borderRadius: 10, padding: '7px 0',
+            cursor: 'pointer', transition: 'all .15s',
+            color: theme.accent, fontSize: 12, fontWeight: 500, opacity: 0.75,
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.opacity = '1'
+            e.currentTarget.style.background = theme.accentBg
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.opacity = '0.75'
+            e.currentTarget.style.background = 'rgba(255,255,255,.04)'
+          }}
+        >
+          <span>📖</span>
+          <span>튜토리얼 보기</span>
+        </button>
+      )}
 
       {!mode.available && (
         <div className="absolute inset-0 rounded-2xl backdrop-blur-sm bg-gray-950/60 flex items-center justify-center">
