@@ -28,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot
 from BattleRoyale2.server.inprocess_bot import InProcessBot2
+from BattleRoyale2.server.remote_bot import RemoteBattleRoyale2BotAdapter
 from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 
 logger = logging.getLogger(__name__)
@@ -214,6 +215,27 @@ def _build_bots(spec: list[tuple[str, str]], seed: int | None = None) -> dict[st
     return bots
 
 
+def _make_user_bot(bot_id: str, code: str) -> BattleRoyale2DBot:
+    """유저 제출 봇을 격리 실행 어댑터로 생성한다 (기존 BR/MS create_game 패턴과 동일).
+    BOT_RUNNER_URL 있으면 bot-runner 격리 실행(RemoteBattleRoyale2BotAdapter). 프로덕션에서
+    runner 필수(BOT_RUNNER_REQUIRED)인데 URL 미설정이면 in-process 폴백을 금지(거부) —
+    유저 코드를 game-server Pod에서 직접 exec 하는 RCE 경로를 막는다.
+    env는 settings와 동일하게 os.environ에서 파싱(통합 서버 configmap이 동일 변수 주입)."""
+    runner_url = os.environ.get("BOT_RUNNER_URL", "").strip()
+    if runner_url:
+        try:
+            timeout = float(os.environ.get("BOT_RUNNER_TIMEOUT_SEC", "0.5"))
+        except ValueError:
+            timeout = 0.5
+        return RemoteBattleRoyale2BotAdapter(bot_id, code, runner_url, timeout)
+    env = os.environ.get("ENV", "production")
+    required = os.environ.get("BOT_RUNNER_REQUIRED", "false").lower() in ("true", "1", "yes")
+    if env == "production" and required:
+        raise RuntimeError("Bot Runner is required but BOT_RUNNER_URL is not configured")
+    # 개발/로컬 전용 폴백 (격리 아님). 프로덕션에선 위 가드로 도달 불가.
+    return InProcessBot2(bot_id, code)
+
+
 def _validate_action(action: Any) -> dict[str, Any]:
     """봇이 반환한 action 을 안전하게 정규화. 잘못된 키/타입은 기본값으로 치환."""
     def vec(value: Any, default: list[float]) -> list[float]:
@@ -284,7 +306,7 @@ class MatchSession:
         for entry in user_bots:
             bid = entry["bot_id"]
             name = entry.get("name", bid)
-            bots[bid] = InProcessBot2(bid, entry.get("code", ""))
+            bots[bid] = _make_user_bot(bid, entry.get("code", ""))
             spec.append((bid, name))
             self.user_bot_ids.add(bid)
 

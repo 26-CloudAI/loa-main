@@ -15,6 +15,7 @@ Each request spawns a fresh process. Consider a process pool if latency is a con
 from __future__ import annotations
 
 import builtins as _builtins_module
+import math
 import multiprocessing
 import os
 import resource
@@ -62,6 +63,54 @@ def _build_safe_builtins() -> dict:
 # Computed once at import; child re-imports this module under spawn and recomputes.
 SAFE_BUILTINS: dict = _build_safe_builtins()
 
+
+# ── battleroyale2 (BR2) mode ────────────────────────────────────────────────
+# BR2 bots are `class Bot(BattleRoyale2DBot)` with get_action()/choose_spawn(),
+# returning a continuous-vector action dict — unlike the classic battleroyale
+# (string) / stocks (dict) contracts. BR2 bots also use math/random, so this
+# mode exposes a whitelisted __import__ on top of SAFE_BUILTINS. policy.check()
+# still blocks dangerous imports (os/sys/...) at the AST layer before exec.
+BR2_ZERO_ACTION = {
+    "move_dir": [0.0, 0.0], "aim_dir": [1.0, 0.0],
+    "attack": False, "guard": False, "dash": False,
+    "pickup": False, "use_potion": False,
+}
+
+_BR2_ALLOWED_MODULES = frozenset({"math", "random", "json", "collections", "heapq", "itertools"})
+
+
+def _br2_safe_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
+    root = name.split(".")[0]
+    if root not in _BR2_ALLOWED_MODULES:
+        raise ImportError("import not allowed: %s" % name)
+    return __import__(name, globals, locals, fromlist, level)
+
+
+_BR2_BUILTINS: dict = dict(SAFE_BUILTINS)
+_BR2_BUILTINS["__import__"] = _br2_safe_import
+
+
+class _BR2BotBase:
+    """Injected as `BattleRoyale2DBot` into the bot namespace. Non-abstract so
+    user code can subclass and override only get_action()."""
+
+    def choose_spawn(self, map_info):  # noqa: ARG002
+        return None
+
+    def get_action(self, state):  # noqa: ARG002
+        return dict(BR2_ZERO_ACTION)
+
+    def on_episode_done(self, rank, n_bots, score):  # noqa: ARG002
+        pass
+
+
+def _default_for(mode: str) -> Any:
+    if mode == "battleroyale":
+        return "STAY"
+    if mode == "battleroyale2":
+        return dict(BR2_ZERO_ACTION)
+    return {"action": "HOLD"}
+
 # Parent join = action timeout + grace (covers spawn/import overhead). Kept
 # tight so an abandoned request frees its worker quickly instead of lingering
 # for seconds after the game server's HTTP call has already timed out.
@@ -91,6 +140,7 @@ def _child_entry(
     result_queue: multiprocessing.SimpleQueue,
     action_timeout_sec: float,
     mode: str,
+    phase: str | None = None,
 ) -> None:
     """Runs inside an isolated child process. Never called directly in the parent."""
     # 1. Wipe inherited environment (secrets, credentials)
@@ -127,6 +177,24 @@ def _child_entry(
     try:
         compiled = compile(source_code, "<bot>", "exec")
         # __name__ is required for class definitions (__module__ resolution).
+        if mode == "battleroyale2":
+            # BR2: user defines `class Bot(BattleRoyale2DBot)`. Instantiate per
+            # call (stateless across ticks — the runner spawns a fresh process
+            # every request), then dispatch get_action / choose_spawn by phase.
+            ns = {"__builtins__": _BR2_BUILTINS, "__name__": "__bot__",
+                  "BattleRoyale2DBot": _BR2BotBase}
+            exec(compiled, ns)  # noqa: S102
+            bot_cls = ns.get("Bot")
+            if not (isinstance(bot_cls, type) and issubclass(bot_cls, _BR2BotBase)):
+                result_queue.put(("error", "no class Bot(BattleRoyale2DBot) defined"))
+                return
+            bot = bot_cls()
+            if phase == "choose_spawn":
+                result_queue.put(("ok", _validate_spawn(bot.choose_spawn(state))))
+            else:
+                result_queue.put(("ok", _validate_br2_action(bot.get_action(state))))
+            return
+
         ns: dict = {"__builtins__": SAFE_BUILTINS, "__name__": "__bot__"}
         exec(compiled, ns)  # noqa: S102
         fn = ns.get("action")
@@ -138,8 +206,7 @@ def _child_entry(
         # IPC boundary. Sending the raw bot output risks (a) a pipe-buffer
         # deadlock when it exceeds ~64KB and (b) serializing attacker-sized
         # payloads every tick. Only the bounded, validated action is sent.
-        default = "STAY" if mode == "battleroyale" else {"action": "HOLD"}
-        result_queue.put(("ok", _validate(result, mode, default)))
+        result_queue.put(("ok", _validate(result, mode, _default_for(mode))))
     except Exception as exc:
         result_queue.put(("error", str(exc)))
 
@@ -149,6 +216,7 @@ def run(
     state: dict,
     mode: str,
     action_timeout_sec: float,
+    phase: str | None = None,
 ) -> Tuple[bool, Any, str]:
     """
     Spawn a child process, run user bot code, and return (ok, action, error).
@@ -158,13 +226,13 @@ def run(
     overhead). Kept tight so an abandoned request frees its worker quickly
     rather than lingering for seconds after the game server's HTTP call timed out.
     """
-    default: Any = "STAY" if mode == "battleroyale" else {"action": "HOLD"}
+    default: Any = _default_for(mode)
     process_timeout = action_timeout_sec + _PROCESS_GRACE_SEC
 
     q: multiprocessing.SimpleQueue = _mp_ctx.SimpleQueue()
     proc = _mp_ctx.Process(
         target=_child_entry,
-        args=(source_code, state, q, action_timeout_sec, mode),
+        args=(source_code, state, q, action_timeout_sec, mode, phase),
         daemon=True,
     )
 
@@ -228,3 +296,47 @@ def _validate(raw: Any, mode: str, default: Any) -> Any:
                 return default
             normalized["quantity"] = quantity
         return normalized
+
+
+def _br2_vec(value: Any, default: list) -> list:
+    """Normalize a 2D vector to [float, float]; reject malformed/non-finite."""
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return list(default)
+    try:
+        x, y = float(value[0]), float(value[1])
+    except (TypeError, ValueError):
+        return list(default)
+    if not (math.isfinite(x) and math.isfinite(y)):
+        return list(default)
+    return [x, y]
+
+
+def _validate_br2_action(raw: Any) -> dict:
+    """Coerce a BR2 bot action to the fixed, bounded schema before it crosses
+    the BotRunner→game-server boundary (mirrors ws_server._validate_action)."""
+    if not isinstance(raw, dict):
+        raw = {}
+    return {
+        "move_dir": _br2_vec(raw.get("move_dir"), [0.0, 0.0]),
+        "aim_dir": _br2_vec(raw.get("aim_dir"), [1.0, 0.0]),
+        "attack": bool(raw.get("attack", False)),
+        "guard": bool(raw.get("guard", False)),
+        "dash": bool(raw.get("dash", False)),
+        "pickup": bool(raw.get("pickup", False)),
+        "use_potion": bool(raw.get("use_potion", False)),
+    }
+
+
+def _validate_spawn(raw: Any):
+    """choose_spawn → [x, y] finite floats, or None (engine picks randomly)."""
+    if raw is None:
+        return None
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        return None
+    try:
+        x, y = float(raw[0]), float(raw[1])
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(x) and math.isfinite(y)):
+        return None
+    return [x, y]

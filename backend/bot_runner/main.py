@@ -76,7 +76,7 @@ def _handle_run(req: RunRequest) -> RunResponse:
         cache.put(req.code_hash, req.code)
         source = req.code
 
-    ok, action, error = executor.run(source, req.state, req.mode, ACTION_TIMEOUT_SEC)
+    ok, action, error = executor.run(source, req.state, req.mode, ACTION_TIMEOUT_SEC, req.phase)
 
     if not ok:
         logger.info("bot error bot_id=%s mode=%s: %s", req.bot_id, req.mode, error)
@@ -85,4 +85,4 @@ def _handle_run(req: RunRequest) -> RunResponse:
 
 
 def _default_action(mode: str) -> object:
-    return "STAY" if mode == "battleroyale" else {"action": "HOLD"}
+    return executor._default_for(mode)
