@@ -4,37 +4,6 @@
 	<meta charset='utf-8' />
 	<meta name='viewport' content='width=device-width, user-scalable=no' />
 	<title>Loa-battleroyale</title>
-	<!-- 백그라운드 탭에서도 게임 루프 유지 (Web Worker rAF keepalive).
-	     ★ Godot 재export 시 이 파일이 덮어써짐 → export 프리셋 HTML > Head Include 에
-	       web/bg_keepalive_head_include.html 의 <script> 를 넣어 영구 적용할 것. -->
-	<script>
-	(function () {
-	  if (window.__godotBgKeepalive) return;
-	  window.__godotBgKeepalive = true;
-	  var hidden = document.hidden;
-	  var queue = [];
-	  var nativeRAF = window.requestAnimationFrame
-	    ? window.requestAnimationFrame.bind(window)
-	    : function (cb) { return setTimeout(function () { cb(performance.now()); }, 16); };
-	  var worker = null;
-	  try {
-	    var src = "var t=setInterval(function(){postMessage(0);},16);onmessage=function(e){if(e.data==='stop'){clearInterval(t);}};";
-	    var blob = new Blob([src], { type: "application/javascript" });
-	    worker = new Worker(URL.createObjectURL(blob));
-	    worker.onmessage = function () {
-	      if (!hidden) return;
-	      var q = queue; queue = [];
-	      var now = performance.now();
-	      for (var i = 0; i < q.length; i++) { try { q[i](now); } catch (err) {} }
-	    };
-	  } catch (e) { return; }
-	  window.requestAnimationFrame = function (cb) {
-	    if (hidden) { queue.push(cb); return queue.length; }
-	    return nativeRAF(cb);
-	  };
-	  document.addEventListener("visibilitychange", function () { hidden = document.hidden; });
-	})();
-	</script>
 	<style type='text/css'>
 
 		body {
@@ -170,7 +139,7 @@
 	<script type='text/javascript' src='index.js'></script>
 	<script type='text/javascript'>//<![CDATA[
 
-		const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":10861328,"index.wasm":25701650},"focusCanvas":true,"gdnativeLibs":[]};
+		const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":10861744,"index.wasm":25701650},"focusCanvas":true,"gdnativeLibs":[]};
 		var engine = new Engine(GODOT_CONFIG);
 
 		(function() {
