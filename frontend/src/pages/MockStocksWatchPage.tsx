@@ -688,18 +688,32 @@ export default function MockStocksWatchPage() {
             <h2 className="text-2xl font-bold text-center mb-1">🏁 게임 종료</h2>
             <p className="text-gray-400 text-sm text-center mb-6">최종 순위</p>
             <div className="flex flex-col gap-3">
-              {displayRankings.slice(0, 5).map((entry, i) => (
-                <div key={entry.id} className="flex items-center gap-3 bg-gray-700/50 rounded-xl px-4 py-3">
-                  <span className="text-2xl">{['🥇','🥈','🥉'][i] ?? `${entry.rank}.`}</span>
-                  <div className="flex-1">
-                    <p className="font-semibold">{entry.id}</p>
-                    <p className="text-xs text-gray-400">신용점수 {entry.credit_score}점</p>
-                  </div>
-                  <span className="font-mono font-bold text-green-400">
-                    ₩{entry.total_value.toLocaleString()}
-                  </span>
-                </div>
-              ))}
+              {(() => {
+                const slice = displayRankings.slice(0, 5)
+                const steps = Math.max(slice.length - 1, 1)
+                return slice.map((entry, i) => {
+                  const t = i / steps
+                  const numColor = `rgb(${Math.round(74 + 33 * t)},${Math.round(222 - 108 * t)},128)`
+                  return (
+                    <div key={entry.id} className="flex items-center gap-3 bg-gray-700/50 rounded-xl pl-3 pr-4 py-3">
+                      <span className="w-8 shrink-0 flex items-center justify-center">
+                        {['🥇','🥈','🥉'][i]
+                          ? <span className="text-2xl leading-none">{['🥇','🥈','🥉'][i]}</span>
+                          : <span className="text-xl font-bold text-gray-400">{entry.rank}.</span>
+                        }
+                      </span>
+                      <div className="flex-1">
+                        <p className="font-semibold">{entry.id}</p>
+                        <p className="text-xs text-gray-400">신용점수 {entry.credit_score}점</p>
+                      </div>
+                      <span className="font-mono font-bold">
+                        <span style={{ color: '#6B7280', fontSize: '0.82em' }}>₩</span>
+                        <span style={{ color: numColor }}>{entry.total_value.toLocaleString()}</span>
+                      </span>
+                    </div>
+                  )
+                })
+              })()}
             </div>
             <div className="mt-6 flex flex-col gap-2">
               <button
