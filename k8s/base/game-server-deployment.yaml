@@ -41,6 +41,17 @@ spec:
               drop: ["ALL"]
             seccompProfile:
               type: RuntimeDefault
+          # BR + MS lifespan이 직렬로 초기화되어 startup에 최대 ~70s 소요.
+          # startupProbe가 통과할 때까지 liveness/readiness 카운트를 보류해
+          # 일시적 DB 지연 시 A1 백그라운드 재시도 self-heal이 작동할 여유 확보.
+          startupProbe:
+            httpGet:
+              path: /livez
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 12  # 최대 15 + 12*10 = 135s budget
           readinessProbe:
             httpGet:
               path: /healthz

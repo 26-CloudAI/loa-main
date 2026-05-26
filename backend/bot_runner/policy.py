@@ -52,6 +52,18 @@ _FORBIDDEN_DUNDERS = frozenset([
     # Singular base + descriptor/slot protocol dunders
     "__base__", "__getattr__", "__getattribute__", "__setattr__",
     "__delattr__", "__get__", "__set__", "__delete__", "__new__",
+    # Traceback object exposes the live frame chain → builtins/globals recovery
+    "__traceback__",
+])
+
+# Traceback/frame attributes (non-dunder, so not covered above). Walking the
+# frame chain via e.__traceback__.tb_frame.f_back.f_builtins['__import__']
+# recovers full builtins/imports despite SAFE_BUILTINS and forbidden-import
+# checks. Block every step of that chain.
+_FORBIDDEN_FRAME_ATTRS = frozenset([
+    "tb_frame", "tb_next", "tb_lineno", "tb_lasti",
+    "f_back", "f_builtins", "f_globals", "f_locals",
+    "f_code", "f_lineno", "f_trace",
 ])
 
 
@@ -94,7 +106,9 @@ def check(code: str) -> None:
         elif isinstance(node, ast.Attribute):
             # _FORBIDDEN_METHODS checked here (not just at ast.Call) so that
             # bound-method aliases like `fmt = "".format` are also rejected.
-            if node.attr in _FORBIDDEN_DUNDERS or node.attr in _FORBIDDEN_METHODS:
+            if (node.attr in _FORBIDDEN_DUNDERS
+                    or node.attr in _FORBIDDEN_METHODS
+                    or node.attr in _FORBIDDEN_FRAME_ATTRS):
                 raise ValueError(f"forbidden attribute access: {node.attr}")
 
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
