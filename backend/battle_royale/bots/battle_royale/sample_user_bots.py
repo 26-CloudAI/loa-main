@@ -535,12 +535,200 @@ class ShieldTankBot(BotInterface):
 
 
 # ---------------------------------------------------------------------------
+# 5. CounterMiner — 채굴 중인 적 카운터 (보스 mining-편향 직접 펀치)
+#    other_bots 위치 추적으로 mining 의심 적 발견 → 추격 + 공격
+# ---------------------------------------------------------------------------
+
+class CounterMinerBot(BotInterface):
+    """
+    채굴 중인 적을 사냥하는 카운터형 봇 (8방향).
+
+    핵심 휴리스틱:
+      - 시야 내 적 봇 위치를 매 틱 기록
+      - 2틱 이상 같은 위치 머문 적 = mining 의심 → priority target
+      - mining 의심 적이 인접하면 즉시 공격, 멀면 추격
+      - 본인은 최소 채굴 (생존 임계까지만)
+
+    설계 의도:
+      RLBossBot 의 보상 구조가 mining 에 편향되어 있어 보스가 채굴 위주로 행동.
+      이 봇은 그 행동 패턴을 직접 카운터하여 보스 학습에 강한 압력을 가한다.
+    """
+
+    _STAY_TICKS_FOR_MINING_SUSPECT = 2   # 같은 위치 N 틱 머물면 mining 의심
+    _MIN_ATTACK_ENERGY             = 35
+    _EMERGENCY_MINE_THRESHOLD      = 50
+    _MEMORY_EXPIRE_TICKS           = 25  # 적 위치 기억 만료
+
+    def __init__(self, bot_id: str, seed: Optional[int] = None):
+        self._bot_id = bot_id
+        self._rng = random.Random(seed)
+        self._memory: dict[tuple[int, int], str] = {}
+        # {enemy_id: (pos, stay_count, last_seen_tick)}
+        self._enemy_pos_hist: dict[str, tuple[tuple[int, int], int, int]] = {}
+        self._on_mineral = False
+
+    @property
+    def bot_id(self) -> str:
+        return self._bot_id
+
+    def choose_spawn(self, map_info: dict) -> Optional[tuple[int, int]]:
+        # 맵 중앙 근처 — 적과 자주 마주치는 위치
+        w, h = map_info["width"], map_info["height"]
+        return (w // 2 + self._rng.randint(-8, 8),
+                h // 2 + self._rng.randint(-8, 8))
+
+    def _update_enemy_history(self, other_bots: list[dict], tick: int) -> None:
+        """other_bots 정보로 적별 위치 변화 추적. mining 의심 갱신."""
+        seen_ids = set()
+        for b in other_bots:
+            eid = b.get("id")
+            if eid is None:
+                continue
+            seen_ids.add(eid)
+            pos = (b["position"][0], b["position"][1])
+            prev = self._enemy_pos_hist.get(eid)
+            if prev is None:
+                self._enemy_pos_hist[eid] = (pos, 1, tick)
+            else:
+                prev_pos, stay, _ = prev
+                if prev_pos == pos:
+                    self._enemy_pos_hist[eid] = (pos, stay + 1, tick)
+                else:
+                    self._enemy_pos_hist[eid] = (pos, 1, tick)
+
+        # 만료된 기록 정리 (시야에서 벗어났거나 죽었거나)
+        self._enemy_pos_hist = {
+            k: v for k, v in self._enemy_pos_hist.items()
+            if tick - v[2] <= self._MEMORY_EXPIRE_TICKS
+        }
+
+    def _mining_suspect_targets(self, my_pos: tuple[int, int]) -> list[tuple[int, int]]:
+        """mining 의심 적의 (dx, dy) 상대좌표 리스트. 가까운 순 정렬."""
+        targets = []
+        my_x, my_y = my_pos
+        for _eid, (pos, stay, _t) in self._enemy_pos_hist.items():
+            if stay >= self._STAY_TICKS_FOR_MINING_SUSPECT:
+                dx, dy = pos[0] - my_x, pos[1] - my_y
+                if abs(dx) <= 2 and abs(dy) <= 2:  # 인접·시야 핵심부
+                    targets.append((dx, dy))
+        targets.sort(key=lambda d: abs(d[0]) + abs(d[1]))
+        return targets
+
+    def get_action(self, state: dict) -> str:
+        my = state["my_bot"]
+        pos_x, pos_y = my["position"]
+        energy = my["energy"]
+        grid = state["vision"]["grid"]
+        zone_bounds = state.get("zone_bounds", (0, 0, 99, 99))
+        tick = state.get("tick", 0)
+        other_bots = state.get("other_bots", [])
+
+        # ── zone 탈출 ────────────────────────────────────────────────────
+        if not _in_zone(pos_x, pos_y, zone_bounds):
+            self._on_mineral = False
+            return _to_center(pos_x, pos_y, zone_bounds)
+
+        # ── 적 위치 기록 갱신 (mining 감지의 핵심) ──────────────────────
+        self._update_enemy_history(other_bots, tick)
+
+        # ── 발밑 광물 채굴 (pending) ─────────────────────────────────────
+        if self._on_mineral:
+            self._on_mineral = False
+            return Action.MINE
+
+        # ── 광물 메모리 갱신 ─────────────────────────────────────────────
+        for gy in range(5):
+            for gx in range(5):
+                if gy == _CY and gx == _CX:
+                    continue
+                mx, my_c = pos_x + (gx - _CX), pos_y + (gy - _CY)
+                cell = grid[gy][gx]
+                if cell in ("mineral", "mineral_rare"):
+                    self._memory[(mx, my_c)] = cell
+                elif cell == "empty":
+                    self._memory.pop((mx, my_c), None)
+
+        # ── 1순위: mining 의심 적 즉시 공격 (인접 1칸) ──────────────────
+        if energy >= self._MIN_ATTACK_ENERGY:
+            suspects = self._mining_suspect_targets((pos_x, pos_y))
+            for dx, dy in suspects:
+                if abs(dx) <= 1 and abs(dy) <= 1 and (dx, dy) != (0, 0):
+                    # grid 검증 — 실제로 인접칸이 bot_enemy 인지
+                    if (0 <= _CY + dy < 5 and 0 <= _CX + dx < 5
+                            and grid[_CY + dy][_CX + dx] == "bot_enemy"):
+                        for adx, ady, _mv, atk in ADJACENT_DIRS:
+                            if (adx, ady) == (dx, dy):
+                                return atk
+
+        # ── 2순위: mining 의심 적 추격 (시야 내) ────────────────────────
+        if energy >= 60:
+            suspects = self._mining_suspect_targets((pos_x, pos_y))
+            for dx, dy in suspects:
+                if (dx, dy) == (0, 0):
+                    continue
+                action = move_toward(dx, dy)
+                self._on_mineral = _update_on_mineral(action, grid)
+                return action
+
+        # ── 3순위: 인접 적 일반 공격 (mining 의심 아니어도) ─────────────
+        if energy >= self._MIN_ATTACK_ENERGY + 10:
+            for adx, ady, _mv, atk in ADJACENT_DIRS:
+                nx, ny = _CX + adx, _CY + ady
+                if 0 <= ny < 5 and 0 <= nx < 5 and grid[ny][nx] == "bot_enemy":
+                    return atk
+
+        # ── 4순위: 긴급 채굴 (에너지 부족) ──────────────────────────────
+        if energy < self._EMERGENCY_MINE_THRESHOLD:
+            best = _best_mineral_dir(grid)
+            if best:
+                action = move_toward(*best)
+                self._on_mineral = _update_on_mineral(action, grid)
+                return action
+            if self._memory:
+                closest = min(self._memory,
+                              key=lambda m: abs(m[0] - pos_x) + abs(m[1] - pos_y))
+                dx, dy = closest[0] - pos_x, closest[1] - pos_y
+                if abs(dx) + abs(dy) > 0:
+                    action = move_toward(dx, dy)
+                    self._on_mineral = _update_on_mineral(action, grid)
+                    return action
+            return Action.SHIELD  # 비상
+
+        # ── 5순위: 시야 내 적 추격 (mining 의심 아니어도) ──────────────
+        if energy >= 80:
+            for gy in range(5):
+                for gx in range(5):
+                    if grid[gy][gx] == "bot_enemy":
+                        ddx, ddy = gx - _CX, gy - _CY
+                        action = move_toward(ddx, ddy)
+                        self._on_mineral = _update_on_mineral(action, grid)
+                        return action
+
+        # ── 6순위: 가벼운 채굴 (적 없을 때만, 에너지 유지용) ───────────
+        best = _best_mineral_dir(grid)
+        if best:
+            action = move_toward(*best)
+            self._on_mineral = _update_on_mineral(action, grid)
+            return action
+
+        # ── 7순위: 중앙 배회 (적 만나기 좋은 위치) ──────────────────────
+        cdx, cdy = 50 - pos_x, 50 - pos_y
+        if abs(cdx) + abs(cdy) > 5:
+            action = move_toward(cdx, cdy)
+            self._on_mineral = _update_on_mineral(action, grid)
+            return action
+
+        return self._rng.choice(MOVE_ACTIONS)
+
+
+# ---------------------------------------------------------------------------
 # 외부에서 임포트할 봇 목록
 # ---------------------------------------------------------------------------
 
 SAMPLE_USER_BOTS: list[tuple[type, str]] = [
-    (DuelistBot,    "유저_결투사"),
-    (OptimizerBot,  "유저_최적화"),
-    (AdaptorBot,    "유저_적응형"),
-    (ShieldTankBot, "유저_탱커"),
+    (DuelistBot,       "유저_결투사"),
+    (OptimizerBot,     "유저_최적화"),
+    (AdaptorBot,       "유저_적응형"),
+    (ShieldTankBot,    "유저_탱커"),
+    (CounterMinerBot,  "유저_카운터"),
 ]
