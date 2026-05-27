@@ -129,6 +129,18 @@ def _decode_token(token: str) -> dict | None:
         return None
 
 
+def _safe_rollback(repo) -> None:
+    """PostgreSQL 트랜잭션 abort 상태(오류 후 'transaction is aborted') 복구.
+    오류를 삼킨 뒤 rollback 을 안 하면 같은 공유 커넥션의 이후 모든 쿼리가 실패한다.
+    SQLite/None 은 무해(rollback 은 no-op 또는 미존재) — 예외는 무시."""
+    try:
+        conn = getattr(repo, "conn", None)
+        if conn is not None:
+            conn.rollback()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _bearer(req_or_headers) -> str | None:
     auth = ""
     try:
@@ -155,6 +167,7 @@ def _resolve_owner_id(token: str | None) -> int | None:
         return user.id
     except Exception:  # noqa: BLE001
         logger.exception("[BR2] owner 해석 실패")
+        _safe_rollback(getattr(svc, "users", None))   # user 커넥션 abort 복구
         return None
 
 
@@ -178,7 +191,8 @@ def _load_game_spec(match_id: str) -> tuple[list[dict], int]:
             row = cur.fetchone()
             cfg = row["config_json"] if row else None
             if cfg:
-                parsed = json.loads(cfg)
+                # SQLite: TEXT(str) / PostgreSQL: JSONB(psycopg2 가 dict 로 디코드) 모두 대응.
+                parsed = cfg if isinstance(cfg, (dict, list)) else json.loads(cfg)
                 ub = parsed.get("user_bots") or []
                 bc = int(parsed.get("bot_count") or TARGET_BOT_COUNT)
                 _GAME_CODE[match_id] = ub
@@ -186,6 +200,7 @@ def _load_game_spec(match_id: str) -> tuple[list[dict], int]:
                 return ub, bc
         except Exception:  # noqa: BLE001
             logger.exception("[BR2] config_json 로드 실패: %s", match_id)
+            _safe_rollback(repo)
     return (user_bots or []), (bot_count or TARGET_BOT_COUNT)
 
 # bot_id → 봇 클래스 매핑. ws_server 는 이 매핑으로 인스턴스 생성.
@@ -329,6 +344,7 @@ class MatchSession:
             repo.update_game_started(self.match_id)
         except Exception:  # noqa: BLE001
             logger.exception("[match=%s] _db_on_start 실패", self.match_id)
+            _safe_rollback(repo)
 
     def _db_on_end(self, data: dict[str, Any]) -> None:
         """매치 종료 시: games finished + 참가자 결과 갱신. 이미 finished 면 스킵(중복 방지)."""
@@ -365,6 +381,7 @@ class MatchSession:
                 )
         except Exception:  # noqa: BLE001
             logger.exception("[match=%s] _db_on_end 실패", self.match_id)
+            _safe_rollback(repo)
 
     def handle_state(self, tick: int, data: dict[str, Any]) -> dict[str, Any]:
         """봇들의 state 를 받아 각 봇의 get_action 호출 → action dict 반환."""
@@ -492,6 +509,7 @@ def create_app() -> FastAPI:
             )
         except Exception:  # noqa: BLE001
             logger.exception("[BR2] create_game 실패")
+            _safe_rollback(repo)
             raise HTTPException(500, "게임 생성에 실패했습니다.")
 
         # 인메모리 캐시(동일 인스턴스 빠른 경로). 다른 인스턴스는 config_json 으로 복원.

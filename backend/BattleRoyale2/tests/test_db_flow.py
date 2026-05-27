@@ -118,6 +118,24 @@ def test_db_on_start_participant_flags(client, repo):
     assert len(ai_flags) == 2 and all(ai_flags)  # AI 채움 2마리 모두 filler
 
 
+def test_load_game_spec_jsonb_dict(repo, monkeypatch):
+    """PostgreSQL(JSONB)에서 psycopg2 가 config_json 을 dict 로 디코드해 돌려주는 경우,
+    _load_game_spec 가 json.loads 대신 dict 를 그대로 사용해야 한다 (회귀: 유저봇 유실 버그)."""
+    monkeypatch.setattr(ws, "_get_game_repo", lambda: repo)
+    ws._GAME_CODE.clear()
+    ws._GAME_BOT_COUNT.clear()
+
+    class _Cur:
+        def fetchone(self):
+            # JSONB → 이미 파싱된 dict (str 아님)
+            return {"config_json": {"user_bots": [{"bot_id": "pg_bot", "name": "PG봇"}], "bot_count": 7}}
+
+    monkeypatch.setattr(repo, "_execute", lambda *a, **k: _Cur())
+    user_bots, bot_count = ws._load_game_spec("any-gid")
+    assert bot_count == 7
+    assert [b["bot_id"] for b in user_bots] == ["pg_bot"]
+
+
 def test_db_on_end_finished_guard(client, repo):
     body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
     gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
