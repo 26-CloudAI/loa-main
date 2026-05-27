@@ -7,7 +7,7 @@ data:
   USE_REDIS: "true"
   REDIS_HOST: "10.197.54.43"
   LOG_FORMAT: "json"
-  CORS_ORIGINS: "https://leagueofagents.net,https://www.leagueofagents.net,https://ai-arena-b2b4b.web.app,https://ai-arena-b2b4b.firebaseapp.com,https://gke-demo--ai-arena-b2b4b.web.app"
+  CORS_ORIGINS: "https://leagueofagents.net,https://www.leagueofagents.net,https://ai-arena-b2b4b.web.app,https://ai-arena-b2b4b.firebaseapp.com,https://ai-arena-b2b4b--gke-demo-9gp3ldb7.web.app"
   DB_TYPE: "postgresql"
   DB_HOST: "10.114.0.3"
   DB_NAME: "ai_arena"
