@@ -17,9 +17,9 @@ steps:
     args:
       - '-c'
       - |
-        TAG=$(cat /workspace/image_tag.txt)
+        TAG=$$(cat /workspace/image_tag.txt)
         docker build \
-          -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$TAG \
+          -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$$TAG \
           backend
 
   # 1b. bot-runner 이미지 빌드
@@ -28,10 +28,10 @@ steps:
     args:
       - '-c'
       - |
-        TAG=$(cat /workspace/image_tag.txt)
+        TAG=$$(cat /workspace/image_tag.txt)
         docker build \
           -f backend/bot_runner/Dockerfile \
-          -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$TAG \
+          -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$$TAG \
           backend/bot_runner
 
   # 2a. server 이미지 푸시
@@ -40,8 +40,8 @@ steps:
     args:
       - '-c'
       - |
-        TAG=$(cat /workspace/image_tag.txt)
-        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$TAG
+        TAG=$$(cat /workspace/image_tag.txt)
+        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$$TAG
 
   # 2b. bot-runner 이미지 푸시
   - name: 'gcr.io/cloud-builders/docker'
@@ -49,8 +49,8 @@ steps:
     args:
       - '-c'
       - |
-        TAG=$(cat /workspace/image_tag.txt)
-        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$TAG
+        TAG=$$(cat /workspace/image_tag.txt)
+        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$$TAG
 
   # 3. GKE 자격 취득
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -69,9 +69,9 @@ steps:
     args:
       - '-c'
       - |
-        TAG=$(cat /workspace/image_tag.txt)
+        TAG=$$(cat /workspace/image_tag.txt)
         kubectl -n ${_NAMESPACE} set image deployment/game-server \
-          game-server=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$TAG
+          game-server=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$$TAG
 
   # 4b. bot-runner 이미지 교체
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -79,9 +79,9 @@ steps:
     args:
       - '-c'
       - |
-        TAG=$(cat /workspace/image_tag.txt)
+        TAG=$$(cat /workspace/image_tag.txt)
         kubectl -n ${_NAMESPACE} set image deployment/bot-runner \
-          bot-runner=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$TAG
+          bot-runner=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$$TAG
 
   # 5a. game-server rollout 확인
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
