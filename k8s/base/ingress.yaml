@@ -20,3 +20,13 @@ spec:
                 name: game-server
                 port:
                   number: 80
+    - host: gke-api.leagueofagents.net
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: game-server
+                port:
+                  number: 80
