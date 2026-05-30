@@ -101,22 +101,29 @@ export default function GamesPage() {
         }),
       ])
 
+      // 메인 /api/games 가 이미 battleroyale2 모드를 포함하고, BR2 전용 API 가 같은 게임을
+      // 다시 반환하므로 game_id 기준 전역 dedup (먼저 들어온 레코드 우선).
       const merged: GameInfo[] = []
+      const seen = new Set<string>()
+      const pushUnique = (arr: GameInfo[]) => {
+        for (const g of arr) {
+          if (seen.has(g.game_id)) continue
+          seen.add(g.game_id)
+          merged.push(g)
+        }
+      }
       if (brResult.status === 'fulfilled' && Array.isArray(brResult.value)) {
-        merged.push(...(brResult.value as GameInfo[]))
+        pushUnique(brResult.value as GameInfo[])
       }
       if (br2Result.status === 'fulfilled' && Array.isArray(br2Result.value)) {
-        merged.push(...(br2Result.value as GameInfo[]))
+        pushUnique(br2Result.value as GameInfo[])
       }
       if (stocksActive.status === 'fulfilled' && Array.isArray(stocksActive.value)) {
-        merged.push(...(stocksActive.value as GameInfo[]))
+        pushUnique(stocksActive.value as GameInfo[])
       }
       if (stocksHistory.status === 'fulfilled' && Array.isArray(stocksHistory.value)) {
         // history는 finished 상태이므로 활성 목록과 game_id 중복 시 활성 우선
-        const activeIds = new Set(merged.map((g) => g.game_id))
-        for (const g of stocksHistory.value as GameInfo[]) {
-          if (!activeIds.has(g.game_id)) merged.push(g)
-        }
+        pushUnique(stocksHistory.value as GameInfo[])
       }
 
       // created_at 기준 내림차순 정렬 (최신 게임이 위로)

@@ -268,14 +268,21 @@ export default function MainPage() {
       fetchJson<GameInfo[]>(`${STOCKS_API_BASE}/api/games`, { headers }),
       fetchJson<GameInfo[]>(`${STOCKS_API_BASE}/api/games/history`, { headers }),
     ]).then(([brRes, br2Res, stocksRes, histRes]) => {
+      // 메인 /api/games 가 이미 battleroyale2 모드를 포함하고, BR2 전용 API 가 같은 게임을
+      // 다시 반환하므로 game_id 기준 전역 dedup (먼저 들어온 레코드 우선).
       const merged: GameInfo[] = []
-      if (brRes.status === 'fulfilled' && Array.isArray(brRes.value)) merged.push(...brRes.value)
-      if (br2Res.status === 'fulfilled' && Array.isArray(br2Res.value)) merged.push(...br2Res.value)
-      if (stocksRes.status === 'fulfilled' && Array.isArray(stocksRes.value)) merged.push(...stocksRes.value)
-      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
-        const seen = new Set(merged.map((g) => g.game_id))
-        for (const g of histRes.value) if (!seen.has(g.game_id)) merged.push(g)
+      const seen = new Set<string>()
+      const pushUnique = (arr: GameInfo[]) => {
+        for (const g of arr) {
+          if (seen.has(g.game_id)) continue
+          seen.add(g.game_id)
+          merged.push(g)
+        }
       }
+      if (brRes.status === 'fulfilled' && Array.isArray(brRes.value)) pushUnique(brRes.value)
+      if (br2Res.status === 'fulfilled' && Array.isArray(br2Res.value)) pushUnique(br2Res.value)
+      if (stocksRes.status === 'fulfilled' && Array.isArray(stocksRes.value)) pushUnique(stocksRes.value)
+      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) pushUnique(histRes.value)
       merged.sort((a, b) => {
         const ta = a.created_at ? new Date(a.created_at).getTime() : 0
         const tb = b.created_at ? new Date(b.created_at).getTime() : 0
