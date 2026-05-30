@@ -15,6 +15,6 @@ data:
   ENV: "production"
   BOT_RUNNER_URL: "http://bot-runner.arena.svc.cluster.local:8001"
   BOT_RUNNER_REQUIRED: "true"
-  BOT_RUNNER_TIMEOUT_SEC: "0.5"  # game-server → bot-runner HTTP 호출 타임아웃. BOT_ACTION_TIMEOUT_SEC(0.1) + 네트워크/HTTP 오버헤드 여유 포함
+  BOT_RUNNER_TIMEOUT_SEC: "2.0"  # game-server → bot-runner HTTP 호출 타임아웃. 봇 실행(BOT_ACTION_TIMEOUT_SEC 0.1) + cold-compile/gVisor/네트워크 오버헤드까지 덮어야 함. 0.5s는 cold-start에서 타임아웃→ZERO 폴백 유발(BR2 매치 미종료 원인). 호출은 비차단(asyncio.to_thread)이라 상향해도 이벤트루프 안 막음.
   # BOSS_WEIGHTS_GCS_URI 는 여기에 쓰지 않는다.
   # Phase 5 Cloud Build step에서 kubectl patch로 주입한다. (버킷명 git 노출 방지)

@@ -15,6 +15,7 @@ v0.1: 단일 매치, 단일 클라이언트, 봇 객체는 서버에서 인스�
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -425,6 +426,30 @@ class MatchSession:
             actions[bot_id] = _validate_action(raw)
         return actions
 
+    async def handle_state_async(self, tick: int, data: dict[str, Any]) -> dict[str, Any]:
+        """handle_state 의 논블로킹 버전. 각 봇의 get_action 을 스레드로 빼서 병렬 실행한다.
+
+        remote(bot-runner) 봇은 동기 blocking HTTP(urllib)라, async WS 핸들러에서 직접 부르면
+        틱마다 이벤트 루프가 타임아웃(0.5s)만큼 멈춰 실시간 클라이언트와 desync → 매치가
+        MATCH_END 까지 못 가고 RUNNING 으로 잔존했다. asyncio.to_thread 로 루프를 비우고,
+        gather 로 여러 봇 호출을 동시 진행해 틱당 지연을 sum → max 로 줄인다."""
+        bots_state: dict[str, Any] = data.get("bots", {}) if isinstance(data, dict) else {}
+
+        async def _one(bot_id: str, bot: BattleRoyale2DBot) -> tuple[str, dict[str, Any]]:
+            state = bots_state.get(bot_id)
+            if state is None:
+                # 시야 누락 또는 사망 처리. STAY 강제.
+                return bot_id, _validate_action(None)
+            try:
+                raw = await asyncio.to_thread(bot.get_action, state)
+            except Exception:  # noqa: BLE001 — 봇 예외는 STAY 로 폴백
+                logger.exception("[match=%s tick=%d] bot=%s get_action 실패", self.match_id, tick, bot_id)
+                raw = None
+            return bot_id, _validate_action(raw)
+
+        results = await asyncio.gather(*(_one(bid, b) for bid, b in self.bots.items()))
+        return dict(results)
+
     def handle_choose_spawn(self, data: dict[str, Any]) -> dict[str, list[float] | None]:
         """클라이언트가 MATCH_CONFIG 응답으로 봇별 스폰 위치 요청 시 호출용 헬퍼.
 
@@ -706,7 +731,7 @@ def create_app() -> FastAPI:
                 elif mtype == "STATE":
                     if not session.started:
                         continue
-                    actions = session.handle_state(tick, data if isinstance(data, dict) else {})
+                    actions = await session.handle_state_async(tick, data if isinstance(data, dict) else {})
                     await session.send({
                         "type": "ACTIONS",
                         "tick": tick,
