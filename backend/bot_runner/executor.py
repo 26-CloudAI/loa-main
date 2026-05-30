@@ -1,5 +1,5 @@
 """
-Isolated bot execution via multiprocessing (spawn context).
+Isolated bot execution via multiprocessing.
 
 Security layers applied in each child process:
   1. os.environ.clear()   — remove all inherited secrets
@@ -8,13 +8,26 @@ Security layers applied in each child process:
   4. filtered __builtins__ — dangerous built-ins removed from exec namespace
   5. gVisor (at Pod level) — syscall filtering (outside this file)
 
-spawn context is used (not fork) for gVisor compatibility and uvicorn thread safety.
-Each request spawns a fresh process. Consider a process pool if latency is a concern.
+Isolation model: ONE fresh child process per request, torn down after the call —
+no state ever crosses calls. The multiprocessing start method only changes *how*
+that fresh child is created, not the per-call isolation:
+
+  * forkserver (default): a clean, single-threaded server process imports this
+    module once (preload) and fork()s a fresh child per request. Under gVisor this
+    is ~5x cheaper than spawn (no interpreter restart, no module re-import) while
+    keeping identical isolation — the forkserver never runs bot code so it can't be
+    contaminated, and each forked child still serves exactly one call then exits.
+  * spawn (fallback): re-execs a fresh Python interpreter per request. Correct but
+    slow under gVisor (~120ms+ of CPU per call), which throttles BR2's lock-step
+    real-time loop. Used automatically if forkserver is unavailable.
+
+Controlled by BOT_MP_START_METHOD (default "forkserver").
 """
 
 from __future__ import annotations
 
 import builtins as _builtins_module
+import logging
 import math
 import multiprocessing
 import os
@@ -22,8 +35,34 @@ import resource
 import signal
 from typing import Any, Tuple
 
-# Spawn context: fresh Python interpreter per child (gVisor-compatible)
-_mp_ctx = multiprocessing.get_context("spawn")
+logger = logging.getLogger(__name__)
+
+# Start method: forkserver by default (fast under gVisor, same per-call isolation),
+# spawn as automatic fallback. See module docstring.
+_START_METHOD = os.environ.get("BOT_MP_START_METHOD", "forkserver").strip().lower()
+
+
+def _make_context():
+    """Build the multiprocessing context. forkserver preloads this module in a clean
+    server process so forked children skip interpreter restart + re-import. Falls back
+    to spawn if forkserver can't be initialised (e.g. unsupported platform)."""
+    if _START_METHOD == "forkserver":
+        try:
+            ctx = multiprocessing.get_context("forkserver")
+            try:
+                # Preload so the forkserver (and thus every forked child) already has
+                # this module — best-effort; children import it lazily if preload fails.
+                ctx.set_forkserver_preload(["executor"])
+            except Exception:  # noqa: BLE001
+                logger.warning("forkserver preload failed; children import lazily", exc_info=True)
+            return ctx
+        except Exception:  # noqa: BLE001
+            logger.warning("forkserver unavailable; falling back to spawn", exc_info=True)
+    return multiprocessing.get_context("spawn")
+
+
+# One fresh child process per call; only the *creation* mechanism changes.
+_mp_ctx = _make_context()
 
 # Allowlist (not blacklist) of builtins exposed to untrusted bot code.
 # Anything not listed is unavailable: open/exec/eval/compile/__import__,
@@ -268,6 +307,20 @@ def run(
     finally:
         if proc.is_alive():
             proc.kill()
+
+
+def warmup() -> None:
+    """Start the multiprocessing machinery (forkserver server process / spawn
+    bootstrap) ahead of the first real request, so the first game tick doesn't pay
+    cold-start. Runs one throwaway execution. Safe to call repeatedly; never raises.
+
+    Must be called at runtime (e.g. FastAPI startup), NOT at import time — the
+    forkserver preloads this module, and an import-time start would recurse.
+    """
+    try:
+        run("def action(state):\n    return 'STAY'\n", {}, "battleroyale", 0.1, None)
+    except Exception:  # noqa: BLE001
+        logger.warning("bot-runner warmup failed (non-fatal)", exc_info=True)
 
 
 def _validate(raw: Any, mode: str, default: Any) -> Any:

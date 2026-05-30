@@ -29,6 +29,15 @@ _thread_pool = ThreadPoolExecutor(max_workers=_WORKERS)
 _inflight = threading.BoundedSemaphore(_WORKERS)
 
 
+@app.on_event("startup")
+async def _warmup() -> None:
+    # Pre-start the multiprocessing machinery (forkserver server / spawn bootstrap)
+    # off the event loop, so the first real /run doesn't pay cold-start. Best-effort.
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(_thread_pool, executor.warmup)
+    logger.info("bot-runner warmup complete (start_method=%s)", executor._mp_ctx.get_start_method())
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
