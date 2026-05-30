@@ -157,3 +157,36 @@ def test_db_on_end_finished_guard(client, repo):
     sess._db_on_end({"duration": 99.0, "reason": "max_ticks", "rankings": []})
     g2 = repo.get_game(gid)
     assert g2.end_reason == "last_standing"
+
+
+def test_db_on_abandon_finalizes_running_game(client, repo):
+    """권위 WS가 MATCH_END 없이 끊기면(_db_on_abandon) running 게임을 종료 확정해
+    목록에 '진행 중'으로 영구 잔존하지 않게 한다."""
+    body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    sess = ws.MatchSession(ws=None, match_id=gid)
+    sess.bots, sess.bot_spec = sess._assemble_bots(seed=1)
+    sess._db_on_start()
+    assert repo.get_game(gid).status == "running"
+    sess.last_tick = 57
+    sess._db_on_abandon()
+    g = repo.get_game(gid)
+    assert g.status == "finished"        # 더 이상 진행 중 아님
+    assert g.end_reason == "abandoned"
+    assert g.final_tick == 57
+
+
+def test_db_on_abandon_does_not_overwrite_finished(client, repo):
+    """MATCH_END로 정상 종료된 게임은 이후 disconnect의 _db_on_abandon이 덮어쓰지 않는다."""
+    body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    sess = ws.MatchSession(ws=None, match_id=gid)
+    sess.bots, sess.bot_spec = sess._assemble_bots(seed=1)
+    sess._db_on_start()
+    sess._db_on_end({"duration": 180.0, "reason": "last_standing", "rankings": []})
+    assert repo.get_game(gid).status == "finished"
+    sess.last_tick = 5
+    sess._db_on_abandon()                # 이미 finished → no-op
+    g = repo.get_game(gid)
+    assert g.status == "finished"
+    assert g.end_reason == "last_standing"   # abandoned 로 안 바뀜

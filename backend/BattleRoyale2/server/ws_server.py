@@ -287,6 +287,7 @@ class MatchSession:
         self.bot_spec: list[tuple[str, str]] = list(DEFAULT_BOT_FACTORY)
         self.started = False
         self.ended = False
+        self.last_tick = 0           # 마지막으로 처리한 틱 (중도 종료 시 final_tick 용)
         self.match_info: dict[str, Any] = {}
         self.authoritative = False   # 첫 연결만 True — FRAME 기록 권위
         self.user_bot_ids: set = set()   # 유저 제출 봇 id (participant is_ai_filler 구분용)
@@ -408,8 +409,35 @@ class MatchSession:
             logger.exception("[match=%s] _db_on_end 실패", self.match_id)
             _safe_rollback(repo)
 
+    def _db_on_abandon(self) -> None:
+        """권위 세션이 MATCH_END 없이 끊겼을 때(탭 닫힘/연결 끊김/네트워크 단절) 게임을
+        종료 상태로 확정한다. BR2는 브라우저(Godot)가 시뮬레이션을 구동하므로, 권위 연결이
+        끊기면 매치는 더 진행될 수 없다(서버 자율 진행 없음). 이 안전망이 없으면 중도 이탈한
+        게임이 DB에 RUNNING 으로 영구히 남아 목록에 "진행 중"으로 박힌다.
+        이미 finished 면 무시(MATCH_END 정상 종료와 중복 방지)."""
+        repo = _get_game_repo()
+        if repo is None:
+            return
+        try:
+            game = repo.get_game(self.match_id)
+            if game is None or getattr(game, "status", None) == "finished":
+                return
+            repo.update_game_finished(
+                game_id=self.match_id,
+                final_tick=self.last_tick,
+                end_reason="abandoned",
+            )
+            logger.info(
+                "[match=%s] 권위 연결이 MATCH_END 없이 종료 — abandoned 로 확정 (tick=%d)",
+                self.match_id, self.last_tick,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("[match=%s] _db_on_abandon 실패", self.match_id)
+            _safe_rollback(repo)
+
     def handle_state(self, tick: int, data: dict[str, Any]) -> dict[str, Any]:
         """봇들의 state 를 받아 각 봇의 get_action 호출 → action dict 반환."""
+        self.last_tick = tick
         bots_state: dict[str, Any] = data.get("bots", {}) if isinstance(data, dict) else {}
         actions: dict[str, Any] = {}
         for bot_id, bot in self.bots.items():
@@ -433,6 +461,7 @@ class MatchSession:
         틱마다 이벤트 루프가 타임아웃(0.5s)만큼 멈춰 실시간 클라이언트와 desync → 매치가
         MATCH_END 까지 못 가고 RUNNING 으로 잔존했다. asyncio.to_thread 로 루프를 비우고,
         gather 로 여러 봇 호출을 동시 진행해 틱당 지연을 sum → max 로 줄인다."""
+        self.last_tick = tick
         bots_state: dict[str, Any] = data.get("bots", {}) if isinstance(data, dict) else {}
 
         async def _one(bot_id: str, bot: BattleRoyale2DBot) -> tuple[str, dict[str, Any]]:
@@ -777,6 +806,10 @@ def create_app() -> FastAPI:
             # 권위 세션이 끊기면 레지스트리에서 해제 (다음 연결이 권위 승계 가능)
             if session.authoritative and _AUTHORITATIVE.get(match_id) == id(session):
                 _AUTHORITATIVE.pop(match_id, None)
+            # 안전망: 권위 세션이 MATCH_END 없이 끊기면 게임을 종료 확정한다.
+            # (지연이 줄어도 사용자가 중도에 닫을 수 있으므로, "진행 중" 영구 잔존을 구조적으로 차단)
+            if session.authoritative and not session.ended:
+                session._db_on_abandon()
             try:
                 await ws.close()
             except Exception:
