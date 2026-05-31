@@ -582,6 +582,17 @@ def create_app() -> FastAPI:
             bot_count = TARGET_BOT_COUNT
         bot_count = max(max(2, len(user_bots)), min(8, bot_count))
 
+        # 이름: 미지정 시 "새 배틀로얄 N" 자동 생성 (BR1/MockStocks 와 일관).
+        # BR2 cutover 후 이 로직이 없어 목록에 "게임 {shortId}" 로 fallback 되던 문제 수정.
+        name = body.get("name") if isinstance(body, dict) else None
+        name = name.strip() if isinstance(name, str) and name.strip() else None
+        if name is None:
+            try:
+                count = repo.count_games_by_mode(owner_id, GAME_MODE)
+            except Exception:  # noqa: BLE001
+                count = 0
+            name = f"새 배틀로얄 {count + 1}"
+
         # 5) 게임 생성 (owner=토큰 사용자, config_json 에 스펙 영속)
         game_id = uuid.uuid4().hex
         try:
@@ -592,7 +603,7 @@ def create_app() -> FastAPI:
                 seed=body.get("seed"),
                 config_json=_spec_config_json(user_bots, bot_count),
                 mode=GAME_MODE,
-                name=(body.get("name") or None),
+                name=name,
             )
         except Exception:  # noqa: BLE001
             logger.exception("[BR2] create_game 실패")

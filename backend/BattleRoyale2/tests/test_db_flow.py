@@ -93,6 +93,23 @@ def test_create_owner_from_token_ignores_body(client, repo):
     assert game.owner_user_id != 9999       # body 무시
 
 
+def test_create_game_auto_names_when_missing(client, repo):
+    """이름 미지정 시 '새 배틀로얄 N' 자동 생성 — 목록에 '게임 {shortId}' fallback 방지.
+    (BR2 cutover 후 자동 이름 로직 누락으로 배틀로얄만 shortId 로 뜨던 문제 회귀 가드)"""
+    body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid1 = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    assert repo.get_game(gid1).name == "새 배틀로얄 1"
+    gid2 = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    assert repo.get_game(gid2).name == "새 배틀로얄 2"   # 다음 번호
+
+
+def test_create_game_uses_provided_name(client, repo):
+    """이름을 명시하면 그대로 사용(자동 생성 안 함)."""
+    body = {"name": "내 게임", "bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    assert repo.get_game(gid).name == "내 게임"
+
+
 def test_config_json_persist_and_load(client, repo):
     body = {
         "bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}],
