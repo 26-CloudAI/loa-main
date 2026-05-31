@@ -160,21 +160,23 @@ def test_db_on_end_finished_guard(client, repo):
     assert g2.end_reason == "last_standing"
 
 
-def test_db_on_abandon_finalizes_running_game(client, repo):
-    """권위 WS가 MATCH_END 없이 끊기면(_db_on_abandon) running 게임을 종료 확정해
-    목록에 '진행 중'으로 영구 잔존하지 않게 한다."""
+def test_db_on_abandon_finalizes_running_game(client, repo, monkeypatch):
+    """권위 WS가 MATCH_END 없이 끊기면(_db_on_abandon) running 게임을 종료 확정하고,
+    final_tick 을 매치 시작부터의 경과 '초'로 저장한다(정상 종료의 duration 과 같은 단위)."""
     body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
     gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
     sess = ws.MatchSession(ws=None, match_id=gid)
     sess.bots, sess.bot_spec = sess._assemble_bots(seed=1)
     sess._db_on_start()
     assert repo.get_game(gid).status == "running"
-    sess.last_tick = 1700                # 클라 프레임 틱(~10/초)
+    # 매치 시작 후 78초 경과 상황을 결정적으로 재현
+    sess.start_time = 1000.0
+    monkeypatch.setattr(ws.time, "time", lambda: 1078.0)
     sess._db_on_abandon()
     g = repo.get_game(gid)
     assert g.status == "finished"        # 더 이상 진행 중 아님
     assert g.end_reason == "abandoned"
-    assert g.final_tick == 170           # 초로 환산(÷10) → ~200 스케일 (≤200)
+    assert g.final_tick == 78            # 경과 78초 (정상 종료와 같은 '초' 단위)
 
 
 def test_db_on_abandon_does_not_overwrite_finished(client, repo):

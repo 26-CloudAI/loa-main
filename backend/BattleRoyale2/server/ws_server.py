@@ -287,7 +287,8 @@ class MatchSession:
         self.bot_spec: list[tuple[str, str]] = list(DEFAULT_BOT_FACTORY)
         self.started = False
         self.ended = False
-        self.last_tick = 0           # 마지막으로 처리한 틱 (중도 종료 시 final_tick 용)
+        self.last_tick = 0           # 마지막으로 처리한 틱
+        self.start_time: float | None = None   # 매치 시작(MATCH_START) 시각 — 중도 종료 시 경과초 계산용
         self.match_info: dict[str, Any] = {}
         self.authoritative = False   # 첫 연결만 True — FRAME 기록 권위
         self.user_bot_ids: set = set()   # 유저 제출 봇 id (participant is_ai_filler 구분용)
@@ -344,6 +345,7 @@ class MatchSession:
 
     async def send_match_start(self) -> None:
         self.started = True
+        self.start_time = time.time()   # 경과초 기준점 (정상종료의 client duration 과 같은 의미)
         self._db_on_start()
         await self.send({"type": "MATCH_START"})
 
@@ -425,16 +427,18 @@ class MatchSession:
             game = repo.get_game(self.match_id)
             if game is None or getattr(game, "status", None) == "finished":
                 return
+            # 정상 종료(_db_on_end)는 client 가 보낸 경과초(duration)를 저장한다. 중도 이탈은
+            # MATCH_END 가 없어 duration 을 못 받으므로, 서버가 매치 시작부터 잰 경과초로 맞춘다
+            # (두 경로 모두 '경과 초' 단위로 일관). start_time 이 없으면(시작 전 이탈) 0.
+            elapsed = int(time.time() - self.start_time) if self.start_time else 0
             repo.update_game_finished(
                 game_id=self.match_id,
-                # last_tick 은 클라 프레임 틱(~10/초). 종료 게임의 final_tick(=경과초)과 같은
-                # ~200 스케일로 맞추기 위해 초로 환산(÷10)해 저장한다.
-                final_tick=int(self.last_tick / 10),
+                final_tick=elapsed,
                 end_reason="abandoned",
             )
             logger.info(
-                "[match=%s] 권위 연결이 MATCH_END 없이 종료 — abandoned 로 확정 (tick=%d)",
-                self.match_id, self.last_tick,
+                "[match=%s] 권위 연결이 MATCH_END 없이 종료 — abandoned 로 확정 (경과 %d초, 내부틱 %d)",
+                self.match_id, elapsed, self.last_tick,
             )
         except Exception:  # noqa: BLE001
             logger.exception("[match=%s] _db_on_abandon 실패", self.match_id)
