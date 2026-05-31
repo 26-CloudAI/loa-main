@@ -434,7 +434,12 @@ class RewardCalculator:
 
     @staticmethod
     def compute_episode_end(rank: int, n_bots: int) -> float:
-        table = {1: 150.0, 2: 15.0, 3: -10.0}
+        if rank == 1:
+            return 150.0
+        # n=2 환경(boss_mode_solo)에서 rank=2 는 꼴찌 = 패배. 강한 패널티.
+        if n_bots == 2:
+            return -50.0
+        table = {2: 15.0, 3: -10.0}
         return table.get(rank, -20.0 * (rank - 3))
 
 

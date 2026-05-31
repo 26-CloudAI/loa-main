@@ -102,6 +102,14 @@ OPP_RATIO_RULE     = 0.05   # 룰봇 sanity check (데이터 수집용)
 PURE_RULE_EVERY_K_EP = 10   # 매 K 에피소드마다 "전원 룰봇" 시나리오
                             # → catastrophic forgetting 즉시 감지용
 
+# 학습-평가 환경 일치: 매 ep 마다 시나리오를 가중 추첨.
+# 가변 n_bots 안전성은 RewardCalculator.compute_episode_end 의 n=2 분기에 의존.
+SCENARIO_MIX: list[tuple[str, float, int]] = [
+    ("pfsp",            0.50, 5),   # 기존 PFSP 5인 — 핵심 비중 유지
+    ("boss_mode_trio",  0.30, 4),   # 보스 vs ClaudeBot×3 (평가의 boss_mode_trio 일치)
+    ("boss_mode_solo",  0.20, 2),   # 보스 vs ClaudeBot×1 (평가의 boss_mode_solo 일치)
+]
+
 # 회귀 alert 임계값 (B baseline 기준, 5%p 이내 하락까지 허용)
 # 측정 baseline (2026-05-26 deterministic):
 #   medium      win=13.3% top2=70.0%
@@ -331,15 +339,23 @@ def _build_opponents(
     league_index: Optional["_league.LeagueIndex"] = None,
     device: Optional[str] = None,
     force_pure_rule: bool = False,
+    scenario: str = "pfsp",
 ) -> list[BotInterface]:
     """
-    PFSP 단순화 풀에서 상대 n 명 구성.
+    상대 n 명 구성. scenario 에 따라 분기.
 
-    구성 비율: League 20% / 유저 40% / 다양성 35% / 룰봇 5%.
-    한 풀이 부족하면 다양성으로 fallback.
-
-    force_pure_rule=True: 전원 룰봇 (catastrophic forgetting 감지 에피소드)
+    scenario="pfsp" (default): League 20% / 유저 40% / 다양성 35% / 룰봇 5%.
+    scenario="boss_mode_solo" or "boss_mode_trio": ClaudeBot 만으로 구성 (평가 일치).
+    force_pure_rule=True: 전원 룰봇 (catastrophic forgetting 감지 에피소드).
     """
+    # boss_mode 시나리오: 평가 환경과 동일하게 ClaudeBot 만으로 구성
+    if scenario in ("boss_mode_solo", "boss_mode_trio"):
+        from bots.boss.claude_bot import ClaudeBot
+        return [
+            ClaudeBot(bot_id=f"Claude_{i}", seed=seed + i * 10)
+            for i in range(n)
+        ]
+
     opponents: list[BotInterface] = []
 
     # ── 0. Pure-rule 시나리오 (sanity check) ────────────────────────────
@@ -486,13 +502,23 @@ def _worker(
         # 매 K 에피소드마다 pure_rule 시나리오 (forgetting floor sanity)
         force_pure_rule = (ep % PURE_RULE_EVERY_K_EP == 0)
 
+        # 시나리오 sampling: pure_rule 우선, 그 외엔 SCENARIO_MIX 가중 추첨
+        if force_pure_rule:
+            scenario, actual_n = "pure_rule", N_BOTS_PER_EP
+        else:
+            scenario, _w, actual_n = rng.choices(
+                SCENARIO_MIX,
+                weights=[s[1] for s in SCENARIO_MIX],
+            )[0]
+
         opponents = _build_opponents(
             training_bots,
-            N_BOTS_PER_EP - 1,
+            actual_n - 1,
             ep_seed, rng,
             league_index=league_index,
             device=device,
             force_pure_rule=force_pure_rule,
+            scenario=scenario,
         )
         all_bots: list[BotInterface] = [boss] + opponents
 
@@ -503,13 +529,13 @@ def _worker(
             logger.debug("W%d ep%d 예외: %s", worker_id, ep, traceback.format_exc())
             continue
 
-        rank, score, surv = _find_boss_rank(result.rankings, N_BOTS_PER_EP)
+        rank, score, surv = _find_boss_rank(result.rankings, actual_n)
         rank_hist.append(rank)
         score_hist.append(score)
         if force_pure_rule:
             pure_rule_rank_hist.append(rank)
 
-        boss.on_episode_done(rank, N_BOTS_PER_EP)
+        boss.on_episode_done(rank, actual_n)
 
         # 주기적 체크포인트 동기화
         if ep % 10 == 0:
@@ -535,7 +561,7 @@ def _worker(
         wins = sum(1 for r in rank_hist if r == 1)
         print(
             f"  [W{worker_id} ep{ep:4d}/{n_episodes}] "
-            f"rank={rank}/{N_BOTS_PER_EP}  score={score:7.1f}  "
+            f"scen={scenario:14s} rank={rank}/{actual_n}  score={score:7.1f}  "
             f"win_rate={wins/len(rank_hist)*100:.0f}%  "
             f"eps={boss._epsilon:.3f}  step={boss._step_count:6d}  "
             f"({elapsed:.0f}s)"
