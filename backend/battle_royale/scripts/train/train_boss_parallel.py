@@ -110,6 +110,11 @@ SCENARIO_MIX: list[tuple[str, float, int]] = [
     ("boss_mode_solo",  0.20, 2),   # 보스 vs ClaudeBot×1 (평가의 boss_mode_solo 일치)
 ]
 
+# 5/31 활성화 시도: boss_mode_solo (ClaudeBot 1대1, 패율 93%) 에서 -50 패널티
+# 폭주 → Q값 전반 하락 → 룰봇에게도 forgetting (easy 16.7% → 3.3%).
+# 1차 학습(gen 317)이 현재 best baseline. 활성화 전에 패널티 완화 / 비중 조정 필요.
+ENABLE_SCENARIO_MIX = False
+
 # 회귀 alert 임계값 (B baseline 기준, 5%p 이내 하락까지 허용)
 # 측정 baseline (2026-05-26 deterministic):
 #   medium      win=13.3% top2=70.0%
@@ -502,14 +507,16 @@ def _worker(
         # 매 K 에피소드마다 pure_rule 시나리오 (forgetting floor sanity)
         force_pure_rule = (ep % PURE_RULE_EVERY_K_EP == 0)
 
-        # 시나리오 sampling: pure_rule 우선, 그 외엔 SCENARIO_MIX 가중 추첨
+        # 시나리오 sampling: pure_rule 우선, ENABLE_SCENARIO_MIX 면 가중 추첨, 아니면 PFSP 고정.
         if force_pure_rule:
             scenario, actual_n = "pure_rule", N_BOTS_PER_EP
-        else:
+        elif ENABLE_SCENARIO_MIX:
             scenario, _w, actual_n = rng.choices(
                 SCENARIO_MIX,
                 weights=[s[1] for s in SCENARIO_MIX],
             )[0]
+        else:
+            scenario, actual_n = "pfsp", N_BOTS_PER_EP
 
         opponents = _build_opponents(
             training_bots,
