@@ -153,6 +153,7 @@ def test_db_on_end_finished_guard(client, repo):
     g = repo.get_game(gid)
     assert g.status == "finished"
     assert g.end_reason == "last_standing"
+    assert g.final_tick == 180   # duration(180초) 그대로 저장 — ×10 제거 회귀 가드 (≤200)
     # 중복 MATCH_END — finished 가드로 reason 안 바뀜
     sess._db_on_end({"duration": 99.0, "reason": "max_ticks", "rankings": []})
     g2 = repo.get_game(gid)
@@ -168,12 +169,12 @@ def test_db_on_abandon_finalizes_running_game(client, repo):
     sess.bots, sess.bot_spec = sess._assemble_bots(seed=1)
     sess._db_on_start()
     assert repo.get_game(gid).status == "running"
-    sess.last_tick = 57
+    sess.last_tick = 1700                # 클라 프레임 틱(~10/초)
     sess._db_on_abandon()
     g = repo.get_game(gid)
     assert g.status == "finished"        # 더 이상 진행 중 아님
     assert g.end_reason == "abandoned"
-    assert g.final_tick == 57
+    assert g.final_tick == 170           # 초로 환산(÷10) → ~200 스케일 (≤200)
 
 
 def test_db_on_abandon_does_not_overwrite_finished(client, repo):

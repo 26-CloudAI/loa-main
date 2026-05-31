@@ -389,7 +389,10 @@ class MatchSession:
                 return
             repo.update_game_finished(
                 game_id=self.match_id,
-                final_tick=int(duration * 10.0),
+                # duration 은 매치 경과 '초'(MATCH_CONFIG duration:180 기준). 다른 모드의
+                # final_tick(논리 틱, max 200)과 같은 ~200 스케일로 맞추기 위해 그대로 저장한다.
+                # (과거 ×10 은 초를 ~1800 으로 부풀려 프론트 "틱 X/200" 을 초과시켰음)
+                final_tick=int(duration),
                 end_reason=reason,
             )
             for entry in rankings:
@@ -424,7 +427,9 @@ class MatchSession:
                 return
             repo.update_game_finished(
                 game_id=self.match_id,
-                final_tick=self.last_tick,
+                # last_tick 은 클라 프레임 틱(~10/초). 종료 게임의 final_tick(=경과초)과 같은
+                # ~200 스케일로 맞추기 위해 초로 환산(÷10)해 저장한다.
+                final_tick=int(self.last_tick / 10),
                 end_reason="abandoned",
             )
             logger.info(
