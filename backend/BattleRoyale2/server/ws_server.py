@@ -776,6 +776,15 @@ def create_app() -> FastAPI:
 
                 elif mtype == "MATCH_END":
                     session.handle_match_end(data if isinstance(data, dict) else {})
+                    # 관전자에게 매치 종료 + 결과 중계 (관전 화면에 결과창 표시용)
+                    specs = _SPECTATORS.get(match_id)
+                    if specs:
+                        end_msg = {"type": "MATCH_END", "data": data if isinstance(data, dict) else {}}
+                        for s in list(specs):
+                            try:
+                                await s.send(end_msg)
+                            except Exception:  # noqa: BLE001
+                                specs.discard(s)
                     logger.info("[match=%s] MATCH_END received", match_id)
                     break
 
