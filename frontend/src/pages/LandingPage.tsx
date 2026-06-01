@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -63,6 +63,7 @@ export default function LandingPage() {
     >
       <Nav token={token} ctaTo={ctaTo} />
       <HeroSection ctaTo={ctaTo} />
+      <HowItWorksSection />
       <BattleRoyaleSection />
       <BossBattleSection />
       <MockStocksSection />
@@ -229,6 +230,127 @@ function HeroSection({ ctaTo }: { ctaTo: string }) {
         </div>
       </div>
 
+    </section>
+  )
+}
+
+/* ═══════════════════════════════════════════
+   How It Works
+═══════════════════════════════════════════ */
+function HowItWorksSection() {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) el.classList.add('loa-visible') },
+      { threshold: 0.2 },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
+
+  const steps = [
+    {
+      num: 1, icon: '🐍',
+      title: 'Python 코드 작성',
+      desc: 'get_action() 함수를 구현해\n봇의 행동 로직을 완성하세요.',
+    },
+    {
+      num: 2, icon: '📤',
+      title: '봇 제출',
+      desc: '플랫폼에 코드를 업로드하면\n즉시 대전에 투입됩니다.',
+    },
+    {
+      num: 3, icon: '⚔️',
+      title: 'AI 자동 대전',
+      desc: '봇들이 실시간으로 맞붙습니다.\n당신은 관전만 하면 됩니다.',
+    },
+    {
+      num: 4, icon: '📊',
+      title: 'ELO 랭킹 반영',
+      desc: '성적에 따라 ELO가 오르내리며\n리더보드에 기록됩니다.',
+    },
+  ]
+
+  return (
+    <section style={{ padding: '80px 24px 96px', borderTop: '1px solid rgba(255,255,255,.04)' }}>
+      <div ref={ref} className="loa-sect" style={{ maxWidth: 940, margin: '0 auto' }}>
+
+        {/* 헤더 */}
+        <div className="sect-g1" style={{ textAlign: 'center', marginBottom: 52 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center',
+            background: 'rgba(232,51,74,.10)', border: '1px solid rgba(232,51,74,.25)',
+            borderRadius: 999, padding: '5px 16px',
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: '#F05E70',
+            marginBottom: 18,
+          }}>
+            HOW IT WORKS
+          </div>
+          <h2 style={{
+            fontSize: 'clamp(24px, 3vw, 40px)', fontWeight: 500,
+            color: '#E8EAF0', margin: 0, letterSpacing: '-0.02em',
+          }}>
+            코드 한 줄이 전장에 뛰어듭니다
+          </h2>
+        </div>
+
+        {/* Steps */}
+        <div className="sect-g2" style={{ display: 'flex', alignItems: 'flex-start' }}>
+          {steps.map((step, i) => (
+            <Fragment key={step.num}>
+              <div style={{
+                flex: 1,
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                textAlign: 'center', padding: '32px 20px 28px',
+                background: 'rgba(255,255,255,.025)',
+                border: '1px solid rgba(255,255,255,.07)',
+                borderRadius: 16,
+                position: 'relative',
+              }}>
+                {/* STEP 뱃지 */}
+                <div style={{
+                  position: 'absolute', top: -11, left: '50%', transform: 'translateX(-50%)',
+                  background: '#E8334A', color: '#fff',
+                  fontSize: 9, fontWeight: 800, padding: '2px 10px',
+                  borderRadius: 999, letterSpacing: '0.08em', whiteSpace: 'nowrap',
+                }}>
+                  STEP {step.num}
+                </div>
+
+                <div style={{ fontSize: 36, marginBottom: 14, lineHeight: 1 }}>{step.icon}</div>
+
+                <h3 style={{
+                  fontSize: 14, fontWeight: 600, color: '#E8EAF0',
+                  margin: '0 0 10px', lineHeight: 1.3,
+                }}>
+                  {step.title}
+                </h3>
+
+                <p style={{
+                  fontSize: 12, color: '#5A6270', lineHeight: 1.75,
+                  margin: 0, whiteSpace: 'pre-line',
+                }}>
+                  {step.desc}
+                </p>
+              </div>
+
+              {/* 화살표 */}
+              {i < steps.length - 1 && (
+                <div style={{
+                  flexShrink: 0, width: 32, paddingTop: 44,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'rgba(232,51,74,.3)', fontSize: 20,
+                }}>
+                  →
+                </div>
+              )}
+            </Fragment>
+          ))}
+        </div>
+      </div>
     </section>
   )
 }
