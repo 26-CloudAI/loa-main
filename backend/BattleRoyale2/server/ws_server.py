@@ -15,6 +15,7 @@ v0.1: 단일 매치, 단일 클라이언트, 봇 객체는 서버에서 인스�
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot
 from BattleRoyale2.server.inprocess_bot import InProcessBot2
+from BattleRoyale2.server.runner_manager import get_runner_manager
 from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 
 logger = logging.getLogger(__name__)
@@ -81,6 +83,44 @@ _STATE_STORE_TRIED = False
 # match_id → 권위 세션의 id(). 첫 WS 연결이 권위. (PROTOCOL.md §3.13)
 _AUTHORITATIVE: dict[str, int] = {}
 
+# match_id → 관전 세션 집합 (C2 라이브 관전). 권위 세션의 FRAME 을 여기로 중계.
+_SPECTATORS: dict[str, set["MatchSession"]] = {}
+
+
+async def _pump_spectator(match_id: str, session: "MatchSession") -> None:
+    """관전 세션에 아직 안 보낸 store 프레임을 순서대로 전송.
+    catch-up(중간 합류)·live tail 공용 — relay_idx 로 진행 위치를 추적해 누락/중복 방지.
+    coins/items 가 델타라 init+누적프레임을 순서대로 재생해야 월드가 복원된다.
+    세션별 락으로 join-catchup 과 broadcast 동시 호출을 직렬화."""
+    store = _get_state_store()
+    if store is None:
+        return
+    if session._relay_lock is None:
+        session._relay_lock = asyncio.Lock()
+    async with session._relay_lock:
+        frames = await store.get_replay_frames(match_id)
+        if session.relay_idx >= len(frames):
+            return
+        for fr in frames[session.relay_idx:]:
+            if fr.get("kind") == "init":
+                await session.send({"type": "FRAME_INIT", "data": fr.get("data", {})})
+            else:
+                await session.send({"type": "FRAME", "tick": fr.get("tick", 0),
+                                    "data": fr.get("data", {})})
+        session.relay_idx = len(frames)
+
+
+async def _broadcast_frame(match_id: str) -> None:
+    """권위 세션이 새 프레임을 기록한 직후, 등록된 모든 관전자에게 중계."""
+    specs = _SPECTATORS.get(match_id)
+    if not specs:
+        return
+    for s in list(specs):
+        try:
+            await _pump_spectator(match_id, s)
+        except Exception:  # noqa: BLE001 — 끊긴 관전 소켓 제거
+            specs.discard(s)
+
 
 def _get_state_store():
     global _STATE_STORE, _STATE_STORE_TRIED
@@ -127,6 +167,13 @@ def _decode_token(token: str) -> dict | None:
         return verify_firebase_token_value(token)
     except Exception:  # noqa: BLE001
         return None
+
+
+def _is_runner_token(token: str | None) -> bool:
+    """서버 헤드리스 러너(C2)용 공유 시크릿 검증. BR2_RUNNER_SECRET 미설정 시 항상 False
+    (= 기능 비활성 → 인증 동작 불변). 설정된 경우에만 동일 토큰을 러너로 허용."""
+    secret = os.environ.get("BR2_RUNNER_SECRET", "").strip()
+    return bool(secret) and token == secret
 
 
 def _safe_rollback(repo) -> None:
@@ -265,6 +312,8 @@ class MatchSession:
         self.match_info: dict[str, Any] = {}
         self.authoritative = False   # 첫 연결만 True — FRAME 기록 권위
         self.user_bot_ids: set = set()   # 유저 제출 봇 id (participant is_ai_filler 구분용)
+        self.relay_idx = 0           # 관전 세션: 이미 중계받은 store 프레임 수
+        self._relay_lock = None      # asyncio.Lock (lazy) — 중계 직렬화
 
     async def send(self, payload: dict[str, Any]) -> None:
         await self.ws.send_text(json.dumps(payload, separators=(",", ":")))
@@ -516,7 +565,15 @@ def create_app() -> FastAPI:
         if user_bots:
             _GAME_CODE[game_id] = user_bots
             _GAME_BOT_COUNT[game_id] = bot_count
-        return {"game_id": game_id, "persisted": True}
+
+        # 서버사이드 헤드리스 러너 spawn (C2). 비활성(기본)이면 mgr=None → 동작 불변.
+        running = False
+        mgr = get_runner_manager()
+        if mgr is not None:
+            running = mgr.try_spawn(game_id)
+            if not running:
+                logger.warning("[BR2] 러너 동시성 초과 — match=%s 는 대기/미시작", game_id)
+        return {"game_id": game_id, "persisted": True, "running": running}
 
     @app.get("/api/games")
     def list_games(request: Request, limit: int = 50):
@@ -603,7 +660,8 @@ def create_app() -> FastAPI:
                 game = None
         if game is not None:
             token = ws.query_params.get("token")
-            valid = bool(token) and _decode_token(token) is not None
+            # 서버 헤드리스 러너(C2)는 공유 시크릿 토큰으로 인증 — Firebase 토큰 아님.
+            valid = _is_runner_token(token) or (bool(token) and _decode_token(token) is not None)
             if not valid:
                 # 토큰 없음/무효 → 거부 (누구나 관전 가능하나 인증은 필요)
                 await ws.close(code=4401)
@@ -657,9 +715,16 @@ def create_app() -> FastAPI:
                         })
                         await ws.close()
                         return
-                    # 자동으로 MATCH_CONFIG → MATCH_START 진행 (v0.1 단순화)
-                    await session.send_match_config(seed=int(data.get("seed", 0)) if isinstance(data, dict) else 0)
-                    await session.send_match_start()
+                    if session.authoritative:
+                        # 권위(러너): 자동으로 MATCH_CONFIG → MATCH_START 진행 (v0.1 단순화)
+                        await session.send({"type": "ROLE", "data": {"role": "runner"}})
+                        await session.send_match_config(seed=int(data.get("seed", 0)) if isinstance(data, dict) else 0)
+                        await session.send_match_start()
+                    else:
+                        # 관전자: 시뮬 안 함. 역할 통보 후 누적 프레임 catch-up + 이후 live tail 중계.
+                        await session.send({"type": "ROLE", "data": {"role": "spectator"}})
+                        _SPECTATORS.setdefault(match_id, set()).add(session)
+                        await _pump_spectator(match_id, session)
 
                 elif mtype == "MATCH_INFO":
                     # 클라이언트가 매치 정보(클러스터/Zone1 등) 를 보내면 spawn 추첨 응답
@@ -686,21 +751,23 @@ def create_app() -> FastAPI:
                                 match_id, tick, ev.get("event"), ev.get("actor_id"), ev.get("target_id"))
 
                 elif mtype == "FRAME_INIT":
-                    # 정적 월드 스냅샷. 권위 세션만 기록.
+                    # 정적 월드 스냅샷. 권위 세션만 기록 → 관전자 중계.
                     if session.authoritative:
                         store = _get_state_store()
                         if store is not None:
                             await store.append_replay_frame(
                                 match_id, {"kind": "init", "data": data if isinstance(data, dict) else {}})
+                            await _broadcast_frame(match_id)
 
                 elif mtype == "FRAME":
-                    # 매 틱 동적 상태 + 델타. 권위 세션만 기록.
+                    # 매 틱 동적 상태 + 델타. 권위 세션만 기록 → 관전자 중계.
                     if session.authoritative:
                         store = _get_state_store()
                         if store is not None:
                             await store.append_replay_frame(
                                 match_id, {"kind": "frame", "tick": tick,
                                            "data": data if isinstance(data, dict) else {}})
+                            await _broadcast_frame(match_id)
 
                 elif mtype == "MATCH_END":
                     session.handle_match_end(data if isinstance(data, dict) else {})
@@ -718,6 +785,12 @@ def create_app() -> FastAPI:
             # 권위 세션이 끊기면 레지스트리에서 해제 (다음 연결이 권위 승계 가능)
             if session.authoritative and _AUTHORITATIVE.get(match_id) == id(session):
                 _AUTHORITATIVE.pop(match_id, None)
+            # 관전 세션 정리
+            specs = _SPECTATORS.get(match_id)
+            if specs is not None:
+                specs.discard(session)
+                if not specs:
+                    _SPECTATORS.pop(match_id, None)
             try:
                 await ws.close()
             except Exception:
