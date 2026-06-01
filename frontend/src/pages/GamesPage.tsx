@@ -293,8 +293,7 @@ function GameCard({ game }: { game: GameInfo }) {
     if (isStocks) {
       navigate(`/games/${game.game_id}/mock-stocks/replay`)
     } else if (isBR2) {
-      // 리플레이 영속화는 다음 작업 — 일단 결과 페이지로
-      navigate(`/games/${game.game_id}/battleroyale/result`)
+      navigate(`/games/${game.game_id}/battleroyale/replay`)
     } else {
       navigate(`/games/${game.game_id}/replay`)
     }

@@ -9,6 +9,10 @@ interface Props {
   wsBase?: string
   /** Firebase 토큰. Godot 이 WS ?token= 로 전달 (인증된 게임 관전용). */
   token?: string | null
+  /** true 면 리플레이 모드 — WS 대신 {apiBase}/api/games/{matchId}/replay 를 받아 재생. */
+  replay?: boolean
+  /** 리플레이 fetch 용 API 베이스 (예: https://host/battleroyale2). */
+  apiBase?: string
   width?: number | string
   height?: number | string
 }
@@ -20,15 +24,17 @@ interface Props {
  *   서버가 없으면 내부 데모 AI 로 폴백
  * - Phase A: 라이브 데모 임베드 검증용. game_id/리플레이 연동은 Phase B 이후.
  */
-export default function GodotGame({ src = '/godot/index.html', matchId, wsBase, token, width = '100%', height = '100%' }: Props) {
+export default function GodotGame({ src = '/godot/index.html', matchId, wsBase, token, replay, apiBase, width = '100%', height = '100%' }: Props) {
   const ref = useRef<HTMLIFrameElement | null>(null)
   // 쿼리(?) 대신 해시(#) 사용 — Godot HTML5 정적 파일 로딩(.pck/.wasm) 경로 해석을 방해하지 않음
-  // match + ws + token 을 해시 파라미터로 전달 (ws=배포 백엔드 주소, token=WS 인증)
+  // match + ws + token (+ replay/api) 을 해시 파라미터로 전달
   let fullSrc = src
   const params: string[] = []
   if (matchId) params.push(`match=${encodeURIComponent(matchId)}`)
   if (wsBase) params.push(`ws=${encodeURIComponent(wsBase)}`)
   if (token) params.push(`token=${encodeURIComponent(token)}`)
+  if (replay) params.push('replay=1')
+  if (apiBase) params.push(`api=${encodeURIComponent(apiBase)}`)
   if (params.length) fullSrc = `${src}#${params.join('&')}`
   return (
     <iframe
