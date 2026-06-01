@@ -658,8 +658,8 @@ def create_app() -> FastAPI:
                 game = repo.get_game(match_id)
             except Exception:  # noqa: BLE001
                 game = None
+        token = ws.query_params.get("token")
         if game is not None:
-            token = ws.query_params.get("token")
             # 서버 헤드리스 러너(C2)는 공유 시크릿 토큰으로 인증 — Firebase 토큰 아님.
             valid = _is_runner_token(token) or (bool(token) and _decode_token(token) is not None)
             if not valid:
@@ -670,11 +670,16 @@ def create_app() -> FastAPI:
 
         await ws.accept()
         session = MatchSession(ws, match_id)
-        # 첫 연결이 권위 (시뮬·기록 담당). 이후 연결은 관전 역할 → FRAME 무시.
-        if match_id not in _AUTHORITATIVE:
+        # 권위(시뮬·기록) 결정. 서버 러너가 도는 매치는 접속 순서가 아니라 "러너 토큰" 으로 권위를 정한다
+        # → 브라우저가 러너보다 먼저 붙어도 관전자가 됨(race 방지). 그 외(데모/로컬)는 첫 연결이 권위.
+        _mgr = get_runner_manager()
+        server_run = _mgr is not None and _mgr.is_active(match_id)
+        eligible = _is_runner_token(token) if server_run else True
+        if eligible and match_id not in _AUTHORITATIVE:
             _AUTHORITATIVE[match_id] = id(session)
             session.authoritative = True
-        logger.info("[match=%s] WS connected (authoritative=%s)", match_id, session.authoritative)
+        logger.info("[match=%s] WS connected (authoritative=%s, server_run=%s)",
+                    match_id, session.authoritative, server_run)
 
         try:
             while True:

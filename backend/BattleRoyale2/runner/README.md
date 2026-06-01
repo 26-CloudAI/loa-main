@@ -12,17 +12,23 @@
 이미지에 바이너리/팩이 들어가도 **`BR2_RUNNER_ENABLED` 미설정이면 러너는 안 켜진다**(`get_runner_manager()→None`).
 즉 **배포만으로는 동작 변화 없음.** 아래 env 를 설정해야 켜진다.
 
-## 켜는 법 (Cloud Run)
+## 켜는 법
 
+러너 env·리소스·인스턴스 설정은 **`cloudbuild.yaml` 에 박혀 있어 배포 시 자동 적용**된다
+(`--set-env-vars` 가 매 배포 시 env 를 교체하므로, 여기 없으면 수동 설정이 배포 때마다 지워짐).
+
+**1회 설정 — Cloud Build 트리거 substitution:**
+- 트리거 설정에서 `_BR2_RUNNER_SECRET` = (임의 문자열, 예 `loa-brrun-7f3a9b2c`) 추가.
+  (repo 에 시크릿 커밋 금지 → 트리거에만 둔다. 빈 값이면 러너 WS 인증 실패)
+
+이후 **main 에 머지 → Cloud Build 자동 배포** 시 러너가 켜진 상태로 배포됨.
+
+### 임시 테스트(배포 없이 바로) — 다음 배포 때 cloudbuild 값으로 덮어써짐
 ```bash
 gcloud run services update ai-arena-server --region asia-northeast3 \
-  --min-instances 1 --max-instances 1 \    # 인메모리 릴레이/StateStore → 단일 인스턴스 필수
-  --cpu 2 --memory 1Gi \                    # 러너 1개 ≈ 0.4 vCPU/46MB + 서버. 동시성 따라 조정
-  --timeout 3600 \                          # WS 매치(~3분) 동안 연결 유지
+  --min-instances 1 --max-instances 1 --cpu 2 --memory 1Gi --timeout 3600 \
   --update-env-vars \
-'BR2_RUNNER_ENABLED=1,BR2_GODOT_BIN=/usr/local/bin/godot_server,BR2_GAME_PCK=/app/BattleRoyale2/runner/game.pck,BR2_RUNNER_WS=ws://127.0.0.1:8080/battleroyale2/match/,BR2_MAX_CONCURRENT_GAMES=4,BR2_MATCH_TIMEOUT_SEC=240'
-# BR2_RUNNER_SECRET 은 Secret Manager 로 (러너 WS 인증용 공유 시크릿):
-#   gcloud run services update ... --set-secrets BR2_RUNNER_SECRET=br2-runner-secret:latest
+'BR2_RUNNER_ENABLED=1,BR2_GODOT_BIN=/usr/local/bin/godot_server,BR2_GAME_PCK=/app/BattleRoyale2/runner/game.pck,BR2_RUNNER_WS=ws://127.0.0.1:8080/battleroyale2/match/,BR2_RUNNER_SECRET=loa-brrun-7f3a9b2c,BR2_MAX_CONCURRENT_GAMES=4,BR2_MATCH_TIMEOUT_SEC=240'
 ```
 
 ### env 의미
