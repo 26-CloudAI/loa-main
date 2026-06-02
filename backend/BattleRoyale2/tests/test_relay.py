@@ -142,3 +142,53 @@ def test_pubsub_relay_delivers_frames_and_end():
     assert "FRAME_INIT" in types
     assert any(m.get("type") == "FRAME" and m.get("tick") == 1 for m in got)
     assert any(m.get("type") == "MATCH_END" for m in got)
+
+
+def test_distributed_authority_election():
+    """멀티 인스턴스 권위 선출: 원자적 SET NX 로 단 하나만 권위, compare-and-delete 로
+    남의 권위는 해제 못 함. fake Redis 로 SET NX/eval(CAS) 시맨틱을 검증."""
+    class _FakeRedis:
+        def __init__(self):
+            self.store = {}
+
+        async def set(self, k, v, nx=False, ex=None):
+            if nx and k in self.store:
+                return None
+            self.store[k] = v
+            return True
+
+        async def get(self, k):
+            return self.store.get(k)
+
+        async def expire(self, k, ttl):
+            return True
+
+        async def eval(self, script, numkeys, key, arg):
+            # _AUTH_RELEASE_LUA: 소유자 일치 시에만 삭제
+            if self.store.get(key) == arg:
+                self.store.pop(key, None)
+                return 1
+            return 0
+
+    async def _run():
+        ws._REDIS = _FakeRedis()
+        ws._REDIS_TRIED = True
+        mid = "authtest"
+        try:
+            a = await ws._try_acquire_authority(mid, "ownerA")
+            b = await ws._try_acquire_authority(mid, "ownerB")   # 이미 점유 → 거절
+            await ws._release_authority(mid, "ownerB")           # 남의 권위 해제 시도 → 무효
+            c_blocked = await ws._try_acquire_authority(mid, "ownerC")
+            await ws._release_authority(mid, "ownerA")           # 진짜 소유자 해제
+            c_ok = await ws._try_acquire_authority(mid, "ownerC")
+            return a, b, c_blocked, c_ok
+        finally:
+            ws._REDIS = None
+            ws._REDIS_TRIED = False
+            ws._AUTHORITATIVE.pop(mid, None)
+
+    a, b, c_blocked, c_ok = asyncio.run(_run())
+    assert a is True            # 첫 획득
+    assert b is False           # 이미 점유 → 거절
+    assert c_blocked is False   # 남의 권위는 해제 안 됨 → 여전히 점유
+    assert c_ok is True         # 진짜 소유자 해제 후 획득 가능
