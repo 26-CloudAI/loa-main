@@ -79,6 +79,7 @@ def _get_game_repo():
 # v0.1 은 InMemoryStateStore. 통합 서버에서 virtual 'src' → battle_royale/src 매핑.
 _STATE_STORE = None
 _STATE_STORE_TRIED = False
+_STATE_STORE_LOCK = None    # asyncio.Lock (이벤트 루프 안에서 lazy 생성)
 
 # match_id → 권위 세션의 id(). 첫 WS 연결이 권위. (PROTOCOL.md §3.13)
 _AUTHORITATIVE: dict[str, int] = {}
@@ -92,7 +93,7 @@ async def _pump_spectator(match_id: str, session: "MatchSession") -> None:
     catch-up(중간 합류)·live tail 공용 — relay_idx 로 진행 위치를 추적해 누락/중복 방지.
     coins/items 가 델타라 init+누적프레임을 순서대로 재생해야 월드가 복원된다.
     세션별 락으로 join-catchup 과 broadcast 동시 호출을 직렬화."""
-    store = _get_state_store()
+    store = await _get_state_store()
     if store is None:
         return
     if session._relay_lock is None:
@@ -111,7 +112,7 @@ async def _pump_spectator(match_id: str, session: "MatchSession") -> None:
 
 
 async def _broadcast_frame(match_id: str) -> None:
-    """권위 세션이 새 프레임을 기록한 직후, 등록된 모든 관전자에게 중계."""
+    """이 인스턴스에 등록된 로컬 관전자들에게 store 의 새 프레임을 중계(pump)."""
     specs = _SPECTATORS.get(match_id)
     if not specs:
         return
@@ -122,18 +123,324 @@ async def _broadcast_frame(match_id: str) -> None:
             specs.discard(s)
 
 
-def _get_state_store():
-    global _STATE_STORE, _STATE_STORE_TRIED
+async def _broadcast_match_end(match_id: str, data: dict) -> None:
+    """이 인스턴스의 로컬 관전자들에게 MATCH_END(결과창용)를 전달."""
+    specs = _SPECTATORS.get(match_id)
+    if not specs:
+        return
+    end_msg = {"type": "MATCH_END", "data": data if isinstance(data, dict) else {}}
+    for s in list(specs):
+        try:
+            await s.send(end_msg)
+        except Exception:  # noqa: BLE001
+            specs.discard(s)
+
+
+# ---------- 멀티 인스턴스 관전 중계 (Redis Pub/Sub) ----------
+# USE_REDIS=true 면 권위 세션이 붙은 인스턴스가 프레임/종료 "신호"를 채널에 발행하고,
+# 관전자가 붙은 각 인스턴스가 구독해 로컬 관전자에게 중계한다(프레임 본문은 Redis StateStore
+# 에서 읽음 → catch-up/순서 로직 재사용). USE_REDIS=false 면 브로커 None → 단일 인스턴스
+# 직접 중계로 동작(기존과 동일, 무회귀).
+_PUBSUB = None
+_PUBSUB_TRIED = False
+_PUBSUB_LOCK = None                       # asyncio.Lock (lazy)
+_SUB_TASKS: dict[str, "asyncio.Task"] = {}  # match_id → 이 인스턴스의 구독 태스크
+
+
+def _match_channel(match_id: str) -> str:
+    return "br2:match:" + match_id
+
+
+async def _get_pubsub():
+    """USE_REDIS=true 일 때만 RedisPubSubBroker 를 lazy 연결해 반환. 아니면/실패 시 None(로컬 전용)."""
+    global _PUBSUB, _PUBSUB_TRIED, _PUBSUB_LOCK
+    if _PUBSUB_TRIED:
+        return _PUBSUB
+    if _PUBSUB_LOCK is None:
+        _PUBSUB_LOCK = asyncio.Lock()
+    async with _PUBSUB_LOCK:
+        if _PUBSUB_TRIED:
+            return _PUBSUB
+        try:
+            from src.arena.server.settings import USE_REDIS  # type: ignore
+            if USE_REDIS:
+                from src.arena.server.redis_manager import RedisPubSubBroker  # type: ignore
+                from src.arena.server.config import RedisConfig  # type: ignore
+                broker = RedisPubSubBroker(RedisConfig())
+                await broker.connect()
+                _PUBSUB = broker
+                logger.info("[BR2] Redis Pub/Sub 활성 (멀티 인스턴스 관전 중계)")
+            else:
+                _PUBSUB = None
+                logger.info("[BR2] Pub/Sub 미사용 — 단일 인스턴스 로컬 중계")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[BR2] Pub/Sub 초기화 실패 — 로컬 중계로 폴백 (%s)", e)
+            _PUBSUB = None
+        _PUBSUB_TRIED = True
+    return _PUBSUB
+
+
+async def _publish_relay(match_id: str, msg: dict) -> None:
+    """관전 중계 신호를 채널에 발행. Redis 미사용/실패 시 무동작(로컬 경로가 처리)."""
+    broker = await _get_pubsub()
+    if broker is None:
+        return
+    try:
+        await broker.publish(_match_channel(match_id), msg)
+    except Exception:  # noqa: BLE001
+        logger.exception("[BR2] relay publish 실패 match=%s", match_id)
+
+
+async def _relay_frame(match_id: str) -> None:
+    """프레임 기록 직후 중계. Redis 면 발행(모든 인스턴스가 구독으로 로컬 중계),
+    Redis 미사용이면 로컬 관전자를 직접 pump(단일 인스턴스, 기존과 동일)."""
+    broker = await _get_pubsub()
+    if broker is None:
+        await _broadcast_frame(match_id)
+    else:
+        await _publish_relay(match_id, {"t": "frame"})
+
+
+async def _relay_match_end(match_id: str, data: dict) -> None:
+    """MATCH_END 중계. Redis 면 발행, 아니면 로컬 직접 전달."""
+    broker = await _get_pubsub()
+    if broker is None:
+        await _broadcast_match_end(match_id, data)
+    else:
+        await _publish_relay(match_id, {"t": "end", "data": data})
+
+
+async def _subscribe_loop(match_id: str) -> None:
+    """채널을 구독하며 frame/end 신호를 받아 로컬 관전자에게 중계."""
+    broker = await _get_pubsub()
+    if broker is None:
+        return
+    try:
+        async for msg in broker.subscribe(_match_channel(match_id)):
+            t = msg.get("t") if isinstance(msg, dict) else None
+            if t == "frame":
+                await _broadcast_frame(match_id)
+            elif t == "end":
+                await _broadcast_match_end(match_id, msg.get("data", {}))
+    except asyncio.CancelledError:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.exception("[BR2] subscribe loop 오류 match=%s", match_id)
+
+
+async def _ensure_subscriber(match_id: str) -> None:
+    """이 인스턴스에 해당 match 관전자가 있을 때 구독 태스크를 1개 보장(멀티 인스턴스)."""
+    broker = await _get_pubsub()
+    if broker is None:
+        return
+    task = _SUB_TASKS.get(match_id)
+    if task is not None and not task.done():
+        return
+    _SUB_TASKS[match_id] = asyncio.create_task(_subscribe_loop(match_id))
+
+
+def _stop_subscriber_if_idle(match_id: str) -> None:
+    """로컬 관전자가 모두 떠나면 구독 태스크를 종료."""
+    if _SPECTATORS.get(match_id):
+        return
+    task = _SUB_TASKS.pop(match_id, None)
+    if task is not None:
+        task.cancel()
+
+
+# ---------- 권위(시뮬·기록) 선출 — 멀티 인스턴스 원자적 (Redis SETNX) ----------
+# 권위는 매치당 단 하나여야 한다(이중 기록·발행 방지). USE_REDIS=true 면 Redis 의 원자적
+# SET NX 로 인스턴스 간 선출하고, false 면 기존 인스턴스 로컬 dict(_AUTHORITATIVE) 로 동작.
+# owner 는 세션별 uuid — 같은 소유자일 때만 TTL 갱신/해제(compare-and-*)해 남의 권위를 건드리지 않음.
+_REDIS = None
+_REDIS_TRIED = False
+_REDIS_LOCK = None
+_AUTH_TTL = 90          # 권위 키 backstop TTL(초). ungraceful 종료 시 takeover 시간.
+_AUTH_REFRESH = 30.0    # TTL 갱신 throttle(초). 긴 매치 대비.
+# 소유자 일치 시에만 삭제하는 원자적 CAS(Lua)
+_AUTH_RELEASE_LUA = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
+)
+
+
+def _auth_key(match_id: str) -> str:
+    return "br2:auth:" + match_id
+
+
+async def _get_redis():
+    """권위 선출용 raw Redis 클라이언트(SET NX/Lua). USE_REDIS=true 일 때만, 아니면/실패 시 None."""
+    global _REDIS, _REDIS_TRIED, _REDIS_LOCK
+    if _REDIS_TRIED:
+        return _REDIS
+    if _REDIS_LOCK is None:
+        _REDIS_LOCK = asyncio.Lock()
+    async with _REDIS_LOCK:
+        if _REDIS_TRIED:
+            return _REDIS
+        try:
+            from src.arena.server.settings import USE_REDIS  # type: ignore
+            if USE_REDIS:
+                import redis.asyncio as aioredis  # type: ignore
+                from src.arena.server.config import RedisConfig  # type: ignore
+                cfg = RedisConfig()
+                client = aioredis.Redis(host=cfg.host, port=cfg.port, db=cfg.db,
+                                        password=cfg.password, decode_responses=True)
+                await client.ping()
+                _REDIS = client
+                logger.info("[BR2] 권위 선출용 Redis 클라이언트 연결")
+            else:
+                _REDIS = None
+                logger.info("[BR2] 권위 선출 — 인스턴스 로컬(단일 인스턴스)")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[BR2] 권위 Redis 연결 실패 — 로컬 권위로 폴백 (%s)", e)
+            _REDIS = None
+        _REDIS_TRIED = True
+    return _REDIS
+
+
+async def _try_acquire_authority(match_id: str, owner: str) -> bool:
+    """원자적으로 권위 획득 시도. Redis 면 SET NX EX, 아니면 로컬 dict. 이미 다른 소유자면 False."""
+    client = await _get_redis()
+    if client is None:
+        if match_id not in _AUTHORITATIVE:
+            _AUTHORITATIVE[match_id] = owner
+            return True
+        return False
+    try:
+        ok = await client.set(_auth_key(match_id), owner, nx=True, ex=_AUTH_TTL)
+        return bool(ok)
+    except Exception:  # noqa: BLE001 — Redis 오류 시 로컬 폴백
+        logger.exception("[BR2] 권위 획득 Redis 오류 — 로컬 폴백 match=%s", match_id)
+        if match_id not in _AUTHORITATIVE:
+            _AUTHORITATIVE[match_id] = owner
+            return True
+        return False
+
+
+async def _refresh_authority(match_id: str, owner: str) -> None:
+    """권위 보유 중 TTL 갱신(긴 매치 대비). 소유자 일치 시에만."""
+    client = await _get_redis()
+    if client is None:
+        return
+    try:
+        if await client.get(_auth_key(match_id)) == owner:
+            await client.expire(_auth_key(match_id), _AUTH_TTL)
+    except Exception:  # noqa: BLE001
+        logger.exception("[BR2] 권위 TTL 갱신 오류 match=%s", match_id)
+
+
+async def _maybe_refresh_authority(session, match_id: str) -> None:
+    """프레임 처리 경로에서 호출 — throttle 후 권위 TTL 갱신."""
+    if await _get_redis() is None:
+        return
+    now = time.monotonic()
+    if now - getattr(session, "_auth_refreshed", 0.0) < _AUTH_REFRESH:
+        return
+    session._auth_refreshed = now
+    await _refresh_authority(match_id, getattr(session, "auth_owner", ""))
+
+
+async def _release_authority(match_id: str, owner: str) -> None:
+    """권위 해제 — 내가 여전히 소유자일 때만(compare-and-delete)."""
+    client = await _get_redis()
+    if client is None:
+        if _AUTHORITATIVE.get(match_id) == owner:
+            _AUTHORITATIVE.pop(match_id, None)
+        return
+    try:
+        await client.eval(_AUTH_RELEASE_LUA, 1, _auth_key(match_id), owner)
+    except Exception:  # noqa: BLE001
+        logger.exception("[BR2] 권위 해제 Redis 오류 match=%s", match_id)
+
+
+# ---------- 서버 러너 매치 마커 (크로스 인스턴스 race-fix) ----------
+# 러너는 POST /api/games 를 처리한 인스턴스에서만 spawn 되므로 _mgr.is_active 는 그 인스턴스에서만
+# True 다. 다른 인스턴스에 붙은 브라우저가 server_run=False 로 오인해 러너보다 먼저 권위를 채가는
+# 것을 막기 위해, 러너 spawn 시 Redis 에 마커를 심어 모든 인스턴스가 "이 매치는 러너 권위"임을 안다.
+_SERVERRUN_TTL = 300       # 마커 TTL(초). 러너 접속 윈도만 커버하면 됨(이후엔 권위 락이 지배).
+
+
+def _serverrun_key(match_id: str) -> str:
+    return "br2:serverrun:" + match_id
+
+
+def _mark_server_run_sync(match_id: str) -> None:
+    """create_game(동기 핸들러) 에서 호출 — 이 매치가 서버 러너 매치임을 Redis 에 마킹.
+    동기 엔드포인트라 sync redis 클라이언트를 잠깐 쓴다. USE_REDIS=false 면 무동작."""
+    try:
+        from src.arena.server.settings import USE_REDIS  # type: ignore
+        if not USE_REDIS:
+            return
+        import redis  # type: ignore
+        from src.arena.server.config import RedisConfig  # type: ignore
+        cfg = RedisConfig()
+        client = redis.Redis(host=cfg.host, port=cfg.port, db=cfg.db, password=cfg.password)
+        client.set(_serverrun_key(match_id), "1", ex=_SERVERRUN_TTL)
+        client.close()
+    except Exception:  # noqa: BLE001 — 마커 실패가 게임 생성을 막지 않게 흡수
+        logger.exception("[BR2] server-run 마커 기록 실패 match=%s", match_id)
+
+
+async def _is_server_run(match_id: str, mgr) -> bool:
+    """이 매치가 서버 러너 매치인가. 로컬 _mgr.is_active 또는 Redis 마커(타 인스턴스 spawn)."""
+    if mgr is not None and mgr.is_active(match_id):
+        return True
+    client = await _get_redis()
+    if client is None:
+        return False
+    try:
+        return bool(await client.get(_serverrun_key(match_id)))
+    except Exception:  # noqa: BLE001
+        logger.exception("[BR2] server-run 마커 조회 오류 match=%s", match_id)
+        return False
+
+
+def _on_runner_exit(match_id: str, rc: int, reason: str) -> None:
+    """헤드리스 러너가 비정상 종료(crash/timeout)했을 때 reaper 스레드에서 호출되는 콜백.
+    stuck 게임을 DB에서 종료 처리(status='error')해 '진행 중' 상태로 박제되는 것을 막는다.
+    reaper 는 별도 스레드지만 DB 연결(sqlite check_same_thread=False / psycopg2)은 동기 핸들러와
+    이미 공유 중이라 기존 동시성 모델과 동일하다. 정상 종료(rc=0)는 reaper 가 콜백을 호출하지 않는다."""
+    repo = _get_game_repo()
+    if repo is None:
+        return
+    try:
+        changed = repo.update_game_abandoned(match_id, end_reason="runner_%s" % reason)
+        if changed:
+            logger.warning("[BR2] 러너 종료로 게임 종료 처리 match=%s rc=%s reason=%s",
+                           match_id, rc, reason)
+        else:
+            logger.info("[BR2] 러너 종료 콜백 match=%s — 이미 종결된 게임(스킵)", match_id)
+    except Exception:  # noqa: BLE001 — DB 오류가 reaper 스레드를 죽이지 않도록 흡수
+        logger.exception("[BR2] 러너 종료 DB 처리 실패 match=%s", match_id)
+
+
+async def _get_state_store():
+    """리플레이/라이브 프레임 저장소를 lazy 하게 1회 초기화(비동기).
+
+    USE_REDIS=true 면 RedisStateStore(연결 필요) — 프레임이 Redis 에 영속되어 인스턴스
+    재시작·멀티 인스턴스에서도 유지된다. USE_REDIS=false(기본/개발/테스트) 면 InMemoryStateStore.
+    Redis 연결 실패 시 팩토리가 InMemory 로 폴백한다.
+
+    sub-app 으로 mount 되면 lifespan 이 전파되지 않으므로(run_server 참고) startup 대신
+    첫 사용 시점에 비동기로 연결한다. 호출부가 모두 async 라 await 안전."""
+    global _STATE_STORE, _STATE_STORE_TRIED, _STATE_STORE_LOCK
     if _STATE_STORE_TRIED:
         return _STATE_STORE
-    _STATE_STORE_TRIED = True
-    try:
-        from src.arena.server.redis_manager import InMemoryStateStore  # type: ignore
-        _STATE_STORE = InMemoryStateStore()
-        logger.info("[BR2] InMemoryStateStore 사용 (프레임 기록 활성)")
-    except Exception as e:  # noqa: BLE001
-        logger.warning("[BR2] StateStore 로드 실패 — 프레임 기록 비활성 (%s)", e)
-        _STATE_STORE = None
+    if _STATE_STORE_LOCK is None:
+        _STATE_STORE_LOCK = asyncio.Lock()
+    async with _STATE_STORE_LOCK:
+        if _STATE_STORE_TRIED:           # 락 대기 중 다른 코루틴이 먼저 초기화했을 수 있음
+            return _STATE_STORE
+        try:
+            from src.arena.server.redis_manager import create_state_store  # type: ignore
+            from src.arena.server.config import RedisConfig  # type: ignore
+            from src.arena.server.settings import USE_REDIS  # type: ignore
+            _STATE_STORE = await create_state_store(RedisConfig(), USE_REDIS)
+            logger.info("[BR2] StateStore 초기화 (redis=%s)", USE_REDIS)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[BR2] StateStore 로드 실패 — 프레임 기록 비활성 (%s)", e)
+            _STATE_STORE = None
+        _STATE_STORE_TRIED = True
     return _STATE_STORE
 
 
@@ -310,7 +617,9 @@ class MatchSession:
         self.started = False
         self.ended = False
         self.match_info: dict[str, Any] = {}
-        self.authoritative = False   # 첫 연결만 True — FRAME 기록 권위
+        self.authoritative = False   # 권위 획득 세션만 True — FRAME 기록/발행 권위
+        self.auth_owner = ""         # 권위 소유자 uuid (Redis 키 compare-and-* 용)
+        self._auth_refreshed = 0.0   # 권위 TTL 마지막 갱신 시각(monotonic), throttle 용
         self.user_bot_ids: set = set()   # 유저 제출 봇 id (participant is_ai_filler 구분용)
         self.relay_idx = 0           # 관전 세션: 이미 중계받은 store 프레임 수
         self._relay_lock = None      # asyncio.Lock (lazy) — 중계 직렬화
@@ -570,8 +879,14 @@ def create_app() -> FastAPI:
         running = False
         mgr = get_runner_manager()
         if mgr is not None:
+            # 러너 비정상 종료 시 DB 정리 콜백 배선 (멱등 — 최초 1회만 설정).
+            if mgr.on_exit is None:
+                mgr.on_exit = _on_runner_exit
             running = mgr.try_spawn(game_id)
-            if not running:
+            if running:
+                # 크로스 인스턴스: 다른 인스턴스 브라우저가 러너보다 먼저 권위를 못 채가게 마킹.
+                _mark_server_run_sync(game_id)
+            else:
                 logger.warning("[BR2] 러너 동시성 초과 — match=%s 는 대기/미시작", game_id)
         return {"game_id": game_id, "persisted": True, "running": running}
 
@@ -638,7 +953,7 @@ def create_app() -> FastAPI:
     @app.get("/api/games/{game_id}/replay")
     async def get_replay(game_id: str):
         """기록된 프레임(FRAME_INIT + FRAME 누적) 반환. 리플레이/라이브 따라보기 공용."""
-        store = _get_state_store()
+        store = await _get_state_store()
         if store is None:
             return {"game_id": game_id, "total_frames": 0, "frames": []}
         frames = await store.get_replay_frames(game_id)
@@ -673,11 +988,13 @@ def create_app() -> FastAPI:
         # 권위(시뮬·기록) 결정. 서버 러너가 도는 매치는 접속 순서가 아니라 "러너 토큰" 으로 권위를 정한다
         # → 브라우저가 러너보다 먼저 붙어도 관전자가 됨(race 방지). 그 외(데모/로컬)는 첫 연결이 권위.
         _mgr = get_runner_manager()
-        server_run = _mgr is not None and _mgr.is_active(match_id)
+        server_run = await _is_server_run(match_id, _mgr)
         eligible = _is_runner_token(token) if server_run else True
-        if eligible and match_id not in _AUTHORITATIVE:
-            _AUTHORITATIVE[match_id] = id(session)
-            session.authoritative = True
+        if eligible:
+            owner = uuid.uuid4().hex
+            if await _try_acquire_authority(match_id, owner):
+                session.authoritative = True
+                session.auth_owner = owner
         logger.info("[match=%s] WS connected (authoritative=%s, server_run=%s)",
                     match_id, session.authoritative, server_run)
 
@@ -729,6 +1046,9 @@ def create_app() -> FastAPI:
                         # 관전자: 시뮬 안 함. 역할 통보 후 누적 프레임 catch-up + 이후 live tail 중계.
                         await session.send({"type": "ROLE", "data": {"role": "spectator"}})
                         _SPECTATORS.setdefault(match_id, set()).add(session)
+                        # 멀티 인스턴스: 다른 인스턴스(권위)의 발행 신호 수신 시작 (catch-up 전에
+                        # 구독을 띄워 live 신호 누락 최소화 — pump 는 relay_idx 로 멱등).
+                        await _ensure_subscriber(match_id)
                         await _pump_spectator(match_id, session)
 
                 elif mtype == "MATCH_INFO":
@@ -758,33 +1078,27 @@ def create_app() -> FastAPI:
                 elif mtype == "FRAME_INIT":
                     # 정적 월드 스냅샷. 권위 세션만 기록 → 관전자 중계.
                     if session.authoritative:
-                        store = _get_state_store()
+                        store = await _get_state_store()
                         if store is not None:
                             await store.append_replay_frame(
                                 match_id, {"kind": "init", "data": data if isinstance(data, dict) else {}})
-                            await _broadcast_frame(match_id)
+                            await _relay_frame(match_id)
 
                 elif mtype == "FRAME":
                     # 매 틱 동적 상태 + 델타. 권위 세션만 기록 → 관전자 중계.
                     if session.authoritative:
-                        store = _get_state_store()
+                        store = await _get_state_store()
                         if store is not None:
                             await store.append_replay_frame(
                                 match_id, {"kind": "frame", "tick": tick,
                                            "data": data if isinstance(data, dict) else {}})
-                            await _broadcast_frame(match_id)
+                            await _relay_frame(match_id)
+                            await _maybe_refresh_authority(session, match_id)
 
                 elif mtype == "MATCH_END":
                     session.handle_match_end(data if isinstance(data, dict) else {})
                     # 관전자에게 매치 종료 + 결과 중계 (관전 화면에 결과창 표시용)
-                    specs = _SPECTATORS.get(match_id)
-                    if specs:
-                        end_msg = {"type": "MATCH_END", "data": data if isinstance(data, dict) else {}}
-                        for s in list(specs):
-                            try:
-                                await s.send(end_msg)
-                            except Exception:  # noqa: BLE001
-                                specs.discard(s)
+                    await _relay_match_end(match_id, data if isinstance(data, dict) else {})
                     logger.info("[match=%s] MATCH_END received", match_id)
                     break
 
@@ -796,15 +1110,18 @@ def create_app() -> FastAPI:
         except Exception:  # noqa: BLE001
             logger.exception("[match=%s] unexpected error", match_id)
         finally:
-            # 권위 세션이 끊기면 레지스트리에서 해제 (다음 연결이 권위 승계 가능)
-            if session.authoritative and _AUTHORITATIVE.get(match_id) == id(session):
-                _AUTHORITATIVE.pop(match_id, None)
+            # 권위 세션이 끊기면 해제 (다음 연결이 권위 승계 가능). 멀티 인스턴스는
+            # Redis 키를 compare-and-delete(내가 소유자일 때만).
+            if session.authoritative:
+                await _release_authority(match_id, getattr(session, "auth_owner", ""))
             # 관전 세션 정리
             specs = _SPECTATORS.get(match_id)
             if specs is not None:
                 specs.discard(session)
                 if not specs:
                     _SPECTATORS.pop(match_id, None)
+                    # 로컬 관전자가 모두 떠났으면 구독 태스크 종료(멀티 인스턴스)
+                    _stop_subscriber_if_idle(match_id)
             try:
                 await ws.close()
             except Exception:

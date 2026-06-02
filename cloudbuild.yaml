@@ -64,9 +64,10 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
 
-      # 리소스 (C2 헤드리스 러너 동작 위해 상향 + 단일 인스턴스)
-      # ⚠️ 인메모리 관전 릴레이/StateStore 때문에 단일 인스턴스(min=max=1) 필수.
-      #    멀티 인스턴스 확장은 Redis Pub/Sub 전환 후. (전체 서비스가 1인스턴스가 됨)
+      # 리소스 (C2 헤드리스 러너 동작 위해 상향)
+      # Redis 기반(USE_REDIS=true) 관전 릴레이/StateStore/권위 선출로 멀티 인스턴스 지원.
+      # 멀티 인스턴스 e2e(BattleRoyale2/tests/e2e_multi_instance.py) 통과 → max-instances 상향.
+      # min=1(상시 warm) ~ max=3 오토스케일. 동시 러너 최대 = max × BR2_MAX_CONCURRENT_GAMES.
       - '--memory'
       - '1Gi'
       - '--cpu'
@@ -74,7 +75,7 @@ steps:
       - '--min-instances'
       - '1'
       - '--max-instances'
-      - '1'
+      - '3'
       - '--timeout'
       - '3600'   # WS 매치(~3분) 동안 연결 유지
       - '--port'

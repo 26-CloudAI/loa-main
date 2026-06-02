@@ -126,6 +126,21 @@ class GameRepository:
         )
         self.conn.commit()
 
+    def update_game_abandoned(self, game_id: str, end_reason: str = "runner_exit") -> int:
+        """러너 비정상 종료(crash/timeout)로 끝난 게임을 종료 처리한다.
+        아직 진행 중(waiting/running)인 게임만 status='error' 로 마킹 — 이미 finished 면 건드리지 않음
+        (정상 MATCH_END 후 quit 한 경우를 덮어쓰지 않기 위함). 변경된 행 수를 반환(0=이미 종결됨)."""
+        cursor = self._execute(
+            """
+            UPDATE games
+            SET status = 'error', finished_at = """ + self._now() + """, end_reason = ?
+            WHERE id = ? AND status IN ('waiting', 'running')
+            """,
+            (end_reason, game_id),
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
     def add_participant(
         self,
         game_id: str,
