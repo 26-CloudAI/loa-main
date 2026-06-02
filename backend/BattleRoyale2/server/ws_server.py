@@ -122,6 +122,25 @@ async def _broadcast_frame(match_id: str) -> None:
             specs.discard(s)
 
 
+def _on_runner_exit(match_id: str, rc: int, reason: str) -> None:
+    """헤드리스 러너가 비정상 종료(crash/timeout)했을 때 reaper 스레드에서 호출되는 콜백.
+    stuck 게임을 DB에서 종료 처리(status='error')해 '진행 중' 상태로 박제되는 것을 막는다.
+    reaper 는 별도 스레드지만 DB 연결(sqlite check_same_thread=False / psycopg2)은 동기 핸들러와
+    이미 공유 중이라 기존 동시성 모델과 동일하다. 정상 종료(rc=0)는 reaper 가 콜백을 호출하지 않는다."""
+    repo = _get_game_repo()
+    if repo is None:
+        return
+    try:
+        changed = repo.update_game_abandoned(match_id, end_reason="runner_%s" % reason)
+        if changed:
+            logger.warning("[BR2] 러너 종료로 게임 종료 처리 match=%s rc=%s reason=%s",
+                           match_id, rc, reason)
+        else:
+            logger.info("[BR2] 러너 종료 콜백 match=%s — 이미 종결된 게임(스킵)", match_id)
+    except Exception:  # noqa: BLE001 — DB 오류가 reaper 스레드를 죽이지 않도록 흡수
+        logger.exception("[BR2] 러너 종료 DB 처리 실패 match=%s", match_id)
+
+
 def _get_state_store():
     global _STATE_STORE, _STATE_STORE_TRIED
     if _STATE_STORE_TRIED:
@@ -570,6 +589,9 @@ def create_app() -> FastAPI:
         running = False
         mgr = get_runner_manager()
         if mgr is not None:
+            # 러너 비정상 종료 시 DB 정리 콜백 배선 (멱등 — 최초 1회만 설정).
+            if mgr.on_exit is None:
+                mgr.on_exit = _on_runner_exit
             running = mgr.try_spawn(game_id)
             if not running:
                 logger.warning("[BR2] 러너 동시성 초과 — match=%s 는 대기/미시작", game_id)

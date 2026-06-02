@@ -42,6 +42,11 @@ gcloud run services update ai-arena-server --region asia-northeast3 \
 | `BR2_MAX_CONCURRENT_GAMES` | 동시 러너 상한(초과 시 거절) |
 | `BR2_MATCH_TIMEOUT_SEC` | 러너 1판 최대 수명(초). 초과 시 kill |
 
+러너가 **비정상 종료(crash) 또는 타임아웃 kill** 되면 reaper 가 `on_exit` 콜백으로 해당 게임을
+DB 에서 종료 처리(`status='error'`, `end_reason='runner_crash'`/`'runner_timeout'`)한다. 정상
+종료(MATCH_END 후 rc=0)는 콜백을 호출하지 않으며, 이미 `finished` 인 게임은 덮어쓰지 않는다.
+→ 러너가 죽어도 게임이 '진행 중' 으로 박제되지 않음.
+
 ## ⚠️ 제약
 
 - **단일 인스턴스 가정**: 러너·관전 릴레이·프레임 StateStore 가 프로세스 로컬. min=max=1 필수.
