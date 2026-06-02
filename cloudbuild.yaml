@@ -64,9 +64,9 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
 
-      # 리소스 (C2 헤드리스 러너 동작 위해 상향 + 단일 인스턴스)
-      # ⚠️ 인메모리 관전 릴레이/StateStore 때문에 단일 인스턴스(min=max=1) 필수.
-      #    멀티 인스턴스 확장은 Redis Pub/Sub 전환 후. (전체 서비스가 1인스턴스가 됨)
+      # 리소스 (C2 헤드리스 러너 동작 위해 상향)
+      # 코드는 Redis 기반(USE_REDIS=true) 관전 릴레이/StateStore/권위 선출로 멀티 인스턴스를
+      # 지원하나, 멀티 인스턴스 e2e 검증 전까지 max-instances=1 유지(검증 후 상향).
       - '--memory'
       - '1Gi'
       - '--cpu'

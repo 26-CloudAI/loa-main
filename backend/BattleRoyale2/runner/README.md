@@ -47,10 +47,23 @@ DB 에서 종료 처리(`status='error'`, `end_reason='runner_crash'`/`'runner_t
 종료(MATCH_END 후 rc=0)는 콜백을 호출하지 않으며, 이미 `finished` 인 게임은 덮어쓰지 않는다.
 → 러너가 죽어도 게임이 '진행 중' 으로 박제되지 않음.
 
-## ⚠️ 제약
+## 멀티 인스턴스 (Redis)
 
-- **단일 인스턴스 가정**: 러너·관전 릴레이·프레임 StateStore 가 프로세스 로컬. min=max=1 필수.
-  멀티 인스턴스로 확장하려면 Redis Pub/Sub + Redis StateStore 로 교체(인프라 추상화 존재).
+`USE_REDIS=true`(운영 기본) 면 관전 릴레이·프레임 저장·권위 선출이 Redis 기반이라
+**멀티 인스턴스로 확장 가능**하다. (`USE_REDIS=false` 면 전부 프로세스 로컬 → 단일 인스턴스 전용.)
+
+- **프레임 저장**: `RedisStateStore` 에 영속 → 인스턴스 재시작/재배포에도 리플레이 유지(TTL 범위).
+- **관전 중계**: 권위 인스턴스가 채널 `br2:match:{id}` 에 신호 발행, 관전자가 붙은 각 인스턴스가
+  구독해 로컬 관전자에게 중계(프레임 본문은 Redis 에서 읽음).
+- **권위 선출**: `br2:auth:{id}` 원자적 SET NX 로 매치당 단 하나. backstop TTL 90s + 프레임 경로 갱신.
+- **러너 race-fix**: 러너는 spawn 인스턴스에서만 로컬 인지되므로, `br2:serverrun:{id}` 마커로
+  모든 인스턴스가 "러너 권위 매치"임을 알아 브라우저가 먼저 권위를 못 채간다.
+
+런너는 `BR2_RUNNER_WS=ws://127.0.0.1:8080/...` 로 자기 인스턴스에 접속 → Redis 로 발행하므로
+멀티 인스턴스에서도 동작. 동시성 상한 `BR2_MAX_CONCURRENT_GAMES` 는 인스턴스당 값(총 = ×인스턴스수).
+
+### ⚠️ 제약
+- `cloudbuild.yaml` 의 `--max-instances` 는 멀티 인스턴스 검증 후 상향한다(현재 1).
 - WS 타임아웃을 매치 길이 이상으로(`--timeout`).
 
 ## game.pck 재생성 (게임 코드 변경 시)
