@@ -14,11 +14,32 @@ import sys
 _BACKEND = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(_BACKEND, "battle_royale"))
 
+import asyncio  # noqa: E402
+
 from fastapi.testclient import TestClient  # noqa: E402
 
+import BattleRoyale2.server.ws_server as ws  # noqa: E402
 from BattleRoyale2.server.ws_server import app, PROTOCOL_VERSION  # noqa: E402
 
 MATCH = "relaytest"
+
+
+def test_get_state_store_async_lazy_cached():
+    """_get_state_store 는 async-lazy. USE_REDIS=false 면 InMemory, 반복 호출 시 같은 인스턴스 캐시."""
+    # 모듈 전역 초기화 (다른 테스트가 이미 store 를 띄웠을 수 있으므로 격리)
+    ws._STATE_STORE = None
+    ws._STATE_STORE_TRIED = False
+    ws._STATE_STORE_LOCK = None
+
+    async def _run():
+        s1 = await ws._get_state_store()
+        s2 = await ws._get_state_store()
+        return s1, s2
+
+    s1, s2 = asyncio.run(_run())
+    from src.arena.server.redis_manager import InMemoryStateStore
+    assert isinstance(s1, InMemoryStateStore)   # USE_REDIS 미설정 → InMemory
+    assert s1 is s2                              # 1회 초기화 후 캐시
 
 
 def test_spectator_catchup_and_live_relay():

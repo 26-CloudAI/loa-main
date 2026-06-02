@@ -79,6 +79,7 @@ def _get_game_repo():
 # v0.1 은 InMemoryStateStore. 통합 서버에서 virtual 'src' → battle_royale/src 매핑.
 _STATE_STORE = None
 _STATE_STORE_TRIED = False
+_STATE_STORE_LOCK = None    # asyncio.Lock (이벤트 루프 안에서 lazy 생성)
 
 # match_id → 권위 세션의 id(). 첫 WS 연결이 권위. (PROTOCOL.md §3.13)
 _AUTHORITATIVE: dict[str, int] = {}
@@ -92,7 +93,7 @@ async def _pump_spectator(match_id: str, session: "MatchSession") -> None:
     catch-up(중간 합류)·live tail 공용 — relay_idx 로 진행 위치를 추적해 누락/중복 방지.
     coins/items 가 델타라 init+누적프레임을 순서대로 재생해야 월드가 복원된다.
     세션별 락으로 join-catchup 과 broadcast 동시 호출을 직렬화."""
-    store = _get_state_store()
+    store = await _get_state_store()
     if store is None:
         return
     if session._relay_lock is None:
@@ -141,18 +142,33 @@ def _on_runner_exit(match_id: str, rc: int, reason: str) -> None:
         logger.exception("[BR2] 러너 종료 DB 처리 실패 match=%s", match_id)
 
 
-def _get_state_store():
-    global _STATE_STORE, _STATE_STORE_TRIED
+async def _get_state_store():
+    """리플레이/라이브 프레임 저장소를 lazy 하게 1회 초기화(비동기).
+
+    USE_REDIS=true 면 RedisStateStore(연결 필요) — 프레임이 Redis 에 영속되어 인스턴스
+    재시작·멀티 인스턴스에서도 유지된다. USE_REDIS=false(기본/개발/테스트) 면 InMemoryStateStore.
+    Redis 연결 실패 시 팩토리가 InMemory 로 폴백한다.
+
+    sub-app 으로 mount 되면 lifespan 이 전파되지 않으므로(run_server 참고) startup 대신
+    첫 사용 시점에 비동기로 연결한다. 호출부가 모두 async 라 await 안전."""
+    global _STATE_STORE, _STATE_STORE_TRIED, _STATE_STORE_LOCK
     if _STATE_STORE_TRIED:
         return _STATE_STORE
-    _STATE_STORE_TRIED = True
-    try:
-        from src.arena.server.redis_manager import InMemoryStateStore  # type: ignore
-        _STATE_STORE = InMemoryStateStore()
-        logger.info("[BR2] InMemoryStateStore 사용 (프레임 기록 활성)")
-    except Exception as e:  # noqa: BLE001
-        logger.warning("[BR2] StateStore 로드 실패 — 프레임 기록 비활성 (%s)", e)
-        _STATE_STORE = None
+    if _STATE_STORE_LOCK is None:
+        _STATE_STORE_LOCK = asyncio.Lock()
+    async with _STATE_STORE_LOCK:
+        if _STATE_STORE_TRIED:           # 락 대기 중 다른 코루틴이 먼저 초기화했을 수 있음
+            return _STATE_STORE
+        try:
+            from src.arena.server.redis_manager import create_state_store  # type: ignore
+            from src.arena.server.config import RedisConfig  # type: ignore
+            from src.arena.server.settings import USE_REDIS  # type: ignore
+            _STATE_STORE = await create_state_store(RedisConfig(), USE_REDIS)
+            logger.info("[BR2] StateStore 초기화 (redis=%s)", USE_REDIS)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[BR2] StateStore 로드 실패 — 프레임 기록 비활성 (%s)", e)
+            _STATE_STORE = None
+        _STATE_STORE_TRIED = True
     return _STATE_STORE
 
 
@@ -660,7 +676,7 @@ def create_app() -> FastAPI:
     @app.get("/api/games/{game_id}/replay")
     async def get_replay(game_id: str):
         """기록된 프레임(FRAME_INIT + FRAME 누적) 반환. 리플레이/라이브 따라보기 공용."""
-        store = _get_state_store()
+        store = await _get_state_store()
         if store is None:
             return {"game_id": game_id, "total_frames": 0, "frames": []}
         frames = await store.get_replay_frames(game_id)
@@ -780,7 +796,7 @@ def create_app() -> FastAPI:
                 elif mtype == "FRAME_INIT":
                     # 정적 월드 스냅샷. 권위 세션만 기록 → 관전자 중계.
                     if session.authoritative:
-                        store = _get_state_store()
+                        store = await _get_state_store()
                         if store is not None:
                             await store.append_replay_frame(
                                 match_id, {"kind": "init", "data": data if isinstance(data, dict) else {}})
@@ -789,7 +805,7 @@ def create_app() -> FastAPI:
                 elif mtype == "FRAME":
                     # 매 틱 동적 상태 + 델타. 권위 세션만 기록 → 관전자 중계.
                     if session.authoritative:
-                        store = _get_state_store()
+                        store = await _get_state_store()
                         if store is not None:
                             await store.append_replay_frame(
                                 match_id, {"kind": "frame", "tick": tick,
