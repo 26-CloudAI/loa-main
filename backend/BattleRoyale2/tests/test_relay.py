@@ -86,3 +86,59 @@ def test_late_spectator_gets_full_history():
             assert spec.receive_json()["type"] == "FRAME_INIT"
             ticks = [spec.receive_json()["tick"] for _ in range(5)]
             assert ticks == [1, 2, 3, 4, 5]
+
+
+def test_pubsub_relay_delivers_frames_and_end():
+    """멀티 인스턴스 경로: 권위가 발행한 frame/end 신호를 구독 루프가 받아 로컬 관전자에 중계.
+    InMemoryPubSubBroker 를 강제 주입해 Redis 없이 발행→구독→pump 배선을 단일 프로세스로 검증."""
+    from src.arena.server.redis_manager import InMemoryStateStore, InMemoryPubSubBroker
+
+    class _Spec:
+        """_pump_spectator / _broadcast_match_end 가 쓰는 최소 인터페이스만 가진 가짜 관전자."""
+        def __init__(self):
+            self.relay_idx = 0
+            self._relay_lock = None
+            self.got = []
+
+        async def send(self, m):
+            self.got.append(m)
+
+    async def _run():
+        mid = "pubsubtest"
+        # store/pubsub 를 InMemory 로 강제 주입 (Redis 경로와 동일한 코드 흐름)
+        ws._STATE_STORE = InMemoryStateStore()
+        ws._STATE_STORE_TRIED = True
+        ws._PUBSUB = InMemoryPubSubBroker()
+        ws._PUBSUB_TRIED = True
+        ws._SUB_TASKS.clear()
+        ws._SPECTATORS.pop(mid, None)
+        spec = _Spec()
+        ws._SPECTATORS.setdefault(mid, set()).add(spec)
+        try:
+            await ws._ensure_subscriber(mid)
+            await asyncio.sleep(0)              # 구독 큐 등록 양보
+            store = ws._STATE_STORE
+            await store.append_replay_frame(mid, {"kind": "init", "data": {"map_size": [5, 5]}})
+            await ws._relay_frame(mid)          # broker is not None → 발행
+            await store.append_replay_frame(mid, {"kind": "frame", "tick": 1, "data": {"t": 0.1}})
+            await ws._relay_frame(mid)
+            await ws._relay_match_end(mid, {"reason": "last_standing"})
+            for _ in range(20):                 # 구독 루프 전달 대기
+                await asyncio.sleep(0)
+            return list(spec.got)
+        finally:
+            task = ws._SUB_TASKS.pop(mid, None)
+            if task is not None:
+                task.cancel()
+            ws._SPECTATORS.pop(mid, None)
+            # 전역 상태 복원 (다른 테스트가 USE_REDIS=false 직접 경로를 쓰도록)
+            ws._PUBSUB = None
+            ws._PUBSUB_TRIED = False
+            ws._STATE_STORE = None
+            ws._STATE_STORE_TRIED = False
+
+    got = asyncio.run(_run())
+    types = [m["type"] for m in got]
+    assert "FRAME_INIT" in types
+    assert any(m.get("type") == "FRAME" and m.get("tick") == 1 for m in got)
+    assert any(m.get("type") == "MATCH_END" for m in got)

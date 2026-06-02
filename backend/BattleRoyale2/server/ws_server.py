@@ -112,7 +112,7 @@ async def _pump_spectator(match_id: str, session: "MatchSession") -> None:
 
 
 async def _broadcast_frame(match_id: str) -> None:
-    """권위 세션이 새 프레임을 기록한 직후, 등록된 모든 관전자에게 중계."""
+    """이 인스턴스에 등록된 로컬 관전자들에게 store 의 새 프레임을 중계(pump)."""
     specs = _SPECTATORS.get(match_id)
     if not specs:
         return
@@ -121,6 +121,131 @@ async def _broadcast_frame(match_id: str) -> None:
             await _pump_spectator(match_id, s)
         except Exception:  # noqa: BLE001 — 끊긴 관전 소켓 제거
             specs.discard(s)
+
+
+async def _broadcast_match_end(match_id: str, data: dict) -> None:
+    """이 인스턴스의 로컬 관전자들에게 MATCH_END(결과창용)를 전달."""
+    specs = _SPECTATORS.get(match_id)
+    if not specs:
+        return
+    end_msg = {"type": "MATCH_END", "data": data if isinstance(data, dict) else {}}
+    for s in list(specs):
+        try:
+            await s.send(end_msg)
+        except Exception:  # noqa: BLE001
+            specs.discard(s)
+
+
+# ---------- 멀티 인스턴스 관전 중계 (Redis Pub/Sub) ----------
+# USE_REDIS=true 면 권위 세션이 붙은 인스턴스가 프레임/종료 "신호"를 채널에 발행하고,
+# 관전자가 붙은 각 인스턴스가 구독해 로컬 관전자에게 중계한다(프레임 본문은 Redis StateStore
+# 에서 읽음 → catch-up/순서 로직 재사용). USE_REDIS=false 면 브로커 None → 단일 인스턴스
+# 직접 중계로 동작(기존과 동일, 무회귀).
+_PUBSUB = None
+_PUBSUB_TRIED = False
+_PUBSUB_LOCK = None                       # asyncio.Lock (lazy)
+_SUB_TASKS: dict[str, "asyncio.Task"] = {}  # match_id → 이 인스턴스의 구독 태스크
+
+
+def _match_channel(match_id: str) -> str:
+    return "br2:match:" + match_id
+
+
+async def _get_pubsub():
+    """USE_REDIS=true 일 때만 RedisPubSubBroker 를 lazy 연결해 반환. 아니면/실패 시 None(로컬 전용)."""
+    global _PUBSUB, _PUBSUB_TRIED, _PUBSUB_LOCK
+    if _PUBSUB_TRIED:
+        return _PUBSUB
+    if _PUBSUB_LOCK is None:
+        _PUBSUB_LOCK = asyncio.Lock()
+    async with _PUBSUB_LOCK:
+        if _PUBSUB_TRIED:
+            return _PUBSUB
+        try:
+            from src.arena.server.settings import USE_REDIS  # type: ignore
+            if USE_REDIS:
+                from src.arena.server.redis_manager import RedisPubSubBroker  # type: ignore
+                from src.arena.server.config import RedisConfig  # type: ignore
+                broker = RedisPubSubBroker(RedisConfig())
+                await broker.connect()
+                _PUBSUB = broker
+                logger.info("[BR2] Redis Pub/Sub 활성 (멀티 인스턴스 관전 중계)")
+            else:
+                _PUBSUB = None
+                logger.info("[BR2] Pub/Sub 미사용 — 단일 인스턴스 로컬 중계")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[BR2] Pub/Sub 초기화 실패 — 로컬 중계로 폴백 (%s)", e)
+            _PUBSUB = None
+        _PUBSUB_TRIED = True
+    return _PUBSUB
+
+
+async def _publish_relay(match_id: str, msg: dict) -> None:
+    """관전 중계 신호를 채널에 발행. Redis 미사용/실패 시 무동작(로컬 경로가 처리)."""
+    broker = await _get_pubsub()
+    if broker is None:
+        return
+    try:
+        await broker.publish(_match_channel(match_id), msg)
+    except Exception:  # noqa: BLE001
+        logger.exception("[BR2] relay publish 실패 match=%s", match_id)
+
+
+async def _relay_frame(match_id: str) -> None:
+    """프레임 기록 직후 중계. Redis 면 발행(모든 인스턴스가 구독으로 로컬 중계),
+    Redis 미사용이면 로컬 관전자를 직접 pump(단일 인스턴스, 기존과 동일)."""
+    broker = await _get_pubsub()
+    if broker is None:
+        await _broadcast_frame(match_id)
+    else:
+        await _publish_relay(match_id, {"t": "frame"})
+
+
+async def _relay_match_end(match_id: str, data: dict) -> None:
+    """MATCH_END 중계. Redis 면 발행, 아니면 로컬 직접 전달."""
+    broker = await _get_pubsub()
+    if broker is None:
+        await _broadcast_match_end(match_id, data)
+    else:
+        await _publish_relay(match_id, {"t": "end", "data": data})
+
+
+async def _subscribe_loop(match_id: str) -> None:
+    """채널을 구독하며 frame/end 신호를 받아 로컬 관전자에게 중계."""
+    broker = await _get_pubsub()
+    if broker is None:
+        return
+    try:
+        async for msg in broker.subscribe(_match_channel(match_id)):
+            t = msg.get("t") if isinstance(msg, dict) else None
+            if t == "frame":
+                await _broadcast_frame(match_id)
+            elif t == "end":
+                await _broadcast_match_end(match_id, msg.get("data", {}))
+    except asyncio.CancelledError:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.exception("[BR2] subscribe loop 오류 match=%s", match_id)
+
+
+async def _ensure_subscriber(match_id: str) -> None:
+    """이 인스턴스에 해당 match 관전자가 있을 때 구독 태스크를 1개 보장(멀티 인스턴스)."""
+    broker = await _get_pubsub()
+    if broker is None:
+        return
+    task = _SUB_TASKS.get(match_id)
+    if task is not None and not task.done():
+        return
+    _SUB_TASKS[match_id] = asyncio.create_task(_subscribe_loop(match_id))
+
+
+def _stop_subscriber_if_idle(match_id: str) -> None:
+    """로컬 관전자가 모두 떠나면 구독 태스크를 종료."""
+    if _SPECTATORS.get(match_id):
+        return
+    task = _SUB_TASKS.pop(match_id, None)
+    if task is not None:
+        task.cancel()
 
 
 def _on_runner_exit(match_id: str, rc: int, reason: str) -> None:
@@ -767,6 +892,9 @@ def create_app() -> FastAPI:
                         # 관전자: 시뮬 안 함. 역할 통보 후 누적 프레임 catch-up + 이후 live tail 중계.
                         await session.send({"type": "ROLE", "data": {"role": "spectator"}})
                         _SPECTATORS.setdefault(match_id, set()).add(session)
+                        # 멀티 인스턴스: 다른 인스턴스(권위)의 발행 신호 수신 시작 (catch-up 전에
+                        # 구독을 띄워 live 신호 누락 최소화 — pump 는 relay_idx 로 멱등).
+                        await _ensure_subscriber(match_id)
                         await _pump_spectator(match_id, session)
 
                 elif mtype == "MATCH_INFO":
@@ -800,7 +928,7 @@ def create_app() -> FastAPI:
                         if store is not None:
                             await store.append_replay_frame(
                                 match_id, {"kind": "init", "data": data if isinstance(data, dict) else {}})
-                            await _broadcast_frame(match_id)
+                            await _relay_frame(match_id)
 
                 elif mtype == "FRAME":
                     # 매 틱 동적 상태 + 델타. 권위 세션만 기록 → 관전자 중계.
@@ -810,19 +938,12 @@ def create_app() -> FastAPI:
                             await store.append_replay_frame(
                                 match_id, {"kind": "frame", "tick": tick,
                                            "data": data if isinstance(data, dict) else {}})
-                            await _broadcast_frame(match_id)
+                            await _relay_frame(match_id)
 
                 elif mtype == "MATCH_END":
                     session.handle_match_end(data if isinstance(data, dict) else {})
                     # 관전자에게 매치 종료 + 결과 중계 (관전 화면에 결과창 표시용)
-                    specs = _SPECTATORS.get(match_id)
-                    if specs:
-                        end_msg = {"type": "MATCH_END", "data": data if isinstance(data, dict) else {}}
-                        for s in list(specs):
-                            try:
-                                await s.send(end_msg)
-                            except Exception:  # noqa: BLE001
-                                specs.discard(s)
+                    await _relay_match_end(match_id, data if isinstance(data, dict) else {})
                     logger.info("[match=%s] MATCH_END received", match_id)
                     break
 
@@ -843,6 +964,8 @@ def create_app() -> FastAPI:
                 specs.discard(session)
                 if not specs:
                     _SPECTATORS.pop(match_id, None)
+                    # 로컬 관전자가 모두 떠났으면 구독 태스크 종료(멀티 인스턴스)
+                    _stop_subscriber_if_idle(match_id)
             try:
                 await ws.close()
             except Exception:
