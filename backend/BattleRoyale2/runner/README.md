@@ -66,6 +66,13 @@ DB 에서 종료 처리(`status='error'`, `end_reason='runner_crash'`/`'runner_t
 - `cloudbuild.yaml` 의 `--max-instances` 는 멀티 인스턴스 검증 후 상향한다(현재 1).
 - WS 타임아웃을 매치 길이 이상으로(`--timeout`).
 
+### 멀티 인스턴스 검증 (게이트 상향 전 필수)
+Redis 실행 중인 환경에서 서버 2개 + 공용 Redis 로 크로스 인스턴스 중계/권위 단일성을 확인:
+```bash
+cd backend && python BattleRoyale2/tests/e2e_multi_instance.py
+```
+통과(✅) 후 `--max-instances` 를 N 으로 상향하고 배포.
+
 ## game.pck 재생성 (게임 코드 변경 시)
 
 웹 pck(`frontend/public/godot/index.pck`)와 **별도로** 갱신해야 함. 게임 레포 PoC 컨테이너가 Linux export 산출:
