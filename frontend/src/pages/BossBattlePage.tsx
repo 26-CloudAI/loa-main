@@ -96,7 +96,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   하: {
     label: '하',
     sub: '쉬움',
-    desc: 'HP 2배 · 공격 1.2배 · 방어 1.3배\n입문용 — 가장 약한 보스.',
+    desc: '광물 채굴·생존 중심 룰베이스 보스.\n인접 공격만 하며 추적하지 않습니다.',
     color: 'text-green-300',
     border: 'border-green-700',
     selected: 'border-green-400 bg-green-950/40',
@@ -104,7 +104,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   중: {
     label: '중',
     sub: '보통',
-    desc: 'HP 3배 · 공격/방어 1.5배 · 약간 빠름\n균형형 보스.',
+    desc: '채굴·전투 균형형 룰베이스 보스.\n시야 내 적을 적극 추적합니다.',
     color: 'text-yellow-300',
     border: 'border-yellow-700',
     selected: 'border-yellow-400 bg-yellow-950/40',
@@ -112,7 +112,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   상: {
     label: '상',
     sub: '어려움',
-    desc: 'HP 5배 · 공격/방어 2배 · 빠르고 공격 잦음\n최고 난이도 보스.',
+    desc: '수천 판 학습한 DQN 강화학습 보스.\n유저 코드를 학습해 점점 강해집니다.',
     color: 'text-red-300',
     border: 'border-red-700',
     selected: 'border-red-400 bg-red-950/40',

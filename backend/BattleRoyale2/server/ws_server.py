@@ -921,14 +921,14 @@ def create_app() -> FastAPI:
                 difficulty = _BOSS_DEFAULT_DIFFICULTY
 
         # 4.6) 이름 미지정 시 모드별 일련번호로 자동 명명.
-        #      게임 ID(uuid) 노출 대신 "배틀로얄 2D N" / "보스전 N" 으로 표시되게 한다.
+        #      게임 ID(uuid) 노출 대신 "새 배틀로얄 N" / "새 보스전 N" 으로 표시되게 한다.
         game_name = str(body.get("name") or "").strip()
         if not game_name:
             try:
                 seq = repo.count_games_by_mode(owner_id, mode) + 1
             except Exception:  # noqa: BLE001
                 seq = 1
-            game_name = ("보스전 %d" % seq) if is_boss else ("배틀로얄 2D %d" % seq)
+            game_name = ("새 보스전 %d" % seq) if is_boss else ("새 배틀로얄 %d" % seq)
 
         # 5) 게임 생성 (owner=토큰 사용자, config_json 에 스펙 영속)
         game_id = uuid.uuid4().hex
