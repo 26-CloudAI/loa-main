@@ -36,13 +36,30 @@ logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = "0.1"
 GAME_MODE = "battleroyale2"   # games.mode 값 (기존 'battle-royale' 과 구분)
+BOSS_MODE = "boss"            # 보스전 — BR2 엔진 재사용, 보스 봇 1마리 + 유저 challenger 봇들
+BR2_MODES = (GAME_MODE, BOSS_MODE)   # BR2 엔진이 처리하는 모드 (목록/결과/리플레이 공통)
 TARGET_BOT_COUNT = 4          # 유저 봇 + AI 채움으로 맞출 기본 총 봇 수
+
+# 보스전 난이도별 보스 봇 stat 곱셈 + 매치 길이. 게임(Godot)이 MATCH_CONFIG.boss_rules 로 받아
+# bot_id=="boss" 캐릭터에 적용(서버 봇은 의사결정만, 물리/스탯은 클라가 적용).
+# 운영이 난이도별 보스 봇 코드/수치를 제공하면 여기 + _BOSS_BOT_CLS 를 교체.
+_BOSS_DIFFICULTY: dict[str, dict] = {
+    "하": {"max_hp_mult": 2.0, "atk_mult": 1.2, "def_mult": 1.3, "speed_mult": 1.0, "attack_cd_mult": 1.0},
+    "중": {"max_hp_mult": 3.0, "atk_mult": 1.5, "def_mult": 1.5, "speed_mult": 1.1, "attack_cd_mult": 0.9},
+    "상": {"max_hp_mult": 5.0, "atk_mult": 2.0, "def_mult": 2.0, "speed_mult": 1.2, "attack_cd_mult": 0.8},
+}
+_BOSS_DEFAULT_DIFFICULTY = "중"
+_BOSS_DURATION_SEC = 180.0
+# 운영 보스봇 코드 제공 전까지 플레이스홀더 = 공격형 AI(MadDogBot). bot_id="boss" 로 소환.
+_BOSS_BOT_CLS = MadDogBot
 
 # game_id → 유저 봇 코드 목록 [{bot_id, name, code}]. POST /api/games 에서 저장,
 # WS MATCH_CONFIG 빌드 시 조회. (인메모리 — 서버 재시작 시 소실, v0.1 단순화)
 _GAME_CODE: dict[str, list[dict]] = {}
 # game_id → 총 봇 수 (내 봇 + AI 채움). POST /api/games 에서 저장.
 _GAME_BOT_COUNT: dict[str, int] = {}
+# game_id → 보스전 정보 {difficulty}. 보스 게임만. (config_json.boss)
+_GAME_BOSS: dict[str, dict] = {}
 
 # AI 채움용 봇 종류 (유저 봇 외 빈 슬롯). 순서대로 순환.
 _AI_FILLERS: list[tuple[str, type[BattleRoyale2DBot]]] = [
@@ -530,6 +547,13 @@ def _spec_config_json(user_bots: list[dict], bot_count: int) -> str:
     return json.dumps({"user_bots": user_bots, "bot_count": bot_count}, separators=(",", ":"))
 
 
+def _spec_config_json_boss(user_bots: list[dict], bot_count: int, difficulty: str) -> str:
+    """보스전 config_json — 일반 스펙 + boss{difficulty}. _load_game_boss 가 읽음."""
+    return json.dumps(
+        {"user_bots": user_bots, "bot_count": bot_count, "boss": {"difficulty": difficulty}},
+        separators=(",", ":"))
+
+
 def _load_game_spec(match_id: str) -> tuple[list[dict], int]:
     """이 게임의 (user_bots, bot_count). 인메모리 캐시 우선, 없으면 DB config_json 에서 로드.
     다중 인스턴스에서 POST 와 WS 가 다른 프로세스여도 DB 로 복원 가능."""
@@ -551,11 +575,34 @@ def _load_game_spec(match_id: str) -> tuple[list[dict], int]:
                 bc = int(parsed.get("bot_count") or TARGET_BOT_COUNT)
                 _GAME_CODE[match_id] = ub
                 _GAME_BOT_COUNT[match_id] = bc
+                boss = parsed.get("boss")
+                if isinstance(boss, dict):
+                    _GAME_BOSS[match_id] = boss
                 return ub, bc
         except Exception:  # noqa: BLE001
             logger.exception("[BR2] config_json 로드 실패: %s", match_id)
             _safe_rollback(repo)
     return (user_bots or []), (bot_count or TARGET_BOT_COUNT)
+
+
+def _load_game_boss(match_id: str):
+    """보스전 정보 {difficulty} 또는 None. 캐시 우선, 없으면 config_json 로드 시 채워짐."""
+    if match_id in _GAME_BOSS:
+        return _GAME_BOSS[match_id]
+    _load_game_spec(match_id)   # config_json 에 boss 있으면 _GAME_BOSS 채움
+    return _GAME_BOSS.get(match_id)
+
+
+def _boss_rules_for(difficulty: str) -> dict:
+    """난이도 → MATCH_CONFIG.boss_rules (게임이 받아 보스 stat/길이 적용). 프로토콜 v2."""
+    ov = _BOSS_DIFFICULTY.get(difficulty, _BOSS_DIFFICULTY[_BOSS_DEFAULT_DIFFICULTY])
+    return {
+        "version": 2,
+        "duration_sec": _BOSS_DURATION_SEC,
+        "slots": {"boss_count": 1, "ai_fillers_enabled": True},
+        "boss_stat_overrides": ov,
+        "difficulty": difficulty,
+    }
 
 # bot_id → 봇 클래스 매핑. ws_server 는 이 매핑으로 인스턴스 생성.
 BOT_CLASS_BY_ID: dict[str, type[BattleRoyale2DBot]] = {
@@ -629,31 +676,36 @@ class MatchSession:
 
     async def send_match_config(self, seed: int = 0) -> None:
         self.bots, self.bot_spec = self._assemble_bots(seed)
-        await self.send({
-            "type": "MATCH_CONFIG",
-            "data": {
-                "match_id": self.match_id,
-                "seed": seed,
-                "duration": 180,
-                "bots": [
-                    {"id": bid, "display_name": name}
-                    for bid, name in self.bot_spec
-                ],
-            },
-        })
+        boss = _load_game_boss(self.match_id)
+        data = {
+            "match_id": self.match_id,
+            "seed": seed,
+            "duration": int(_BOSS_DURATION_SEC) if boss is not None else 180,
+            "bots": [{"id": bid, "display_name": name} for bid, name in self.bot_spec],
+        }
+        # 보스전이면 boss_rules 동봉 — 게임이 bot_id=="boss" 에 stat 강화/마킹 + 매치 길이 적용.
+        if boss is not None:
+            data["boss_rules"] = _boss_rules_for(str(boss.get("difficulty", _BOSS_DEFAULT_DIFFICULTY)))
+        await self.send({"type": "MATCH_CONFIG", "data": data})
 
     def _assemble_bots(self, seed: int) -> tuple[dict[str, BattleRoyale2DBot], list[tuple[str, str]]]:
         """이 매치(game_id) 의 유저 제출 봇 + AI 채움 봇 구성.
         유저 코드가 없으면 기본 AI 3종(DEFAULT_BOT_FACTORY)으로 폴백.
         AI 채움은 초식/미친개/존버 중 랜덤 선택, 총 봇 수는 config_json/캐시 기준."""
         user_bots, bot_count = _load_game_spec(self.match_id)
-        if not user_bots:
+        boss = _load_game_boss(self.match_id)
+        if not user_bots and boss is None:
             bots = _build_bots(list(DEFAULT_BOT_FACTORY), seed=seed)
             return bots, list(DEFAULT_BOT_FACTORY)
 
         bots: dict[str, BattleRoyale2DBot] = {}
         spec: list[tuple[str, str]] = []
         self.user_bot_ids = set()
+        # 보스전: 보스 봇 1마리 먼저(bot_id="boss"). 운영 코드 제공 전 플레이스홀더 = 공격형 AI.
+        # 게임(Godot)이 boss_rules.boss_stat_overrides 로 stat 강화 + 보스 마킹 적용.
+        if boss is not None:
+            bots["boss"] = _BOSS_BOT_CLS("boss", seed=seed + 7)
+            spec.append(("boss", "보스"))
         for entry in user_bots:
             bid = entry["bot_id"]
             name = entry.get("name", bid)
@@ -853,16 +905,28 @@ def create_app() -> FastAPI:
             bot_count = TARGET_BOT_COUNT
         bot_count = max(max(2, len(user_bots)), min(8, bot_count))
 
+        # 4.5) 모드 (battleroyale2 | boss). 보스전이면 난이도 + 보스 봇 1마리 동봉.
+        mode = str(body.get("mode") or GAME_MODE)
+        if mode not in BR2_MODES:
+            mode = GAME_MODE
+        is_boss = (mode == BOSS_MODE)
+        difficulty = ""
+        if is_boss:
+            difficulty = str(body.get("difficulty") or _BOSS_DEFAULT_DIFFICULTY)
+            if difficulty not in _BOSS_DIFFICULTY:
+                difficulty = _BOSS_DEFAULT_DIFFICULTY
+
         # 5) 게임 생성 (owner=토큰 사용자, config_json 에 스펙 영속)
         game_id = uuid.uuid4().hex
         try:
             repo.create_game(
                 game_id=game_id,
                 owner_user_id=owner_id,
-                total_bots=bot_count if user_bots else len(DEFAULT_BOT_FACTORY),
+                total_bots=(bot_count + 1 if is_boss else bot_count) if user_bots else len(DEFAULT_BOT_FACTORY),
                 seed=body.get("seed"),
-                config_json=_spec_config_json(user_bots, bot_count),
-                mode=GAME_MODE,
+                config_json=(_spec_config_json_boss(user_bots, bot_count, difficulty)
+                             if is_boss else _spec_config_json(user_bots, bot_count)),
+                mode=mode,
                 name=(body.get("name") or None),
             )
         except Exception:  # noqa: BLE001
@@ -874,6 +938,8 @@ def create_app() -> FastAPI:
         if user_bots:
             _GAME_CODE[game_id] = user_bots
             _GAME_BOT_COUNT[game_id] = bot_count
+        if is_boss:
+            _GAME_BOSS[game_id] = {"difficulty": difficulty}
 
         # 서버사이드 헤드리스 러너 spawn (C2). 비활성(기본)이면 mgr=None → 동작 불변.
         running = False
@@ -901,12 +967,12 @@ def create_app() -> FastAPI:
             raise HTTPException(503, "BattleRoyale2 DB를 사용할 수 없습니다.")
         out = []
         for g in repo.list_games_by_owner(owner_id, limit=limit):
-            if getattr(g, "mode", None) != GAME_MODE:
+            if getattr(g, "mode", None) not in BR2_MODES:
                 continue
             out.append({
                 "game_id": g.id,
                 "name": g.name,
-                "mode": GAME_MODE,
+                "mode": getattr(g, "mode", GAME_MODE),
                 "status": g.status,
                 "total_bots": g.total_bots,
                 "created_at": getattr(g, "created_at", None),
@@ -926,7 +992,7 @@ def create_app() -> FastAPI:
         if repo is None:
             raise HTTPException(503, "BattleRoyale2 DB를 사용할 수 없습니다.")
         g = repo.get_game(game_id)
-        if g is None or getattr(g, "mode", None) != GAME_MODE:
+        if g is None or getattr(g, "mode", None) not in BR2_MODES:
             raise HTTPException(404, "게임을 찾을 수 없습니다.")
         rankings = []
         for p in repo.get_participants(game_id):
