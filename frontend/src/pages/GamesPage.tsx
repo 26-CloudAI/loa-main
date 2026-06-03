@@ -46,6 +46,14 @@ const STATUS_LABEL: Record<GameInfo['status'], string> = {
   error: '오류',
 }
 
+// BR2 틱(결정틱 10/초) → MM:SS 경과 시간. 게임 목록에서 틱 대신 시간 표시용.
+function fmtTickTime(tick: number): string {
+  const sec = Math.max(0, Math.floor((tick ?? 0) / 10))
+  const m = String(Math.floor(sec / 60)).padStart(2, '0')
+  const s = String(sec % 60).padStart(2, '0')
+  return `${m}:${s}`
+}
+
 const STATUS_COLOR: Record<GameInfo['status'], string> = {
   waiting: 'bg-yellow-500/20 text-yellow-300',
   loading: 'bg-yellow-500/20 text-yellow-300',
@@ -326,11 +334,18 @@ function GameCard({ game }: { game: GameInfo }) {
 
       {/* 가운데: 진행 정보 */}
       <div className="hidden sm:flex items-center gap-6 text-sm text-gray-400 flex-1 justify-center">
-        <span>
-          틱{' '}
-          <span className="text-white font-medium">{game.current_tick}</span>
-          {' / 200'}
-        </span>
+        {(isBR2 || game.mode === 'boss') ? (
+          <span>
+            시간{' '}
+            <span className="text-white font-medium">{fmtTickTime(game.current_tick)}</span>
+          </span>
+        ) : (
+          <span>
+            틱{' '}
+            <span className="text-white font-medium">{game.current_tick}</span>
+            {' / 200'}
+          </span>
+        )}
         <span>
           봇{' '}
           <span className="text-white font-medium">{game.total_bots}</span>

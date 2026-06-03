@@ -5,58 +5,76 @@ import { MOCK, MOCK_GAME_ID } from '../dev/mock'
 import BotCodeInput from '../components/BotCodeInput'
 import TutorialBanner from '../components/TutorialBanner'
 import QuickRefPanel from '../components/QuickRefPanel'
+import { BR2_API_BASE } from '../br2'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+// 보스전도 BR2(연속 2D) 엔진 사용 → /battleroyale2 백엔드.
+const API_BASE = BR2_API_BASE
 
 const MAX_CODE_BYTES = 50 * 1024
 const MAX_BOTS = 3
 
-const DEFAULT_CODE = `import random
+// BR2(연속 2D) 봇 템플릿 — class Bot(BattleRoyale2DBot), get_action(state) → action dict.
+const DEFAULT_CODE = `import math
 
-def action(state: dict) -> str:
-    my      = state["my_bot"]
-    pos_x, pos_y = my["position"]
-    energy  = my["energy"]
-    grid    = state["vision"]["grid"]
-    zone_bounds = state.get("zone_bounds", (0, 0, 99, 99))
-    min_x, min_y, max_x, max_y = zone_bounds
+# class Bot(BattleRoyale2DBot) 을 정의하세요. get_action(state) 가 매 결정 틱(0.1s) 호출됩니다.
+# 허용 import: math, random, json, collections, heapq, itertools
+class Bot(BattleRoyale2DBot):
+    def choose_spawn(self, map_info):
+        rc = map_info.get("rare_clusters") or map_info.get("chest_clusters") or []
+        if rc:
+            return (rc[0][0], rc[0][1])
+        return None
 
-    # 존 밖이면 중심으로 이동
-    in_zone = min_x <= pos_x <= max_x and min_y <= pos_y <= max_y
-    if not in_zone:
-        cx = (min_x + max_x) // 2
-        cy = (min_y + max_y) // 2
-        dx, dy = cx - pos_x, cy - pos_y
-        if abs(dx) >= abs(dy):
-            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
-        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+    def get_action(self, state):
+        me = state["self"]
+        x, y = me["pos"]
+        vision = state["vision"]
+        zone = state.get("zone", {})
+        action = {
+            "move_dir": [0.0, 0.0], "aim_dir": [1.0, 0.0],
+            "attack": False, "guard": False, "dash": False,
+            "pickup": False, "use_potion": False,
+        }
 
-    # 에너지 위험 시 방어
-    if energy <= 20:
-        return "SHIELD"
+        # 1) HP 낮고 포션 보유 → 사용
+        if me.get("has_potion") and me["hp"] < 80:
+            action["use_potion"] = True
 
-    # 인접 적 공격
-    dirs = [(0,-1,"ATTACK_UP"), (0,1,"ATTACK_DOWN"), (-1,0,"ATTACK_LEFT"), (1,0,"ATTACK_RIGHT")]
-    for dx, dy, atk in dirs:
-        if grid[2 + dy][2 + dx] == "bot_enemy":
-            return atk
+        # 2) 자기장 밖이면 중심으로 이동
+        if zone.get("active") and zone.get("damage", 0) > 0:
+            cx, cy = zone["center"]
+            dx, dy = cx - x, cy - y
+            d = math.hypot(dx, dy)
+            if d > zone.get("radius", 0):
+                action["move_dir"] = [dx / d, dy / d]
+                action["aim_dir"] = [dx / d, dy / d]
+                return action
 
-    # 인접 광물 채굴
-    for dx, dy, _ in dirs:
-        cell = grid[2 + dy][2 + dx]
-        if cell in ("mineral", "mineral_rare"):
-            return "MINE"
+        # 3) 보스/적 → 사거리(60) 안이면 공격, 아니면 접근
+        enemies = vision.get("enemies", [])
+        if enemies:
+            e = min(enemies, key=lambda en: (en["pos"][0]-x)**2 + (en["pos"][1]-y)**2)
+            dx, dy = e["pos"][0]-x, e["pos"][1]-y
+            d = math.hypot(dx, dy) or 1.0
+            action["aim_dir"] = [dx/d, dy/d]
+            if d <= 60:
+                action["attack"] = True
+            else:
+                action["move_dir"] = [dx/d, dy/d]
+            return action
 
-    # 시야 내 광물로 이동
-    for row in range(5):
-        for col in range(5):
-            if grid[row][col] in ("mineral", "mineral_rare"):
-                dx, dy = col - 2, row - 2
-                if abs(dx) >= abs(dy):
-                    return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
-                return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+        # 4) 코인 채집 (희귀 우선)
+        nodes = vision.get("nodes", [])
+        if nodes:
+            rare = [n for n in nodes if n.get("rare")]
+            pool = rare if rare else nodes
+            n = min(pool, key=lambda nd: (nd["pos"][0]-x)**2 + (nd["pos"][1]-y)**2)
+            dx, dy = n["pos"][0]-x, n["pos"][1]-y
+            d = math.hypot(dx, dy) or 1.0
+            action["move_dir"] = [dx/d, dy/d]
+            action["aim_dir"] = [dx/d, dy/d]
 
-    return random.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
+        return action
 `
 
 function byteSize(str: string) {
@@ -260,7 +278,7 @@ export default function BossBattlePage() {
 
     if (MOCK) {
       await new Promise((r) => setTimeout(r, 600))
-      navigate(`/games/${MOCK_GAME_ID}/watch`)
+      navigate(`/games/${MOCK_GAME_ID}/battleroyale/watch`)
       return
     }
 
@@ -293,7 +311,7 @@ export default function BossBattlePage() {
       }
 
       const game = await res.json()
-      navigate(`/games/${game.game_id}/watch`)
+      navigate(`/games/${game.game_id}/battleroyale/watch`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '게임 생성에 실패했습니다.')
       setSubmitting(false)
