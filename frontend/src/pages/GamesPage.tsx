@@ -27,6 +27,7 @@ interface GameInfo {
   name?: string | null
   mode?: string
   created_at?: string | null
+  started_at?: string | null
   finished_at?: string | null
   rankings?: RankingEntry[]
 }
@@ -46,12 +47,25 @@ const STATUS_LABEL: Record<GameInfo['status'], string> = {
   error: '오류',
 }
 
-// BR2 틱(결정틱 10/초) → MM:SS 경과 시간. 게임 목록에서 틱 대신 시간 표시용.
-function fmtTickTime(tick: number): string {
-  const sec = Math.max(0, Math.floor((tick ?? 0) / 10))
+function fmtMMSS(sec: number): string {
+  sec = Math.max(0, Math.floor(sec))
   const m = String(Math.floor(sec / 60)).padStart(2, '0')
   const s = String(sec % 60).padStart(2, '0')
   return `${m}:${s}`
+}
+
+// 게임 목록 시간 표시(보스전 포함 BR2 공통).
+// - 진행 중: started_at 부터 경과(페이지 로드 시점 기준 — 새로고침 때 갱신).
+// - 종료: finished_at - started_at(실제 소요). 폴백: current_tick(=final_tick, 결정틱 10/초)/10.
+function fmtGameTime(game: GameInfo): string {
+  const started = game.started_at ? new Date(game.started_at).getTime() : 0
+  if (game.status === 'running' && started) {
+    return fmtMMSS((Date.now() - started) / 1000)
+  }
+  if (started && game.finished_at) {
+    return fmtMMSS((new Date(game.finished_at).getTime() - started) / 1000)
+  }
+  return fmtMMSS((game.current_tick ?? 0) / 10)
 }
 
 const STATUS_COLOR: Record<GameInfo['status'], string> = {
@@ -109,30 +123,35 @@ export default function GamesPage() {
         }),
       ])
 
-      // 메인 /api/games 가 이미 battleroyale2 모드를 포함하고, BR2 전용 API 가 같은 게임을
-      // 다시 반환하므로 game_id 기준 전역 dedup (먼저 들어온 레코드 우선).
-      const merged: GameInfo[] = []
-      const seen = new Set<string>()
-      const pushUnique = (arr: GameInfo[]) => {
+      // 메인 /api/games 와 BR2 전용 API 가 같은 BR2 게임을 둘 다 반환 →
+      // game_id 기준 병합(메인의 current_tick 등 + BR2 의 started_at/finished_at/mode 우선 overlay).
+      const byId = new Map<string, GameInfo>()
+      const mergeAll = (arr: GameInfo[]) => {
         for (const g of arr) {
-          if (seen.has(g.game_id)) continue
-          seen.add(g.game_id)
-          merged.push(g)
+          const prev = byId.get(g.game_id)
+          byId.set(g.game_id, prev ? { ...prev, ...g } : g)
         }
       }
       if (brResult.status === 'fulfilled' && Array.isArray(brResult.value)) {
-        pushUnique(brResult.value as GameInfo[])
+        mergeAll(brResult.value as GameInfo[])
       }
       if (br2Result.status === 'fulfilled' && Array.isArray(br2Result.value)) {
-        pushUnique(br2Result.value as GameInfo[])
+        mergeAll(br2Result.value as GameInfo[])   // BR2 필드(started_at/mode) 우선
+      }
+      // 주식은 별도 dedup (이미 병합된 BR2/메인 게임과 game_id 중복 시 건너뜀, 활성 우선)
+      const pushUnique = (arr: GameInfo[]) => {
+        for (const g of arr) {
+          if (byId.has(g.game_id)) continue
+          byId.set(g.game_id, g)
+        }
       }
       if (stocksActive.status === 'fulfilled' && Array.isArray(stocksActive.value)) {
         pushUnique(stocksActive.value as GameInfo[])
       }
       if (stocksHistory.status === 'fulfilled' && Array.isArray(stocksHistory.value)) {
-        // history는 finished 상태이므로 활성 목록과 game_id 중복 시 활성 우선
         pushUnique(stocksHistory.value as GameInfo[])
       }
+      const merged: GameInfo[] = Array.from(byId.values())
 
       // created_at 기준 내림차순 정렬 (최신 게임이 위로)
       merged.sort((a, b) => {
@@ -274,7 +293,8 @@ function GameCard({ game }: { game: GameInfo }) {
   const shortId = game.game_id.slice(0, 8)
   const modeBadge = game.mode ? MODE_BADGE[game.mode] : null
   const isStocks = game.mode === 'mock-stocks'
-  const isBR2 = game.mode === 'battleroyale2'
+  // 보스전(boss)도 BR2 엔진 → watch/replay/result/시간표시 모두 BR2 경로 사용.
+  const isBR2 = game.mode === 'battleroyale2' || game.mode === 'boss'
   const isFinished = game.status === 'finished'
 
   function handleWatch() {
@@ -334,10 +354,10 @@ function GameCard({ game }: { game: GameInfo }) {
 
       {/* 가운데: 진행 정보 */}
       <div className="hidden sm:flex items-center gap-6 text-sm text-gray-400 flex-1 justify-center">
-        {(isBR2 || game.mode === 'boss') ? (
+        {isBR2 ? (
           <span>
             시간{' '}
-            <span className="text-white font-medium">{fmtTickTime(game.current_tick)}</span>
+            <span className="text-white font-medium">{fmtGameTime(game)}</span>
           </span>
         ) : (
           <span>

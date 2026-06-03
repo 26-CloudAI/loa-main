@@ -36,6 +36,7 @@ export default function GodotTestPage() {
   const [phase, setPhase] = useState(1)
   const [alive, setAlive] = useState(0)
   const [lb, setLb] = useState<LbRow[]>([])
+  const [follow, setFollow] = useState<{ bot: string; nonce: number } | null>(null)   // 리더보드 클릭 시점전환
   const [logs, setLogs] = useState<LogLine[]>([])
   const [result, setResult] = useState<{ reason: string; rankings: RankRow[] } | null>(null)
   const [showModal, setShowModal] = useState(true)
@@ -107,7 +108,7 @@ export default function GodotTestPage() {
         className="relative rounded-xl overflow-hidden ring-1 ring-gray-800 shadow-2xl h-full shrink-0"
         style={{ aspectRatio: '1 / 1', maxWidth: '100%' }}
       >
-        <GodotGame matchId={matchId || undefined} wsBase={BR2_WS_BASE} token={token} />
+        <GodotGame matchId={matchId || undefined} wsBase={BR2_WS_BASE} token={token} follow={follow} />
       </div>
 
       {/* 패널 — 게임 바로 옆 (그룹이 함께 중앙 정렬) */}
@@ -124,7 +125,12 @@ export default function GodotTestPage() {
           <h3 className="text-sm font-bold text-gray-200 mb-2">리더보드</h3>
           <ul className="space-y-1.5">
             {lb.map((row, i) => (
-              <li key={row.name} className="flex items-center justify-between text-sm">
+              <li
+                key={row.name}
+                onClick={() => setFollow({ bot: row.name, nonce: Date.now() })}
+                title="클릭하면 이 봇 시점으로"
+                className="flex items-center justify-between text-sm cursor-pointer rounded px-1 hover:bg-white/5"
+              >
                 <span className="truncate" style={{ color: botColor(row.name), opacity: row.alive ? 1 : 0.45 }}>
                   {i + 1}. {row.name}{row.alive ? '' : ' ☠'}
                 </span>
