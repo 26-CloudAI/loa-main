@@ -27,7 +27,7 @@ from typing import Any
 from fastapi import Body, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot
+from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot, BOSS_BOT_BY_DIFFICULTY
 from BattleRoyale2.server.inprocess_bot import InProcessBot2
 from BattleRoyale2.server.runner_manager import get_runner_manager
 from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
@@ -50,21 +50,8 @@ _BOSS_DIFFICULTY: dict[str, dict] = {
 }
 _BOSS_DEFAULT_DIFFICULTY = "중"
 _BOSS_DURATION_SEC = 180.0
-# 임시 보스 봇 — 스폰 위치에서 가만히 있음(아무 행동 X). 난이도 하/중/상 모두 동일(임시).
-# 운영이 난이도별 보스 봇 코드를 제공하면 _BOSS_BOT_CLS 를 교체.
-class _StationaryBot(BattleRoyale2DBot):
-    def __init__(self, bot_id: str, seed: int = 0):
-        self._bot_id = bot_id
-
-    @property
-    def bot_id(self) -> str:
-        return self._bot_id
-
-    def get_action(self, state: dict[str, Any]) -> dict[str, Any]:
-        return {}   # 빈 action → 엔진이 STAY 로 검증 (이동/공격 없음)
-
-
-_BOSS_BOT_CLS = _StationaryBot
+# 보스 봇은 난이도별로 BattleRoyale2/bots/boss.py 에 정의(운영이 get_action 작성).
+# 현재 세 난이도 모두 임시 STAY. _assemble_bots 에서 난이도로 클래스를 골라 소환.
 
 # game_id → 유저 봇 코드 목록 [{bot_id, name, code}]. POST /api/games 에서 저장,
 # WS MATCH_CONFIG 빌드 시 조회. (인메모리 — 서버 재시작 시 소실, v0.1 단순화)
@@ -717,7 +704,9 @@ class MatchSession:
         # 보스전: 보스 봇 1마리 먼저(bot_id="boss"). 운영 코드 제공 전 플레이스홀더 = 공격형 AI.
         # 게임(Godot)이 boss_rules.boss_stat_overrides 로 stat 강화 + 보스 마킹 적용.
         if boss is not None:
-            bots["boss"] = _BOSS_BOT_CLS("boss", seed=seed + 7)
+            diff = str(boss.get("difficulty", _BOSS_DEFAULT_DIFFICULTY))
+            boss_cls = BOSS_BOT_BY_DIFFICULTY.get(diff, BOSS_BOT_BY_DIFFICULTY[_BOSS_DEFAULT_DIFFICULTY])
+            bots["boss"] = boss_cls("boss", seed=seed + 7)
             spec.append(("boss", "보스"))
         for entry in user_bots:
             bid = entry["bot_id"]
