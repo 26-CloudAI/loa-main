@@ -29,11 +29,21 @@ interface Props {
 export default function GodotGame({ src = '/godot/index.html', matchId, wsBase, token, replay, apiBase, follow, width = '100%', height = '100%' }: Props) {
   const ref = useRef<HTMLIFrameElement | null>(null)
 
-  // 리더보드 봇 클릭 → Godot iframe 으로 follow 메시지 전달 → main.gd 가 카메라 전환.
+  // 리더보드 봇 클릭 → Godot 에 follow 전달 → main.gd(_poll_follow)가 window.__loaFollow 를 읽어 카메라 전환.
+  // 동일 출처 iframe 이라 contentWindow 에 직접 설정(가장 확실) + postMessage(폴백) 둘 다 시도.
   useEffect(() => {
-    if (follow && follow.bot && ref.current && ref.current.contentWindow) {
-      ref.current.contentWindow.postMessage(JSON.stringify({ type: 'follow', bot: follow.bot }), '*')
-    }
+    if (!follow || !follow.bot) return
+    const w = ref.current && ref.current.contentWindow
+    if (!w) { console.log('[follow] iframe window 없음'); return }
+    let direct = false
+    try {
+      ;(w as unknown as { __loaFollow?: string }).__loaFollow = follow.bot
+      direct = true
+    } catch { /* cross-origin 등 — postMessage 폴백 */ }
+    try {
+      w.postMessage(JSON.stringify({ type: 'follow', bot: follow.bot }), '*')
+    } catch { /* ignore */ }
+    console.log('[follow] 전송:', follow.bot, '(direct=' + direct + ')')
   }, [follow])
   // 쿼리(?) 대신 해시(#) 사용 — Godot HTML5 정적 파일 로딩(.pck/.wasm) 경로 해석을 방해하지 않음
   // match + ws + token (+ replay/api) 을 해시 파라미터로 전달
