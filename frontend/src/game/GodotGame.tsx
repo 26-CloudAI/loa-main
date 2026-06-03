@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 
 interface Props {
   /** public/godot/index.html 기준 경로. 기본은 라이브 데모 빌드. */
@@ -13,6 +13,8 @@ interface Props {
   replay?: boolean
   /** 리플레이 fetch 용 API 베이스 (예: https://host/battleroyale2). */
   apiBase?: string
+  /** 시점 전환 요청 — 리더보드 봇 클릭 시. nonce 로 같은 봇 재클릭도 전달. */
+  follow?: { bot: string; nonce: number } | null
   width?: number | string
   height?: number | string
 }
@@ -24,8 +26,15 @@ interface Props {
  *   서버가 없으면 내부 데모 AI 로 폴백
  * - Phase A: 라이브 데모 임베드 검증용. game_id/리플레이 연동은 Phase B 이후.
  */
-export default function GodotGame({ src = '/godot/index.html', matchId, wsBase, token, replay, apiBase, width = '100%', height = '100%' }: Props) {
+export default function GodotGame({ src = '/godot/index.html', matchId, wsBase, token, replay, apiBase, follow, width = '100%', height = '100%' }: Props) {
   const ref = useRef<HTMLIFrameElement | null>(null)
+
+  // 리더보드 봇 클릭 → Godot iframe 으로 follow 메시지 전달 → main.gd 가 카메라 전환.
+  useEffect(() => {
+    if (follow && follow.bot && ref.current && ref.current.contentWindow) {
+      ref.current.contentWindow.postMessage(JSON.stringify({ type: 'follow', bot: follow.bot }), '*')
+    }
+  }, [follow])
   // 쿼리(?) 대신 해시(#) 사용 — Godot HTML5 정적 파일 로딩(.pck/.wasm) 경로 해석을 방해하지 않음
   // match + ws + token (+ replay/api) 을 해시 파라미터로 전달
   let fullSrc = src
