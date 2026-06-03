@@ -38,6 +38,11 @@ def test_boss_roster_includes_boss_and_user_bots():
         assert "boss" in bots and "boss" in ids        # 보스 봇 소환됨
         assert "challenger" in bots                      # 유저 봇 포함
         assert dict(spec)["boss"] == "보스"
+        # 보스전은 AI 채움 없음 — 보스 + 유저 봇만
+        assert not any(bid.startswith("ai_") for bid in ids)
+        assert set(bots.keys()) == {"boss", "challenger"}
+        # 임시 보스봇은 가만히 있음 — get_action 이 빈 dict
+        assert bots["boss"].get_action({}) == {}
     finally:
         ws._GAME_CODE.pop(mid, None)
         ws._GAME_BOT_COUNT.pop(mid, None)

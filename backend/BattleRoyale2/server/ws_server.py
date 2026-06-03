@@ -50,8 +50,21 @@ _BOSS_DIFFICULTY: dict[str, dict] = {
 }
 _BOSS_DEFAULT_DIFFICULTY = "중"
 _BOSS_DURATION_SEC = 180.0
-# 운영 보스봇 코드 제공 전까지 플레이스홀더 = 공격형 AI(MadDogBot). bot_id="boss" 로 소환.
-_BOSS_BOT_CLS = MadDogBot
+# 임시 보스 봇 — 스폰 위치에서 가만히 있음(아무 행동 X). 난이도 하/중/상 모두 동일(임시).
+# 운영이 난이도별 보스 봇 코드를 제공하면 _BOSS_BOT_CLS 를 교체.
+class _StationaryBot(BattleRoyale2DBot):
+    def __init__(self, bot_id: str, seed: int = 0):
+        self._bot_id = bot_id
+
+    @property
+    def bot_id(self) -> str:
+        return self._bot_id
+
+    def get_action(self, state: dict[str, Any]) -> dict[str, Any]:
+        return {}   # 빈 action → 엔진이 STAY 로 검증 (이동/공격 없음)
+
+
+_BOSS_BOT_CLS = _StationaryBot
 
 # game_id → 유저 봇 코드 목록 [{bot_id, name, code}]. POST /api/games 에서 저장,
 # WS MATCH_CONFIG 빌드 시 조회. (인메모리 — 서버 재시작 시 소실, v0.1 단순화)
@@ -599,7 +612,7 @@ def _boss_rules_for(difficulty: str) -> dict:
     return {
         "version": 2,
         "duration_sec": _BOSS_DURATION_SEC,
-        "slots": {"boss_count": 1, "ai_fillers_enabled": True},
+        "slots": {"boss_count": 1, "ai_fillers_enabled": False},
         "boss_stat_overrides": ov,
         "difficulty": difficulty,
     }
@@ -713,17 +726,19 @@ class MatchSession:
             spec.append((bid, name))
             self.user_bot_ids.add(bid)
 
-        target = max(len(spec), min(8, bot_count))   # 유저봇 수 이상, 최대 8
-        rng = random.Random(seed)
-        type_counts: dict[str, int] = {}
-        fill_n = max(0, target - len(spec))
-        for i in range(fill_n):
-            label, cls = rng.choice(_AI_FILLERS)   # 랜덤 종류
-            type_counts[label] = type_counts.get(label, 0) + 1
-            bid = "ai_%d" % i
-            name = "%s %d" % (label, type_counts[label])
-            bots[bid] = cls(bid, seed=seed + 100 + i)
-            spec.append((bid, name))
+        # 보스전은 AI 채움 없음 — 보스 봇 + 유저 봇만. (일반 매치만 AI 로 빈 슬롯 채움)
+        if boss is None:
+            target = max(len(spec), min(8, bot_count))   # 유저봇 수 이상, 최대 8
+            rng = random.Random(seed)
+            type_counts: dict[str, int] = {}
+            fill_n = max(0, target - len(spec))
+            for i in range(fill_n):
+                label, cls = rng.choice(_AI_FILLERS)   # 랜덤 종류
+                type_counts[label] = type_counts.get(label, 0) + 1
+                bid = "ai_%d" % i
+                name = "%s %d" % (label, type_counts[label])
+                bots[bid] = cls(bid, seed=seed + 100 + i)
+                spec.append((bid, name))
         return bots, spec
 
     async def send_match_start(self) -> None:
