@@ -96,7 +96,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   하: {
     label: '하',
     sub: '쉬움',
-    desc: '광물 채굴·생존 중심 룰베이스 보스.\n인접 공격만 하며 추적하지 않습니다.',
+    desc: 'HP 2배 · 공격 1.2배 · 방어 1.3배\n입문용 — 가장 약한 보스.',
     color: 'text-green-300',
     border: 'border-green-700',
     selected: 'border-green-400 bg-green-950/40',
@@ -104,7 +104,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   중: {
     label: '중',
     sub: '보통',
-    desc: '채굴·전투 균형형 룰베이스 보스.\n시야 내 적을 적극 추적합니다.',
+    desc: 'HP 3배 · 공격/방어 1.5배 · 약간 빠름\n균형형 보스.',
     color: 'text-yellow-300',
     border: 'border-yellow-700',
     selected: 'border-yellow-400 bg-yellow-950/40',
@@ -112,7 +112,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   상: {
     label: '상',
     sub: '어려움',
-    desc: '수천 판 학습한 DQN 강화학습 보스.\n유저 코드를 학습해 점점 강해집니다.',
+    desc: 'HP 5배 · 공격/방어 2배 · 빠르고 공격 잦음\n최고 난이도 보스.',
     color: 'text-red-300',
     border: 'border-red-700',
     selected: 'border-red-400 bg-red-950/40',
@@ -246,7 +246,6 @@ export default function BossBattlePage() {
 
   const [gameName, setGameName] = useState('')
   const [bots, setBots] = useState<BotEntry[]>([{ id: '', code: DEFAULT_CODE }])
-  const [tickInterval, setTickInterval] = useState(0.05)
   const [seed, setSeed] = useState('')
   const [difficulty, setDifficulty] = useState<Difficulty>('중')
   const [isPublic, setIsPublic] = useState(true)
@@ -289,7 +288,6 @@ export default function BossBattlePage() {
           code: b.code,
           is_public: isPublic,
         })),
-        tick_interval: tickInterval,
         mode: 'boss',
         difficulty,
         seed: seed !== '' ? parseInt(seed, 10) : null,
@@ -419,29 +417,6 @@ export default function BossBattlePage() {
               >
                 <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-white">틱 간격 (속도)</p>
-                  <p className="text-xs text-gray-500">값이 작을수록 빠름</p>
-                </div>
-                <span className="text-sm font-mono" style={{ color: '#E8334A' }}>{tickInterval.toFixed(2)}s</span>
-              </div>
-              <input
-                type="range"
-                min={0.01}
-                max={1.0}
-                step={0.01}
-                value={tickInterval}
-                onChange={(e) => setTickInterval(parseFloat(e.target.value))}
-                className="w-full accent-[#E8334A]"
-              />
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>0.01s (빠름)</span>
-                <span>1.0s (느림)</span>
-              </div>
             </div>
 
             <div className="flex items-center justify-between">
