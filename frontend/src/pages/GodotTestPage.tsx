@@ -32,7 +32,7 @@ export default function GodotTestPage() {
   const navigate = useNavigate()
   const { game_id } = useParams()
   const { token } = useAuth()
-  const [time, setTime] = useState(180)
+  const [time, setTime] = useState(0)   // 경과 시간(카운트업). hud.time = 경과초.
   const [phase, setPhase] = useState(1)
   const [alive, setAlive] = useState(0)
   const [lb, setLb] = useState<LbRow[]>([])
