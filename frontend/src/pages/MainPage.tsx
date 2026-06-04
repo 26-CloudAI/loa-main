@@ -40,10 +40,6 @@ interface GameInfo {
   finished_at?: string | null
 }
 
-// BR2(연속 2D) 매치 최대 길이(초). 진행 중 경과시간 표시를 이 값으로 클램프해
-// 러너가 죽어 status 가 running 으로 남은 좀비 게임이 540:00 처럼 폭주하는 걸 방지.
-const BR2_MATCH_MAX_SEC = 180
-
 function fmtMMSS(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec))
   const mm = String(Math.floor(s / 60)).padStart(2, '0')
@@ -61,11 +57,12 @@ function parseServerTime(s?: string | null): number {
   return Number.isNaN(t) ? 0 : t
 }
 
-// 진행 중 BR2/보스 게임의 경과시간(초). started_at 부터 now, 매치 최대치로 클램프.
+// 진행 중 BR2/보스 게임의 경과시간(초). started_at 부터 now.
+// ※ 180초는 마지막 자기장이 멈추는 시점일 뿐 교전은 이어지므로 상한 클램프 없음.
 function runningElapsedSec(game: GameInfo): number {
   const started = parseServerTime(game.started_at)
   if (!started) return 0
-  return Math.min((Date.now() - started) / 1000, BR2_MATCH_MAX_SEC)
+  return (Date.now() - started) / 1000
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
