@@ -28,6 +28,7 @@ from fastapi import Body, FastAPI, HTTPException, Request, WebSocket, WebSocketD
 from fastapi.middleware.cors import CORSMiddleware
 
 from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot, BOSS_BOT_BY_DIFFICULTY
+from BattleRoyale2.rules import boss_mode as boss_rules_mod
 from BattleRoyale2.server.inprocess_bot import InProcessBot2
 from BattleRoyale2.server.runner_manager import get_runner_manager
 from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
@@ -40,19 +41,13 @@ BOSS_MODE = "boss"            # 보스전 — BR2 엔진 재사용, 보스 봇 1
 BR2_MODES = (GAME_MODE, BOSS_MODE)   # BR2 엔진이 처리하는 모드 (목록/결과/리플레이 공통)
 TARGET_BOT_COUNT = 4          # 유저 봇 + AI 채움으로 맞출 기본 총 봇 수
 
-# 보스전 난이도별 보스 봇 stat 곱셈 + 매치 길이. 게임(Godot)이 MATCH_CONFIG.boss_rules 로 받아
-# bot_id=="boss" 캐릭터에 적용(서버 봇은 의사결정만, 물리/스탯은 클라가 적용).
-# 운영이 난이도별 보스 봇 코드/수치를 제공하면 여기 + _BOSS_BOT_CLS 를 교체.
-_BOSS_DIFFICULTY: dict[str, dict] = {
-    # 난이도별 스탯 배율은 추후 보스 로직 작업 시 함께 튜닝 예정 — 현재는 전 난이도 동일(무력화).
-    "하": {"max_hp_mult": 1.0, "atk_mult": 1.0, "def_mult": 1.0, "speed_mult": 1.0, "attack_cd_mult": 1.0},
-    "중": {"max_hp_mult": 1.0, "atk_mult": 1.0, "def_mult": 1.0, "speed_mult": 1.0, "attack_cd_mult": 1.0},
-    "상": {"max_hp_mult": 1.0, "atk_mult": 1.0, "def_mult": 1.0, "speed_mult": 1.0, "attack_cd_mult": 1.0},
-}
+# 보스전 운영 룰은 rules/boss_mode.py 가 정의(다대일 균형 stat 배수 + 매치 환경 룰).
+# ws_server 는 진입점만 담당:
+#   - 난이도 키 검증: boss_rules_mod.BOSS_STAT_MULTIPLIERS  ("하"/"중"/"상")
+#   - MATCH_CONFIG.boss_rules payload: boss_rules_mod.boss_mode_rules(난이도)
+#   - 유저봇 상한·기본 봇 수·매치 길이: boss_rules_mod 상수
+# 보스 봇 클래스는 BOSS_BOT_BY_DIFFICULTY(BattleRoyale2/bots/boss/__init__.py) 매핑.
 _BOSS_DEFAULT_DIFFICULTY = "중"
-_BOSS_DURATION_SEC = 180.0
-# 보스 봇은 난이도별로 BattleRoyale2/bots/boss.py 에 정의(운영이 get_action 작성).
-# 현재 세 난이도 모두 임시 STAY. _assemble_bots 에서 난이도로 클래스를 골라 소환.
 
 # game_id → 유저 봇 코드 목록 [{bot_id, name, code}]. POST /api/games 에서 저장,
 # WS MATCH_CONFIG 빌드 시 조회. (인메모리 — 서버 재시작 시 소실, v0.1 단순화)
@@ -594,17 +589,6 @@ def _load_game_boss(match_id: str):
     return _GAME_BOSS.get(match_id)
 
 
-def _boss_rules_for(difficulty: str) -> dict:
-    """난이도 → MATCH_CONFIG.boss_rules (게임이 받아 보스 stat/길이 적용). 프로토콜 v2."""
-    ov = _BOSS_DIFFICULTY.get(difficulty, _BOSS_DIFFICULTY[_BOSS_DEFAULT_DIFFICULTY])
-    return {
-        "version": 2,
-        "duration_sec": _BOSS_DURATION_SEC,
-        "slots": {"boss_count": 1, "ai_fillers_enabled": False},
-        "boss_stat_overrides": ov,
-        "difficulty": difficulty,
-    }
-
 # bot_id → 봇 클래스 매핑. ws_server 는 이 매핑으로 인스턴스 생성.
 BOT_CLASS_BY_ID: dict[str, type[BattleRoyale2DBot]] = {
     "bot_a": HerbivoreBot,
@@ -678,15 +662,18 @@ class MatchSession:
     async def send_match_config(self, seed: int = 0) -> None:
         self.bots, self.bot_spec = self._assemble_bots(seed)
         boss = _load_game_boss(self.match_id)
+        boss_duration = boss_rules_mod.BOSS_MODE_DURATION_SEC
+        base_duration = boss_rules_mod.BR2_BASE_DURATION_SEC
         data = {
             "match_id": self.match_id,
             "seed": seed,
-            "duration": int(_BOSS_DURATION_SEC) if boss is not None else 180,
+            "duration": int(boss_duration if boss is not None else base_duration),
             "bots": [{"id": bid, "display_name": name} for bid, name in self.bot_spec],
         }
         # 보스전이면 boss_rules 동봉 — 게임이 bot_id=="boss" 에 stat 강화/마킹 + 매치 길이 적용.
         if boss is not None:
-            data["boss_rules"] = _boss_rules_for(str(boss.get("difficulty", _BOSS_DEFAULT_DIFFICULTY)))
+            difficulty = str(boss.get("difficulty", _BOSS_DEFAULT_DIFFICULTY))
+            data["boss_rules"] = boss_rules_mod.boss_mode_rules(difficulty)
         await self.send({"type": "MATCH_CONFIG", "data": data})
 
     def _assemble_bots(self, seed: int) -> tuple[dict[str, BattleRoyale2DBot], list[tuple[str, str]]]:
@@ -702,13 +689,14 @@ class MatchSession:
         bots: dict[str, BattleRoyale2DBot] = {}
         spec: list[tuple[str, str]] = []
         self.user_bot_ids = set()
-        # 보스전: 보스 봇 1마리 먼저(bot_id="boss"). 운영 코드 제공 전 플레이스홀더 = 공격형 AI.
+        # 보스전: 보스 봇 1마리 먼저(bot_id="boss"). 난이도별 룰/RL 봇은 BOSS_BOT_BY_DIFFICULTY.
         # 게임(Godot)이 boss_rules.boss_stat_overrides 로 stat 강화 + 보스 마킹 적용.
         if boss is not None:
             diff = str(boss.get("difficulty", _BOSS_DEFAULT_DIFFICULTY))
             boss_cls = BOSS_BOT_BY_DIFFICULTY.get(diff, BOSS_BOT_BY_DIFFICULTY[_BOSS_DEFAULT_DIFFICULTY])
+            boss_name = getattr(boss_cls, "DISPLAY_NAME", "보스")
             bots["boss"] = boss_cls("boss", seed=seed + 7)
-            spec.append(("boss", "보스"))
+            spec.append(("boss", boss_name))
         for entry in user_bots:
             bid = entry["bot_id"]
             name = entry.get("name", bid)
@@ -716,19 +704,23 @@ class MatchSession:
             spec.append((bid, name))
             self.user_bot_ids.add(bid)
 
-        # 보스전은 AI 채움 없음 — 보스 봇 + 유저 봇만. (일반 매치만 AI 로 빈 슬롯 채움)
-        if boss is None:
-            target = max(len(spec), min(8, bot_count))   # 유저봇 수 이상, 최대 8
-            rng = random.Random(seed)
-            type_counts: dict[str, int] = {}
-            fill_n = max(0, target - len(spec))
-            for i in range(fill_n):
-                label, cls = rng.choice(_AI_FILLERS)   # 랜덤 종류
-                type_counts[label] = type_counts.get(label, 0) + 1
-                bid = "ai_%d" % i
-                name = "%s %d" % (label, type_counts[label])
-                bots[bid] = cls(bid, seed=seed + 100 + i)
-                spec.append((bid, name))
+        # AI 채움 — 일반·보스전 공통. 보스전은 BOSS_MODE_DEFAULT_BOT_COUNT(4) 기본,
+        # 일반은 bot_count 까지 채움. 보스+유저봇 합이 이미 target 이상이면 fill_n=0.
+        if boss is not None:
+            target = max(len(spec), min(8, bot_count) if bot_count else
+                         boss_rules_mod.BOSS_MODE_DEFAULT_BOT_COUNT)
+        else:
+            target = max(len(spec), min(8, bot_count))
+        rng = random.Random(seed)
+        type_counts: dict[str, int] = {}
+        fill_n = max(0, target - len(spec))
+        for i in range(fill_n):
+            label, cls = rng.choice(_AI_FILLERS)
+            type_counts[label] = type_counts.get(label, 0) + 1
+            bid = "ai_%d" % i
+            name = "%s %d" % (label, type_counts[label])
+            bots[bid] = cls(bid, seed=seed + 100 + i)
+            spec.append((bid, name))
         return bots, spec
 
     async def send_match_start(self) -> None:
@@ -859,8 +851,13 @@ def create_app() -> FastAPI:
 
     # 마운트된 서브앱은 자체 미들웨어 스택을 가지므로 CORS 를 여기서 직접 추가.
     # CORS_ORIGINS 환경변수(콤마구분) 사용, 없으면 전체 허용. 쿠키 미사용이라 credentials=False.
+    # 운영 origin 지정돼도 dev(localhost:5173 / 127.0.0.1:5173)는 항상 추가해 dev 프론트 호환.
+    _dev_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
     _cors_raw = os.environ.get("CORS_ORIGINS", "")
-    origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] if _cors_raw else ["*"]
+    origins = (
+        [o.strip() for o in _cors_raw.split(",") if o.strip()] + _dev_origins
+        if _cors_raw else ["*"]
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -902,15 +899,7 @@ def create_app() -> FastAPI:
                 bid = str(b.get("bot_id") or ("user_%d" % i))
                 user_bots.append({"bot_id": bid, "name": str(b.get("name") or bid), "code": code})
 
-        # 4) 봇 수 (2~8, 유저봇 수 이상)
-        req_count = body.get("bot_count") if isinstance(body, dict) else None
-        try:
-            bot_count = int(req_count) if req_count is not None else TARGET_BOT_COUNT
-        except (TypeError, ValueError):
-            bot_count = TARGET_BOT_COUNT
-        bot_count = max(max(2, len(user_bots)), min(8, bot_count))
-
-        # 4.5) 모드 (battleroyale2 | boss). 보스전이면 난이도 + 보스 봇 1마리 동봉.
+        # 4.5) 모드 (battleroyale2 | boss). 먼저 결정해야 봇 수·유저봇 상한이 모드별로 갈림.
         mode = str(body.get("mode") or GAME_MODE)
         if mode not in BR2_MODES:
             mode = GAME_MODE
@@ -918,8 +907,25 @@ def create_app() -> FastAPI:
         difficulty = ""
         if is_boss:
             difficulty = str(body.get("difficulty") or _BOSS_DEFAULT_DIFFICULTY)
-            if difficulty not in _BOSS_DIFFICULTY:
+            if difficulty not in boss_rules_mod.BOSS_STAT_MULTIPLIERS:
                 difficulty = _BOSS_DEFAULT_DIFFICULTY
+            # 보스전 유저봇 상한 강제 (보스 1 + 유저봇 최대 N + AI 채움).
+            if len(user_bots) > boss_rules_mod.BOSS_MAX_USER_BOTS:
+                raise HTTPException(
+                    400,
+                    "보스전 유저봇은 최대 %d마리입니다." % boss_rules_mod.BOSS_MAX_USER_BOTS,
+                )
+
+        # 4) 봇 수 (2~8, 유저봇 + 보스 수 이상). 보스 모드 기본값은 BOSS_MODE_DEFAULT_BOT_COUNT.
+        req_count = body.get("bot_count") if isinstance(body, dict) else None
+        default_count = (boss_rules_mod.BOSS_MODE_DEFAULT_BOT_COUNT
+                         if is_boss else TARGET_BOT_COUNT)
+        try:
+            bot_count = int(req_count) if req_count is not None else default_count
+        except (TypeError, ValueError):
+            bot_count = default_count
+        forced_min = len(user_bots) + (1 if is_boss else 0)
+        bot_count = max(max(2, forced_min), min(8, bot_count))
 
         # 4.6) 이름 미지정 시 모드별 일련번호로 자동 명명.
         #      게임 ID(uuid) 노출 대신 "새 배틀로얄 N" / "새 보스전 N" 으로 표시되게 한다.
@@ -932,14 +938,15 @@ def create_app() -> FastAPI:
             game_name = ("새 보스전 %d" % seq) if is_boss else ("새 배틀로얄 %d" % seq)
 
         # 5) 게임 생성 (owner=토큰 사용자, config_json 에 스펙 영속)
+        has_assembly = bool(user_bots) or is_boss
         game_id = uuid.uuid4().hex
         try:
             repo.create_game(
                 game_id=game_id,
                 owner_user_id=owner_id,
-                # 보스전은 AI 채움 없이 보스(1) + 유저봇만 스폰 → 총원 = 유저봇수 + 1.
-                # (일반 매치만 bot_count 까지 AI 로 채움)
-                total_bots=(len(user_bots) + 1 if is_boss else bot_count) if user_bots else len(DEFAULT_BOT_FACTORY),
+                # 보스전: 보스(1) + 유저봇 + AI 채움 = bot_count.
+                # 일반: 유저봇 + AI 채움 = bot_count. 유저봇 없으면 DEFAULT_BOT_FACTORY 폴백.
+                total_bots=bot_count if has_assembly else len(DEFAULT_BOT_FACTORY),
                 seed=body.get("seed"),
                 config_json=(_spec_config_json_boss(user_bots, bot_count, difficulty)
                              if is_boss else _spec_config_json(user_bots, bot_count)),
