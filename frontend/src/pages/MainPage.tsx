@@ -51,9 +51,19 @@ function fmtMMSS(totalSec: number): string {
   return `${mm}:${ss}`
 }
 
+// 서버 타임스탬프를 epoch(ms)로. SQLite datetime('now') 는 tz 표기 없는 UTC("Y-M-D H:M:S")라
+// JS new Date() 가 로컬(KST)로 오해해 +9h(=540분) 오차가 남 → tz 없으면 UTC('Z')로 보정.
+function parseServerTime(s?: string | null): number {
+  if (!s) return 0
+  const str = s.trim().replace(' ', 'T')
+  const iso = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(str) ? str : str + 'Z'
+  const t = new Date(iso).getTime()
+  return Number.isNaN(t) ? 0 : t
+}
+
 // 진행 중 BR2/보스 게임의 경과시간(초). started_at 부터 now, 매치 최대치로 클램프.
 function runningElapsedSec(game: GameInfo): number {
-  const started = game.started_at ? new Date(game.started_at).getTime() : 0
+  const started = parseServerTime(game.started_at)
   if (!started) return 0
   return Math.min((Date.now() - started) / 1000, BR2_MATCH_MAX_SEC)
 }
@@ -68,7 +78,9 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 function timeAgo(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
-  const diff = Date.now() - new Date(dateStr).getTime()
+  const t = parseServerTime(dateStr)
+  if (!t) return ''
+  const diff = Date.now() - t
   const min = Math.floor(diff / 60000)
   if (min < 1) return '방금 전'
   if (min < 60) return `${min}분 전`
