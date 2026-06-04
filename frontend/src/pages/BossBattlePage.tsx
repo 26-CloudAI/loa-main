@@ -96,7 +96,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   하: {
     label: '하',
     sub: '쉬움',
-    desc: '광물 채굴·생존 중심 룰베이스 보스.\n인접 공격만 하며 추적하지 않습니다.',
+    desc: '코인 수집 + 도주 위주의 룰베이스 보스\n인접공격만 하며 추적하지않습니다.',
     color: 'text-green-300',
     border: 'border-green-700',
     selected: 'border-green-400 bg-green-950/40',
@@ -104,7 +104,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   중: {
     label: '중',
     sub: '보통',
-    desc: '채굴·전투 균형형 룰베이스 보스.\n시야 내 적을 적극 추적합니다.',
+    desc: '수집·전투 균형형 룰베이스 보스\n시야 내 적을 적극 추적 및 공격합니다.',
     color: 'text-yellow-300',
     border: 'border-yellow-700',
     selected: 'border-yellow-400 bg-yellow-950/40',
