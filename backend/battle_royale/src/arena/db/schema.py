@@ -324,6 +324,106 @@ CREATE TABLE IF NOT EXISTS schema_version (
 """
 
 
+# psycopg2 TCP keepalive — Cloud SQL/네트워크가 idle 커넥션을 끊는 것을 예방.
+# 단일 장수명 커넥션이 idle 로 죽으면 'connection already closed' 500 이 나므로 keepalive 로 살림.
+_PG_KEEPALIVE = dict(
+    keepalives=1,
+    keepalives_idle=30,
+    keepalives_interval=10,
+    keepalives_count=5,
+)
+
+
+class ResilientPgConnection:
+    """psycopg2 커넥션 래퍼 — 끊긴(closed) 커넥션을 투명하게 재연결한다.
+
+    단일 공유 커넥션이 idle 로 끊겨도(InterfaceError: connection already closed) 다음 사용
+    시점에 자동 재연결한다. 모든 repo 가 같은 래퍼 인스턴스를 공유하므로 한 번 복구되면
+    전체가 복구된다. (sqlite 는 파일 기반이라 끊김이 없어 래핑하지 않는다.)
+
+    주의: 커넥션이 트랜잭션 도중 죽으면 그 트랜잭션은 유실되고 호출자가 에러를 받는다(재시도).
+    keepalive 로 끊김 자체를 줄이고, 그래도 끊긴 경우 다음 요청부터 자가복구하는 게 목적."""
+
+    def __init__(self, connect_fn, error_cls, initial=None):
+        self._connect = connect_fn               # () -> 새 raw psycopg2 conn
+        self._error = error_cls                  # psycopg2.Error
+        self._conn = initial if initial is not None else connect_fn()
+
+    def _live(self):
+        """살아있는 raw 커넥션 반환(닫혔으면 재연결)."""
+        c = self._conn
+        if c is None or c.closed:
+            c = self._conn = self._connect()
+        return c
+
+    def cursor(self, *args, **kwargs):
+        try:
+            return self._live().cursor(*args, **kwargs)
+        except self._error:
+            # 사용 직전 끊김 감지 → 1회 재연결 후 재시도
+            self._conn = self._connect()
+            return self._conn.cursor(*args, **kwargs)
+
+    def commit(self):
+        try:
+            return self._live().commit()
+        except self._error:
+            self._conn = self._connect()         # 다음 요청 위해 복구만, 이 트랜잭션은 유실
+            raise
+
+    def rollback(self):
+        try:
+            c = self._conn
+            if c is not None and not c.closed:
+                return c.rollback()
+        except self._error:
+            self._conn = self._connect()
+
+    def close(self):
+        try:
+            c = self._conn
+            if c is not None and not c.closed:
+                c.close()
+        except self._error:
+            pass
+
+    @property
+    def closed(self):
+        c = self._conn
+        return 1 if (c is None or c.closed) else 0
+
+    def __getattr__(self, name):
+        # 정의 안 한 속성/메서드(autocommit, cursor_factory, encoding 등)는 살아있는 conn 에 위임.
+        # '_' 로 시작하는 내부 속성은 위임 금지(초기화 중 재귀 방지).
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return getattr(self._live(), name)
+
+
+def _raw_pg_connect():
+    """원시 psycopg2 커넥션 생성(keepalive + RealDictCursor). 스키마 init 은 안 함 — 재연결용."""
+    import psycopg2
+    import psycopg2.extras
+
+    from ..server import settings  # 지연 import (순환 의존 방지)
+
+    conn = psycopg2.connect(
+        host=settings.DB_HOST,
+        dbname=settings.DB_NAME,
+        user=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        connect_timeout=settings.DB_CONNECT_TIMEOUT,
+        options=(
+            f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT_MS} "
+            f"-c lock_timeout={settings.DB_LOCK_TIMEOUT_MS}"
+        ),
+        **_PG_KEEPALIVE,
+    )
+    conn.autocommit = False
+    conn.cursor_factory = psycopg2.extras.RealDictCursor
+    return conn
+
+
 def get_connection(db_path: str | Path = "ai_arena.db"):
     """
     DB_TYPE 환경변수에 따라 DB 연결을 반환하는 팩토리.
@@ -353,6 +453,7 @@ def get_connection(db_path: str | Path = "ai_arena.db"):
                 f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT_MS} "
                 f"-c lock_timeout={settings.DB_LOCK_TIMEOUT_MS}"
             ),
+            **_PG_KEEPALIVE,
         )
         conn.autocommit = False
         conn.cursor_factory = psycopg2.extras.RealDictCursor
@@ -403,29 +504,18 @@ def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
 
 
 def _init_postgresql():
-    """PostgreSQL DB 초기화. psycopg2 필요."""
+    """PostgreSQL DB 초기화. psycopg2 필요. 끊김 자가복구 래퍼(ResilientPgConnection) 반환."""
     try:
         import psycopg2
-        import psycopg2.extras
+        import psycopg2.extras  # noqa: F401  (RealDictCursor 는 _raw_pg_connect 에서 사용)
     except ImportError as e:
         raise ImportError(
             "psycopg2가 필요합니다: pip install psycopg2-binary"
         ) from e
 
-    from ..server import settings
-
-    conn = psycopg2.connect(
-        host=settings.DB_HOST,
-        dbname=settings.DB_NAME,
-        user=settings.DB_USER,
-        password=settings.DB_PASSWORD,
-        connect_timeout=settings.DB_CONNECT_TIMEOUT,
-        options=(
-            f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT_MS} "
-            f"-c lock_timeout={settings.DB_LOCK_TIMEOUT_MS}"
-        ),
-    )
-
+    conn = _raw_pg_connect()
+    # 스키마 init 은 기본(tuple) 커서로 — fetchone()[0] 인덱싱 때문. init 후 RealDictCursor 로 복귀.
+    conn.cursor_factory = None
     with conn.cursor() as cur:
         for statement in SCHEMA_SQL_POSTGRESQL.split(";"):
             stmt = statement.strip()
@@ -448,7 +538,8 @@ def _init_postgresql():
 
     conn.commit()
     conn.cursor_factory = psycopg2.extras.RealDictCursor
-    return conn
+    # 끊기면 _raw_pg_connect 로 자동 재연결하는 래퍼로 감싸 반환(모든 repo 가 공유).
+    return ResilientPgConnection(_raw_pg_connect, psycopg2.Error, initial=conn)
 
 
 def _migrate_sqlite(conn: sqlite3.Connection) -> None:
