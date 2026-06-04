@@ -937,7 +937,9 @@ def create_app() -> FastAPI:
             repo.create_game(
                 game_id=game_id,
                 owner_user_id=owner_id,
-                total_bots=(bot_count + 1 if is_boss else bot_count) if user_bots else len(DEFAULT_BOT_FACTORY),
+                # 보스전은 AI 채움 없이 보스(1) + 유저봇만 스폰 → 총원 = 유저봇수 + 1.
+                # (일반 매치만 bot_count 까지 AI 로 채움)
+                total_bots=(len(user_bots) + 1 if is_boss else bot_count) if user_bots else len(DEFAULT_BOT_FACTORY),
                 seed=body.get("seed"),
                 config_json=(_spec_config_json_boss(user_bots, bot_count, difficulty)
                              if is_boss else _spec_config_json(user_bots, bot_count)),
