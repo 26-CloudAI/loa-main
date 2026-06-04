@@ -44,9 +44,10 @@ TARGET_BOT_COUNT = 4          # 유저 봇 + AI 채움으로 맞출 기본 총 �
 # bot_id=="boss" 캐릭터에 적용(서버 봇은 의사결정만, 물리/스탯은 클라가 적용).
 # 운영이 난이도별 보스 봇 코드/수치를 제공하면 여기 + _BOSS_BOT_CLS 를 교체.
 _BOSS_DIFFICULTY: dict[str, dict] = {
-    "하": {"max_hp_mult": 2.0, "atk_mult": 1.2, "def_mult": 1.3, "speed_mult": 1.0, "attack_cd_mult": 1.0},
-    "중": {"max_hp_mult": 3.0, "atk_mult": 1.5, "def_mult": 1.5, "speed_mult": 1.1, "attack_cd_mult": 0.9},
-    "상": {"max_hp_mult": 5.0, "atk_mult": 2.0, "def_mult": 2.0, "speed_mult": 1.2, "attack_cd_mult": 0.8},
+    # 난이도별 스탯 배율은 추후 보스 로직 작업 시 함께 튜닝 예정 — 현재는 전 난이도 동일(무력화).
+    "하": {"max_hp_mult": 1.0, "atk_mult": 1.0, "def_mult": 1.0, "speed_mult": 1.0, "attack_cd_mult": 1.0},
+    "중": {"max_hp_mult": 1.0, "atk_mult": 1.0, "def_mult": 1.0, "speed_mult": 1.0, "attack_cd_mult": 1.0},
+    "상": {"max_hp_mult": 1.0, "atk_mult": 1.0, "def_mult": 1.0, "speed_mult": 1.0, "attack_cd_mult": 1.0},
 }
 _BOSS_DEFAULT_DIFFICULTY = "중"
 _BOSS_DURATION_SEC = 180.0
@@ -920,6 +921,16 @@ def create_app() -> FastAPI:
             if difficulty not in _BOSS_DIFFICULTY:
                 difficulty = _BOSS_DEFAULT_DIFFICULTY
 
+        # 4.6) 이름 미지정 시 모드별 일련번호로 자동 명명.
+        #      게임 ID(uuid) 노출 대신 "새 배틀로얄 N" / "새 보스전 N" 으로 표시되게 한다.
+        game_name = str(body.get("name") or "").strip()
+        if not game_name:
+            try:
+                seq = repo.count_games_by_mode(owner_id, mode) + 1
+            except Exception:  # noqa: BLE001
+                seq = 1
+            game_name = ("새 보스전 %d" % seq) if is_boss else ("새 배틀로얄 %d" % seq)
+
         # 5) 게임 생성 (owner=토큰 사용자, config_json 에 스펙 영속)
         game_id = uuid.uuid4().hex
         try:
@@ -931,7 +942,7 @@ def create_app() -> FastAPI:
                 config_json=(_spec_config_json_boss(user_bots, bot_count, difficulty)
                              if is_boss else _spec_config_json(user_bots, bot_count)),
                 mode=mode,
-                name=(body.get("name") or None),
+                name=game_name,
             )
         except Exception:  # noqa: BLE001
             logger.exception("[BR2] create_game 실패")
