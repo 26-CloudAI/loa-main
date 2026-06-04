@@ -57,10 +57,14 @@ function fmtMMSS(sec: number): string {
 // 게임 목록 시간 표시(보스전 포함 BR2 공통).
 // - 진행 중: started_at 부터 경과(페이지 로드 시점 기준 — 새로고침 때 갱신).
 // - 종료: finished_at - started_at(실제 소요). 폴백: current_tick(=final_tick, 결정틱 10/초)/10.
+// BR2 매치 최대 길이(초). 진행 중 경과시간을 이 값으로 클램프 — 러너가 죽어 running 으로
+// 남은 좀비 게임이 540:00 처럼 폭주하는 걸 방지(정상 매치는 ≤180s 라 영향 없음).
+const BR2_MATCH_MAX_SEC = 180
+
 function fmtGameTime(game: GameInfo): string {
   const started = game.started_at ? new Date(game.started_at).getTime() : 0
   if (game.status === 'running' && started) {
-    return fmtMMSS((Date.now() - started) / 1000)
+    return fmtMMSS(Math.min((Date.now() - started) / 1000, BR2_MATCH_MAX_SEC))
   }
   if (started && game.finished_at) {
     return fmtMMSS((new Date(game.finished_at).getTime() - started) / 1000)

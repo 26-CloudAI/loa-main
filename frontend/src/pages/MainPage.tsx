@@ -36,7 +36,26 @@ interface GameInfo {
   name?: string | null
   mode?: string
   created_at?: string | null
+  started_at?: string | null
   finished_at?: string | null
+}
+
+// BR2(연속 2D) 매치 최대 길이(초). 진행 중 경과시간 표시를 이 값으로 클램프해
+// 러너가 죽어 status 가 running 으로 남은 좀비 게임이 540:00 처럼 폭주하는 걸 방지.
+const BR2_MATCH_MAX_SEC = 180
+
+function fmtMMSS(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec))
+  const mm = String(Math.floor(s / 60)).padStart(2, '0')
+  const ss = String(s % 60).padStart(2, '0')
+  return `${mm}:${ss}`
+}
+
+// 진행 중 BR2/보스 게임의 경과시간(초). started_at 부터 now, 매치 최대치로 클램프.
+function runningElapsedSec(game: GameInfo): number {
+  const started = game.started_at ? new Date(game.started_at).getTime() : 0
+  if (!started) return 0
+  return Math.min((Date.now() - started) / 1000, BR2_MATCH_MAX_SEC)
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -268,21 +287,21 @@ export default function MainPage() {
       fetchJson<GameInfo[]>(`${STOCKS_API_BASE}/api/games`, { headers }),
       fetchJson<GameInfo[]>(`${STOCKS_API_BASE}/api/games/history`, { headers }),
     ]).then(([brRes, br2Res, stocksRes, histRes]) => {
-      // 메인 /api/games 가 이미 battleroyale2 모드를 포함하고, BR2 전용 API 가 같은 게임을
-      // 다시 반환하므로 game_id 기준 전역 dedup (먼저 들어온 레코드 우선).
-      const merged: GameInfo[] = []
-      const seen = new Set<string>()
-      const pushUnique = (arr: GameInfo[]) => {
+      // 메인 /api/games(current_tick 등) 와 BR2 전용 API(started_at/finished_at 등) 가 같은
+      // game_id 를 각각 반환하므로 필드 병합(나중 레코드가 덮어씀)으로 양쪽 필드를 모두 보존.
+      // (first-wins dedup 이면 BR2 의 started_at 이 누락돼 진행시간이 0:00 으로 나옴)
+      const byId = new Map<string, GameInfo>()
+      const mergeIn = (arr: GameInfo[]) => {
         for (const g of arr) {
-          if (seen.has(g.game_id)) continue
-          seen.add(g.game_id)
-          merged.push(g)
+          const prev = byId.get(g.game_id)
+          byId.set(g.game_id, prev ? { ...prev, ...g } : g)
         }
       }
-      if (brRes.status === 'fulfilled' && Array.isArray(brRes.value)) pushUnique(brRes.value)
-      if (br2Res.status === 'fulfilled' && Array.isArray(br2Res.value)) pushUnique(br2Res.value)
-      if (stocksRes.status === 'fulfilled' && Array.isArray(stocksRes.value)) pushUnique(stocksRes.value)
-      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) pushUnique(histRes.value)
+      if (brRes.status === 'fulfilled' && Array.isArray(brRes.value)) mergeIn(brRes.value)
+      if (br2Res.status === 'fulfilled' && Array.isArray(br2Res.value)) mergeIn(br2Res.value)
+      if (stocksRes.status === 'fulfilled' && Array.isArray(stocksRes.value)) mergeIn(stocksRes.value)
+      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) mergeIn(histRes.value)
+      const merged: GameInfo[] = Array.from(byId.values())
       merged.sort((a, b) => {
         const ta = a.created_at ? new Date(a.created_at).getTime() : 0
         const tb = b.created_at ? new Date(b.created_at).getTime() : 0
@@ -444,17 +463,22 @@ export default function MainPage() {
                 {recentGames.map((game) => {
                   const pill = game.mode ? MODE_PILL[game.mode] : null
                   const modeLabel = game.mode ? MODE_LABEL[game.mode] : '—'
-                  const statusText = STATUS_TEXT[game.status]?.(game.current_tick) ?? game.status
+                  // 보스전도 BR2(연속 2D) 엔진 → 관전/결과/시간표시 모두 BR2 경로 사용.
+                  const isBR2 = game.mode === 'battleroyale2' || game.mode === 'boss'
+                  const statusText =
+                    game.status === 'running' && isBR2
+                      ? `진행 중 ${fmtMMSS(runningElapsedSec(game))}`
+                      : (STATUS_TEXT[game.status]?.(game.current_tick) ?? game.status)
                   const statusColor = STATUS_COLOR[game.status] ?? MUTED
 
                   function handleClick() {
                     if (game.status === 'finished') {
                       if (game.mode === 'mock-stocks') navigate(`/games/${game.game_id}/mock-stocks/result`)
-                      else if (game.mode === 'battleroyale2') navigate(`/games/${game.game_id}/battleroyale/result`)
+                      else if (isBR2) navigate(`/games/${game.game_id}/battleroyale/result`)
                       else navigate(`/games/${game.game_id}/watch`)
                     } else {
                       if (game.mode === 'mock-stocks') navigate(`/games/${game.game_id}/mock-stocks/watch`)
-                      else if (game.mode === 'battleroyale2') navigate(`/games/${game.game_id}/battleroyale/watch`)
+                      else if (isBR2) navigate(`/games/${game.game_id}/battleroyale/watch`)
                       else navigate(`/games/${game.game_id}/watch`)
                     }
                   }
