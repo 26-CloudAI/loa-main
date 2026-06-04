@@ -57,8 +57,8 @@ def test_boss_rules_structure_by_difficulty():
         assert r["slots"]["boss_count"] == 1
         assert r["boss_stat_overrides"] == _BOSS_DIFFICULTY[diff]
         assert r["duration_sec"] > 0
-    # 상 난이도가 하보다 HP 강화 큼
-    assert _boss_rules_for("상")["boss_stat_overrides"]["max_hp_mult"] > \
+    # 난이도별 스탯 배율은 추후 보스 로직과 함께 튜닝 — 현재는 전 난이도 동일(무력화).
+    assert _boss_rules_for("상")["boss_stat_overrides"]["max_hp_mult"] == \
         _boss_rules_for("하")["boss_stat_overrides"]["max_hp_mult"]
 
 
