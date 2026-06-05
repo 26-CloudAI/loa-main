@@ -147,18 +147,17 @@ export default function QuickRefPanel({ mode }: { mode: Mode }) {
         flexShrink: 0,
         overflow: 'hidden',
         transition: 'width 320ms cubic-bezier(.4,0,.2,1)',
-        position: 'sticky',
-        top: 80,
-        alignSelf: 'flex-start',
+        ...(open
+          ? { position: 'sticky', top: 80, alignSelf: 'flex-start' }
+          : { alignSelf: 'center' }
+        ),
       }}
     >
       {/* ── 열린 상태 ── */}
       <div style={{
         width: 208,
-        opacity: open ? 1 : 0,
-        transition: 'opacity 200ms ease',
-        display: 'flex', flexDirection: 'column', gap: 8,
-        pointerEvents: open ? 'auto' : 'none',
+        display: open ? 'flex' : 'none',
+        flexDirection: 'column', gap: 8,
       }}>
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 2 }}>
@@ -241,13 +240,10 @@ export default function QuickRefPanel({ mode }: { mode: Mode }) {
         type="button"
         onClick={reopen}
         style={{
-          position: 'absolute', top: 0, right: 0,
-          width: 28, height: '100%', minHeight: 120,
+          display: open ? 'none' : 'flex',
+          width: 28, padding: '12px 0',
           background: 'none', border: 'none', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          opacity: open ? 0 : 1,
-          transition: 'opacity 200ms ease',
-          pointerEvents: open ? 'none' : 'auto',
+          alignItems: 'center', justifyContent: 'center',
         }}
         title="Quick Ref 열기"
       >

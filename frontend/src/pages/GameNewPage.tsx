@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK } from '../dev/mock'
 import BotCodeInput from '../components/BotCodeInput'
+import TutorialBanner from '../components/TutorialBanner'
 import { BR2_API_BASE } from '../br2'
 
 // BR2(연속 2D 배틀로얄) 백엔드. VITE_API_BASE(.../battleroyale) → /battleroyale2 파생.
@@ -316,6 +317,7 @@ export default function GameNewPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <TutorialBanner mode="battle-royale" />
 
           {/* 게임 이름 */}
           <section className="flex flex-col gap-2">
