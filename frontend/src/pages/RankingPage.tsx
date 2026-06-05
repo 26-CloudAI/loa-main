@@ -109,6 +109,7 @@ function TierBadge({ elo }: { elo: number }) {
 function PodiumPillar({ entry, isMe, animDelay }: { entry: RankingEntry; isMe: boolean; animDelay: string }) {
   const cfg = PODIUM_CFG[entry.rank as 1 | 2 | 3]
   const isFirst = entry.rank === 1
+  const navigate = useNavigate()
 
   return (
     <div style={{
@@ -116,19 +117,25 @@ function PodiumPillar({ entry, isMe, animDelay }: { entry: RankingEntry; isMe: b
       animation: `podiumRise 1.4s cubic-bezier(.22,.68,0,1.2) ${animDelay} both`,
     }}>
       {/* ── 카드 ── */}
-      <div style={{
-        height: cfg.cardH,
-        background: cfg.cardBg,
-        border: `1px solid rgba(255,255,255,.12)`,
-        borderBottom: 'none',
-        borderRadius: '5px 5px 0 0',
-        boxShadow: cfg.shadow,
-        animation: isFirst ? cfg.anim : undefined,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        gap: 6, padding: '16px 12px',
-        position: 'relative', overflow: 'hidden',
-      }}>
+      <div
+        onClick={() => navigate(`/users/${entry.user_id}/bots`)}
+        style={{
+          height: cfg.cardH,
+          background: cfg.cardBg,
+          border: `1px solid rgba(255,255,255,.12)`,
+          borderBottom: 'none',
+          borderRadius: '5px 5px 0 0',
+          boxShadow: cfg.shadow,
+          animation: isFirst ? cfg.anim : undefined,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 6, padding: '16px 12px',
+          position: 'relative', overflow: 'hidden',
+          cursor: 'pointer', transition: 'filter .18s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(1.15)')}
+        onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}
+      >
         {/* 미묘한 상단 하이라이트 */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, height: 1,

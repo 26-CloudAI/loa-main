@@ -44,6 +44,7 @@ class StockParticipantRecord:
     final_total_value: Optional[float]
     profit_rate: Optional[float]
     final_credit_score: Optional[int]
+    code: Optional[str] = None
 
 
 class StockGameRepository:
@@ -196,25 +197,26 @@ class StockGameRepository:
         bot_id: str,
         bot_name: str,
         is_ai_filler: bool = False,
+        code: Optional[str] = None,
     ) -> int:
         """참가자 추가. 생성된 participant ID를 반환."""
         if self._is_pg:
             cursor = self._execute(
                 """
-                INSERT INTO stock_game_participants (game_id, bot_id, bot_name, is_ai_filler)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO stock_game_participants (game_id, bot_id, bot_name, is_ai_filler, code)
+                VALUES (?, ?, ?, ?, ?)
                 RETURNING id
                 """,
-                (game_id, bot_id, bot_name, is_ai_filler),
+                (game_id, bot_id, bot_name, is_ai_filler, code),
             )
             participant_id = cursor.fetchone()["id"]
         else:
             cursor = self._execute(
                 """
-                INSERT INTO stock_game_participants (game_id, bot_id, bot_name, is_ai_filler)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO stock_game_participants (game_id, bot_id, bot_name, is_ai_filler, code)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (game_id, bot_id, bot_name, int(is_ai_filler)),
+                (game_id, bot_id, bot_name, int(is_ai_filler), code),
             )
             participant_id = cursor.lastrowid
         self.conn.commit()
@@ -272,7 +274,31 @@ class StockGameRepository:
             name=row["name"] if "name" in row.keys() else None,
         )
 
+    def get_user_bots(self, owner_uid: str, limit: int = 50) -> list[dict]:
+        """유저의 모의주식 봇 제출 이력을 반환한다 (코드가 저장된 항목만)."""
+        cursor = self._execute(
+            """
+            SELECT
+                sgp.id, sgp.bot_id, sgp.bot_name, sgp.code,
+                sgp.final_rank, sgp.profit_rate,
+                sg.id   AS game_id,
+                sg.name AS game_name,
+                sg.created_at
+            FROM stock_games sg
+            JOIN stock_game_participants sgp ON sg.id = sgp.game_id
+            WHERE sg.owner_uid = ?
+              AND sgp.is_ai_filler = 0
+              AND sgp.code IS NOT NULL
+            ORDER BY sg.created_at DESC
+            LIMIT ?
+            """,
+            (owner_uid, limit),
+        )
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
     def _row_to_participant(self, row) -> StockParticipantRecord:
+        keys = row.keys() if hasattr(row, "keys") else {}
         return StockParticipantRecord(
             id=row["id"],
             game_id=row["game_id"],
@@ -284,4 +310,5 @@ class StockGameRepository:
             final_total_value=row["final_total_value"],
             profit_rate=row["profit_rate"],
             final_credit_score=row["final_credit_score"],
+            code=row["code"] if "code" in keys else None,
         )

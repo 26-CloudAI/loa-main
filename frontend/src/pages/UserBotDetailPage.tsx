@@ -18,17 +18,19 @@ const MODE_STYLE: Record<string, string> = {
 }
 
 interface BotInfo {
-  id: number
+  id: string
   name: string
   game_mode: string | null
   game_name: string | null
   code: string | null
-  is_public: boolean
-  version: number
-  wins: number
-  losses: number
-  games_played: number
-  updated_at: string
+  is_public?: boolean
+  version?: number
+  wins?: number
+  losses?: number
+  games_played?: number
+  updated_at?: string
+  readonly?: boolean
+  final_rank?: number
 }
 
 interface UserInfo {
@@ -39,6 +41,9 @@ interface UserInfo {
   wins: number
   losses: number
   games_played: number
+  stocks_wins?: number
+  stocks_losses?: number
+  stocks_games_played?: number
 }
 
 export default function UserBotDetailPage() {
@@ -63,8 +68,23 @@ export default function UserBotDetailPage() {
       })
       .then((data) => {
         setUserInfo(data.user)
-        setBots(data.bots ?? [])
-        if (data.bots?.length > 0) setSelectedBot(data.bots[0])
+        const brBots: BotInfo[] = (data.bots ?? []).map((b: any) => ({
+          ...b,
+          id: `br-${b.id}`,
+          readonly: false,
+        }))
+        const stocksBots: BotInfo[] = (data.stocks_bots ?? []).map((b: any) => ({
+          id: `stocks-${b.id}`,
+          name: b.name,
+          game_mode: b.game_mode,
+          game_name: b.game_name,
+          code: b.code,
+          final_rank: b.final_rank,
+          readonly: true,
+        }))
+        const allBots = [...brBots, ...stocksBots]
+        setBots(allBots)
+        if (allBots.length > 0) setSelectedBot(allBots[0])
       })
       .catch((e) => setError(e instanceof Error ? e.message : '봇 정보를 불러오지 못했습니다.'))
       .finally(() => setLoading(false))
@@ -74,6 +94,10 @@ export default function UserBotDetailPage() {
     await logout()
     navigate('/login')
   }
+
+  const totalWins = (userInfo?.wins ?? 0) + (userInfo?.stocks_wins ?? 0)
+  const totalLosses = (userInfo?.losses ?? 0) + (userInfo?.stocks_losses ?? 0)
+  const totalGames = (userInfo?.games_played ?? 0) + (userInfo?.stocks_games_played ?? 0)
 
   return (
     <div style={{
@@ -155,15 +179,15 @@ export default function UserBotDetailPage() {
                     <div className="text-xs text-gray-500">ELO</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-green-400">{userInfo.wins}</div>
+                    <div className="text-lg font-semibold text-green-400">{totalWins}</div>
                     <div className="text-xs text-gray-500">승</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-red-400">{userInfo.losses}</div>
+                    <div className="text-lg font-semibold text-red-400">{totalLosses}</div>
                     <div className="text-xs text-gray-500">패</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-gray-300">{userInfo.games_played}</div>
+                    <div className="text-lg font-semibold text-gray-300">{totalGames}</div>
                     <div className="text-xs text-gray-500">총 게임</div>
                   </div>
                 </div>
@@ -200,14 +224,24 @@ export default function UserBotDetailPage() {
                         <div className="text-xs text-gray-500 mt-0.5 truncate">{bot.game_name}</div>
                       )}
                       <div className="text-xs mt-1 flex items-center gap-1.5">
-                        {bot.games_played === 0 ? (
-                          <span className="text-gray-500">미경기</span>
-                        ) : bot.wins > 0 ? (
-                          <span className="text-green-400">승</span>
+                        {bot.readonly ? (
+                          bot.final_rank === 1 ? (
+                            <span className="text-green-400">1위</span>
+                          ) : bot.final_rank ? (
+                            <span className="text-gray-400">{bot.final_rank}위</span>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )
                         ) : (
-                          <span className="text-red-400">패</span>
+                          (bot.games_played ?? 0) === 0 ? (
+                            <span className="text-gray-500">미경기</span>
+                          ) : (bot.wins ?? 0) > 0 ? (
+                            <span className="text-green-400">승</span>
+                          ) : (
+                            <span className="text-red-400">패</span>
+                          )
                         )}
-                        {!bot.is_public && (
+                        {!bot.readonly && !bot.is_public && (
                           <span className="text-gray-600">🔒</span>
                         )}
                       </div>
@@ -221,7 +255,9 @@ export default function UserBotDetailPage() {
                     <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
                       <div>
                         <span className="font-medium">{selectedBot.name}</span>
-                        <span className="ml-2 text-xs text-gray-500">v{selectedBot.version}</span>
+                        {!selectedBot.readonly && selectedBot.version != null && (
+                          <span className="ml-2 text-xs text-gray-500">v{selectedBot.version}</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5">
                         {selectedBot.game_mode && (
@@ -229,18 +265,18 @@ export default function UserBotDetailPage() {
                             {selectedBot.game_mode}
                           </span>
                         )}
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${selectedBot.is_public ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-gray-600/20 text-gray-400 border border-gray-600/50'}`}>
-                          {selectedBot.is_public ? '공개' : '비공개'}
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${(selectedBot.readonly ? !!selectedBot.code : selectedBot.is_public) ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-gray-600/20 text-gray-400 border border-gray-600/50'}`}>
+                          {(selectedBot.readonly ? !!selectedBot.code : selectedBot.is_public) ? '공개' : '비공개'}
                         </span>
                       </div>
                     </div>
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 min-h-0 overflow-hidden">
                       {selectedBot.code ? (
                         <PythonEditor
                           value={selectedBot.code}
                           onChange={() => {}}
                           readOnly
-                          height="520px"
+                          height="100%"
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full">

@@ -18,6 +18,7 @@ export default function PythonEditor({ value, onChange, hasError, readOnly = fal
         overflow: 'hidden',
         border: `1px solid ${hasError ? '#ef4444' : '#374151'}`,
         outline: hasError ? '2px solid rgba(239,68,68,.3)' : undefined,
+        height: height === '100%' ? '100%' : undefined,
       }}
     >
       <CodeMirror

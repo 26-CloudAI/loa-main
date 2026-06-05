@@ -82,6 +82,7 @@ class InProcessBot(BotInterface):
 
     def __init__(self, bot_id: str, code: str):
         super().__init__(bot_id)
+        self.code = code
         self._action_fn = None
         self._load_error: Optional[str] = None
         try:
@@ -477,6 +478,15 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             "frames": frames,
             "result": result_data,
         }
+
+    @app.get("/api/users/me/bots")
+    async def get_my_bots(request: Request):
+        """인증된 유저의 모의주식 봇 제출 이력을 반환한다."""
+        uid = _require_uid(request)
+        repo = registry._repo
+        if repo is None:
+            return []
+        return repo.get_user_bots(uid)
 
     @app.get("/api/users/me/stats")
     async def get_my_stats(request: Request):
