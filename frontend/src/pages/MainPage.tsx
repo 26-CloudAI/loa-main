@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { MOCK, MOCK_GAMES } from '../dev/mock'
+import { BR2_API_BASE } from '../br2'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 const STOCKS_API_BASE = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
@@ -35,7 +36,33 @@ interface GameInfo {
   name?: string | null
   mode?: string
   created_at?: string | null
+  started_at?: string | null
   finished_at?: string | null
+}
+
+function fmtMMSS(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec))
+  const mm = String(Math.floor(s / 60)).padStart(2, '0')
+  const ss = String(s % 60).padStart(2, '0')
+  return `${mm}:${ss}`
+}
+
+// 서버 타임스탬프를 epoch(ms)로. SQLite datetime('now') 는 tz 표기 없는 UTC("Y-M-D H:M:S")라
+// JS new Date() 가 로컬(KST)로 오해해 +9h(=540분) 오차가 남 → tz 없으면 UTC('Z')로 보정.
+function parseServerTime(s?: string | null): number {
+  if (!s) return 0
+  const str = s.trim().replace(' ', 'T')
+  const iso = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(str) ? str : str + 'Z'
+  const t = new Date(iso).getTime()
+  return Number.isNaN(t) ? 0 : t
+}
+
+// 진행 중 BR2/보스 게임의 경과시간(초). started_at 부터 now.
+// ※ 180초는 마지막 자기장이 멈추는 시점일 뿐 교전은 이어지므로 상한 클램프 없음.
+function runningElapsedSec(game: GameInfo): number {
+  const started = parseServerTime(game.started_at)
+  if (!started) return 0
+  return (Date.now() - started) / 1000
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -48,7 +75,9 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 function timeAgo(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
-  const diff = Date.now() - new Date(dateStr).getTime()
+  const t = parseServerTime(dateStr)
+  if (!t) return ''
+  const diff = Date.now() - t
   const min = Math.floor(diff / 60000)
   if (min < 1) return '방금 전'
   if (min < 60) return `${min}분 전`
@@ -61,12 +90,14 @@ function timeAgo(dateStr: string | null | undefined): string {
 
 const MODE_LABEL: Record<string, string> = {
   'battle-royale': '배틀로얄',
+  'battleroyale2': '배틀로얄',
   'boss': '보스전',
   'mock-stocks': '모의주식',
 }
 
 const MODE_PILL: Record<string, { bg: string; color: string; border: string }> = {
   'battle-royale': { bg: 'rgba(232,51,74,.15)',  color: '#F05E70', border: 'rgba(232,51,74,.3)' },
+  'battleroyale2': { bg: 'rgba(232,51,74,.15)',  color: '#F05E70', border: 'rgba(232,51,74,.3)' },
   'boss':          { bg: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: 'rgba(155,89,245,.3)' },
   'mock-stocks':   { bg: 'rgba(245,166,36,.15)', color: '#FFC76A', border: 'rgba(245,166,36,.3)' },
 }
@@ -115,23 +146,26 @@ interface ModeCardProps {
   pillColor: string
   pillBorder: string
   onClick: () => void
+  tutorialRoute: string
 }
 
-function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnColor, pillBg, pillColor, pillBorder, onClick }: ModeCardProps) {
+function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnColor, pillBg, pillColor, pillBorder, onClick, tutorialRoute }: ModeCardProps) {
+  const navigate = useNavigate()
   function onEnter(e: React.MouseEvent<HTMLDivElement>) {
     const el = e.currentTarget
     el.style.transform = 'translateY(-4px)'
     el.style.borderColor = borderColor.replace('.25', '.5')
+    el.style.boxShadow = `0 0 56px ${glowColor.replace('.15', '.28').replace('.12', '.22')}`
   }
   function onLeave(e: React.MouseEvent<HTMLDivElement>) {
     const el = e.currentTarget
     el.style.transform = 'translateY(0)'
     el.style.borderColor = borderColor
+    el.style.boxShadow = `0 0 40px ${glowColor}`
   }
 
   return (
     <div
-      onClick={onClick}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       style={{
@@ -139,7 +173,6 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
         border: `1px solid ${borderColor}`,
         borderRadius: 14,
         padding: 24,
-        cursor: 'pointer',
         boxShadow: `0 0 40px ${glowColor}`,
         transition: 'transform .25s ease, box-shadow .25s ease, border-color .25s ease',
       }}
@@ -158,15 +191,42 @@ function ModeCard({ mode, icon, title, desc, borderColor, glowColor, btnBg, btnC
       </div>
       <h3 style={{ fontFamily: FONT, fontSize: 26, margin: '0 0 4px', color: '#F0EBFF' }}>{title}</h3>
       <p style={{ fontWeight: 300, color: MUTED, fontSize: 12, margin: '0 0 20px' }}>{desc}</p>
-      <button
-        style={{
-          width: '100%', padding: '10px 0', borderRadius: 8,
-          background: btnBg, color: btnColor,
-          border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500,
-        }}
-      >
-        시작하기 →
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button
+          onClick={onClick}
+          style={{
+            width: '100%', padding: '10px 0', borderRadius: 8,
+            background: btnBg, color: btnColor,
+            border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500,
+            transition: 'filter .15s, transform .15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.filter = 'brightness(1.15)'
+            e.currentTarget.style.transform = 'translateY(-1px)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.filter = 'brightness(1)'
+            e.currentTarget.style.transform = 'translateY(0)'
+          }}
+        >
+          시작하기 →
+        </button>
+        <button
+          onClick={() => navigate(tutorialRoute)}
+          style={{
+            width: '100%', padding: '7px 0', borderRadius: 8,
+            background: 'transparent',
+            border: `1px solid ${pillBorder}`,
+            color: pillColor, fontSize: 12, cursor: 'pointer',
+            opacity: 0.75,
+            transition: 'opacity .15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '0.75')}
+        >
+          📖 튜토리얼 보기
+        </button>
+      </div>
     </div>
   )
 }
@@ -232,16 +292,25 @@ export default function MainPage() {
 
     Promise.allSettled([
       fetchJson<GameInfo[]>(`${API_BASE}/api/games`, { headers }),
+      fetchJson<GameInfo[]>(`${BR2_API_BASE}/api/games`, { headers }),
       fetchJson<GameInfo[]>(`${STOCKS_API_BASE}/api/games`, { headers }),
       fetchJson<GameInfo[]>(`${STOCKS_API_BASE}/api/games/history`, { headers }),
-    ]).then(([brRes, stocksRes, histRes]) => {
-      const merged: GameInfo[] = []
-      if (brRes.status === 'fulfilled' && Array.isArray(brRes.value)) merged.push(...brRes.value)
-      if (stocksRes.status === 'fulfilled' && Array.isArray(stocksRes.value)) merged.push(...stocksRes.value)
-      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
-        const seen = new Set(merged.map((g) => g.game_id))
-        for (const g of histRes.value) if (!seen.has(g.game_id)) merged.push(g)
+    ]).then(([brRes, br2Res, stocksRes, histRes]) => {
+      // 메인 /api/games(current_tick 등) 와 BR2 전용 API(started_at/finished_at 등) 가 같은
+      // game_id 를 각각 반환하므로 필드 병합(나중 레코드가 덮어씀)으로 양쪽 필드를 모두 보존.
+      // (first-wins dedup 이면 BR2 의 started_at 이 누락돼 진행시간이 0:00 으로 나옴)
+      const byId = new Map<string, GameInfo>()
+      const mergeIn = (arr: GameInfo[]) => {
+        for (const g of arr) {
+          const prev = byId.get(g.game_id)
+          byId.set(g.game_id, prev ? { ...prev, ...g } : g)
+        }
       }
+      if (brRes.status === 'fulfilled' && Array.isArray(brRes.value)) mergeIn(brRes.value)
+      if (br2Res.status === 'fulfilled' && Array.isArray(br2Res.value)) mergeIn(br2Res.value)
+      if (stocksRes.status === 'fulfilled' && Array.isArray(stocksRes.value)) mergeIn(stocksRes.value)
+      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) mergeIn(histRes.value)
+      const merged: GameInfo[] = Array.from(byId.values())
       merged.sort((a, b) => {
         const ta = a.created_at ? new Date(a.created_at).getTime() : 0
         const tb = b.created_at ? new Date(b.created_at).getTime() : 0
@@ -306,7 +375,6 @@ export default function MainPage() {
                 {user.role}
               </span>
             )}
-            ▾
           </button>
           <button onClick={handleLogout} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>로그아웃</button>
         </div>
@@ -365,6 +433,7 @@ export default function MainPage() {
             btnBg="#9B59F5" btnColor="#fff"
             pillBg="rgba(155,89,245,.15)" pillColor="#C8A8FF" pillBorder="rgba(155,89,245,.3)"
             onClick={() => navigate('/games/new/battle-royale')}
+            tutorialRoute="/tutorial/battle-royale"
           />
           <ModeCard
             mode="GAME MODE 02" icon="◉" title="보스전" desc="거대한 적을 쓰러뜨려라"
@@ -372,6 +441,7 @@ export default function MainPage() {
             btnBg="#E8334A" btnColor="#fff"
             pillBg="rgba(232,51,74,.15)" pillColor="#F05E70" pillBorder="rgba(232,51,74,.3)"
             onClick={() => navigate('/games/new/boss-battle')}
+            tutorialRoute="/tutorial/boss"
           />
           <ModeCard
             mode="GAME MODE 03" icon="▲" title="모의주식" desc="알고리즘으로 시장을 지배하라"
@@ -379,6 +449,7 @@ export default function MainPage() {
             btnBg="#F5A624" btnColor="#000"
             pillBg="rgba(245,166,36,.15)" pillColor="#FFC76A" pillBorder="rgba(245,166,36,.3)"
             onClick={() => navigate('/games/new/mock-stocks')}
+            tutorialRoute="/tutorial/stocks"
           />
         </div>
 
@@ -401,15 +472,22 @@ export default function MainPage() {
                 {recentGames.map((game) => {
                   const pill = game.mode ? MODE_PILL[game.mode] : null
                   const modeLabel = game.mode ? MODE_LABEL[game.mode] : '—'
-                  const statusText = STATUS_TEXT[game.status]?.(game.current_tick) ?? game.status
+                  // 보스전도 BR2(연속 2D) 엔진 → 관전/결과/시간표시 모두 BR2 경로 사용.
+                  const isBR2 = game.mode === 'battleroyale2' || game.mode === 'boss'
+                  const statusText =
+                    game.status === 'running' && isBR2
+                      ? `진행 중 ${fmtMMSS(runningElapsedSec(game))}`
+                      : (STATUS_TEXT[game.status]?.(game.current_tick) ?? game.status)
                   const statusColor = STATUS_COLOR[game.status] ?? MUTED
 
                   function handleClick() {
                     if (game.status === 'finished') {
                       if (game.mode === 'mock-stocks') navigate(`/games/${game.game_id}/mock-stocks/result`)
+                      else if (isBR2) navigate(`/games/${game.game_id}/battleroyale/result`)
                       else navigate(`/games/${game.game_id}/watch`)
                     } else {
                       if (game.mode === 'mock-stocks') navigate(`/games/${game.game_id}/mock-stocks/watch`)
+                      else if (isBR2) navigate(`/games/${game.game_id}/battleroyale/watch`)
                       else navigate(`/games/${game.game_id}/watch`)
                     }
                   }

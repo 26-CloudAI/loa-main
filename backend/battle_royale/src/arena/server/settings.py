@@ -50,10 +50,14 @@ SERVER_PORT: int = int(os.environ.get("SERVER_PORT", "8080"))
 
 # ── CORS ───────────────────────────────────────
 # 콤마 구분 문자열 (예: "https://my-app.web.app,https://my-app.firebaseapp.com")
-# env var 없으면 개발 편의상 ["*"] 유지
+# env var 없으면 개발 편의상 ["*"] 유지.
+# env 가 운영 origin 만 지정해도 dev(localhost:5173 / 127.0.0.1:5173)는 항상 허용해
+# 같은 백엔드에 대해 dev 프론트가 fetch 할 수 있게 한다. 운영 백엔드에 localhost 접근
+# 자체가 불가능하므로 보안 영향 없음.
+_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 _cors_raw = os.environ.get("CORS_ORIGINS", "")
 CORS_ORIGINS: list[str] = (
-    [o.strip() for o in _cors_raw.split(",") if o.strip()]
+    [o.strip() for o in _cors_raw.split(",") if o.strip()] + _DEV_ORIGINS
     if _cors_raw
     else ["*"]
 )

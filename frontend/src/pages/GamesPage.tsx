@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { MOCK, MOCK_GAMES } from '../dev/mock'
+import { BR2_API_BASE } from '../br2'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
 const STOCKS_API_BASE = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
@@ -26,12 +27,14 @@ interface GameInfo {
   name?: string | null
   mode?: string
   created_at?: string | null
+  started_at?: string | null
   finished_at?: string | null
   rankings?: RankingEntry[]
 }
 
 const MODE_BADGE: Record<string, { label: string; style: { background: string; color: string; border: string } }> = {
   'battle-royale': { label: '배틀로얄', style: { background: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: '1px solid rgba(155,89,245,.4)' } },
+  'battleroyale2': { label: '배틀로얄', style: { background: 'rgba(155,89,245,.15)', color: '#C8A8FF', border: '1px solid rgba(155,89,245,.4)' } },
   'boss':          { label: '보스전',   style: { background: 'rgba(232,51,74,.15)',  color: '#F05E70', border: '1px solid rgba(232,51,74,.4)'  } },
   'mock-stocks':   { label: '모의주식', style: { background: 'rgba(245,166,36,.15)', color: '#FFC76A', border: '1px solid rgba(245,166,36,.4)' } },
 }
@@ -42,6 +45,38 @@ const STATUS_LABEL: Record<GameInfo['status'], string> = {
   running: '진행 중',
   finished: '종료',
   error: '오류',
+}
+
+function fmtMMSS(sec: number): string {
+  sec = Math.max(0, Math.floor(sec))
+  const m = String(Math.floor(sec / 60)).padStart(2, '0')
+  const s = String(sec % 60).padStart(2, '0')
+  return `${m}:${s}`
+}
+
+// 서버 타임스탬프를 epoch(ms)로. SQLite datetime('now') 는 tz 표기 없는 UTC("Y-M-D H:M:S")라
+// JS new Date() 가 로컬(KST)로 오해해 +9h(=540분) 오차가 남 → tz 없으면 UTC('Z')로 보정.
+function parseServerTime(s?: string | null): number {
+  if (!s) return 0
+  const str = s.trim().replace(' ', 'T')
+  const iso = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(str) ? str : str + 'Z'
+  const t = new Date(iso).getTime()
+  return Number.isNaN(t) ? 0 : t
+}
+
+// 게임 목록 시간 표시(보스전 포함 BR2 공통).
+// - 진행 중: started_at 부터 경과(페이지 로드 시점 기준 — 새로고침 때 갱신).
+//   ※ 180초는 마지막 자기장이 멈추는 시점일 뿐 교전은 그 뒤로도 이어지므로 상한 클램프 없음.
+// - 종료: finished_at - started_at(실제 소요). 폴백: current_tick(=final_tick, 결정틱 10/초)/10.
+function fmtGameTime(game: GameInfo): string {
+  const started = parseServerTime(game.started_at)
+  if (game.status === 'running' && started) {
+    return fmtMMSS((Date.now() - started) / 1000)
+  }
+  if (started && game.finished_at) {
+    return fmtMMSS((parseServerTime(game.finished_at) - started) / 1000)
+  }
+  return fmtMMSS((game.current_tick ?? 0) / 10)
 }
 
 const STATUS_COLOR: Record<GameInfo['status'], string> = {
@@ -84,8 +119,11 @@ export default function GamesPage() {
       return
     }
     try {
-      const [brResult, stocksActive, stocksHistory] = await Promise.allSettled([
+      const [brResult, br2Result, stocksActive, stocksHistory] = await Promise.allSettled([
         fetchJson(`${API_BASE}/api/games`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetchJson(`${BR2_API_BASE}/api/games`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetchJson(`${STOCKS_API_BASE}/api/games`, {
@@ -96,20 +134,35 @@ export default function GamesPage() {
         }),
       ])
 
-      const merged: GameInfo[] = []
-      if (brResult.status === 'fulfilled' && Array.isArray(brResult.value)) {
-        merged.push(...(brResult.value as GameInfo[]))
-      }
-      if (stocksActive.status === 'fulfilled' && Array.isArray(stocksActive.value)) {
-        merged.push(...(stocksActive.value as GameInfo[]))
-      }
-      if (stocksHistory.status === 'fulfilled' && Array.isArray(stocksHistory.value)) {
-        // history는 finished 상태이므로 활성 목록과 game_id 중복 시 활성 우선
-        const activeIds = new Set(merged.map((g) => g.game_id))
-        for (const g of stocksHistory.value as GameInfo[]) {
-          if (!activeIds.has(g.game_id)) merged.push(g)
+      // 메인 /api/games 와 BR2 전용 API 가 같은 BR2 게임을 둘 다 반환 →
+      // game_id 기준 병합(메인의 current_tick 등 + BR2 의 started_at/finished_at/mode 우선 overlay).
+      const byId = new Map<string, GameInfo>()
+      const mergeAll = (arr: GameInfo[]) => {
+        for (const g of arr) {
+          const prev = byId.get(g.game_id)
+          byId.set(g.game_id, prev ? { ...prev, ...g } : g)
         }
       }
+      if (brResult.status === 'fulfilled' && Array.isArray(brResult.value)) {
+        mergeAll(brResult.value as GameInfo[])
+      }
+      if (br2Result.status === 'fulfilled' && Array.isArray(br2Result.value)) {
+        mergeAll(br2Result.value as GameInfo[])   // BR2 필드(started_at/mode) 우선
+      }
+      // 주식은 별도 dedup (이미 병합된 BR2/메인 게임과 game_id 중복 시 건너뜀, 활성 우선)
+      const pushUnique = (arr: GameInfo[]) => {
+        for (const g of arr) {
+          if (byId.has(g.game_id)) continue
+          byId.set(g.game_id, g)
+        }
+      }
+      if (stocksActive.status === 'fulfilled' && Array.isArray(stocksActive.value)) {
+        pushUnique(stocksActive.value as GameInfo[])
+      }
+      if (stocksHistory.status === 'fulfilled' && Array.isArray(stocksHistory.value)) {
+        pushUnique(stocksHistory.value as GameInfo[])
+      }
+      const merged: GameInfo[] = Array.from(byId.values())
 
       // created_at 기준 내림차순 정렬 (최신 게임이 위로)
       merged.sort((a, b) => {
@@ -146,12 +199,16 @@ export default function GamesPage() {
 
   return (
     <div style={{
+      position: 'relative',
       minHeight: '100vh',
       background: '#0D0F14',
       color: '#E8EAF0',
       backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
       backgroundSize: '24px 24px',
     }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: 'radial-gradient(ellipse 60% 70% at 50% 40%, rgba(99,102,241,.15) 0%, transparent 70%)',
+      }} />
       {/* 헤더 */}
       <nav style={{
         background: 'rgba(13,15,20,.92)',
@@ -191,7 +248,6 @@ export default function GamesPage() {
               }}>
                 {user.role}
               </span>
-              ▾
             </button>
           )}
           <button onClick={handleLogout} style={navBtn} onMouseEnter={e => (e.currentTarget.style.color = '#F0EBFF')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>로그아웃</button>
@@ -204,7 +260,7 @@ export default function GamesPage() {
           <h2 className="text-xl font-medium">게임 목록</h2>
           <button
             onClick={() => navigate('/games/new')}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg px-4 transition-colors" style={{ paddingTop: 7, paddingBottom: 10 }}
           >
             + 새 게임 만들기
           </button>
@@ -248,11 +304,15 @@ function GameCard({ game }: { game: GameInfo }) {
   const shortId = game.game_id.slice(0, 8)
   const modeBadge = game.mode ? MODE_BADGE[game.mode] : null
   const isStocks = game.mode === 'mock-stocks'
+  // 보스전(boss)도 BR2 엔진 → watch/replay/result/시간표시 모두 BR2 경로 사용.
+  const isBR2 = game.mode === 'battleroyale2' || game.mode === 'boss'
   const isFinished = game.status === 'finished'
 
   function handleWatch() {
     if (isStocks) {
       navigate(`/games/${game.game_id}/mock-stocks/watch`)
+    } else if (isBR2) {
+      navigate(`/games/${game.game_id}/battleroyale/watch`)
     } else {
       navigate(`/games/${game.game_id}/watch`)
     }
@@ -261,6 +321,8 @@ function GameCard({ game }: { game: GameInfo }) {
   function handleResult() {
     if (isStocks) {
       navigate(`/games/${game.game_id}/mock-stocks/result`)
+    } else if (isBR2) {
+      navigate(`/games/${game.game_id}/battleroyale/result`)
     } else {
       navigate(`/games/${game.game_id}/watch`)
     }
@@ -269,6 +331,8 @@ function GameCard({ game }: { game: GameInfo }) {
   function handleReplay() {
     if (isStocks) {
       navigate(`/games/${game.game_id}/mock-stocks/replay`)
+    } else if (isBR2) {
+      navigate(`/games/${game.game_id}/battleroyale/replay`)
     } else {
       navigate(`/games/${game.game_id}/replay`)
     }
@@ -287,7 +351,7 @@ function GameCard({ game }: { game: GameInfo }) {
       <div className="flex items-center shrink-0">
         <div className="w-20 flex items-center justify-center">
           {modeBadge && (
-            <span className="text-xs leading-none rounded-full px-2 font-medium" style={{ ...modeBadge.style, paddingTop: '2px', paddingBottom: '4px' }}>
+            <span className="text-xs leading-none rounded-full px-2 font-medium" style={{ ...modeBadge.style, paddingTop: '3px', paddingBottom: '3px' }}>
               {modeBadge.label}
             </span>
           )}
@@ -301,11 +365,18 @@ function GameCard({ game }: { game: GameInfo }) {
 
       {/* 가운데: 진행 정보 */}
       <div className="hidden sm:flex items-center gap-6 text-sm text-gray-400 flex-1 justify-center">
-        <span>
-          틱{' '}
-          <span className="text-white font-medium">{game.current_tick}</span>
-          {' / 200'}
-        </span>
+        {isBR2 ? (
+          <span>
+            시간{' '}
+            <span className="text-white font-medium">{fmtGameTime(game)}</span>
+          </span>
+        ) : (
+          <span>
+            틱{' '}
+            <span className="text-white font-medium">{game.current_tick}</span>
+            {' / 200'}
+          </span>
+        )}
         <span>
           봇{' '}
           <span className="text-white font-medium">{game.total_bots}</span>
@@ -325,7 +396,7 @@ function GameCard({ game }: { game: GameInfo }) {
             </button>
             <button
               onClick={handleReplay}
-              className="flex items-center gap-1 text-sm rounded-lg transition-colors bg-indigo-700 hover:bg-indigo-600 text-white"
+              className="flex items-center gap-0.5 text-sm rounded-lg transition-colors bg-indigo-700 hover:bg-indigo-600 text-white"
               style={{ paddingTop: '4px', paddingBottom: '6px', paddingLeft: '8px', paddingRight: '12px' }}
             >
               <span>🎬</span><span>리플레이</span>

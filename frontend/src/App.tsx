@@ -17,6 +17,9 @@ import RankingPage from './pages/RankingPage'
 import UserBotDetailPage from './pages/UserBotDetailPage'
 import MyPage from './pages/MyPage'
 import GodotTestPage from './pages/GodotTestPage'
+import BattleRoyale2ResultPage from './pages/BattleRoyale2ResultPage'
+import BattleRoyale2ReplayPage from './pages/BattleRoyale2ReplayPage'
+import TutorialPage from './pages/TutorialPage'
 
 function LoadingScreen() {
   return (
@@ -94,6 +97,9 @@ function AppRoutes() {
       <Route path="/games/:game_id/watch" element={<WatchPage />} />
       <Route path="/games/new/mock-stocks" element={<MockStocksNewPage />} />
       <Route path="/games/:game_id/mock-stocks/watch" element={<MockStocksWatchPage />} />
+      <Route path="/games/:game_id/battleroyale/watch" element={<GodotTestPage />} />
+      <Route path="/games/:game_id/battleroyale/result" element={<BattleRoyale2ResultPage />} />
+      <Route path="/games/:game_id/battleroyale/replay" element={<BattleRoyale2ReplayPage />} />
       <Route path="/games/:game_id/mock-stocks/result" element={<MockStocksResultPage />} />
       <Route path="/games/:game_id/replay" element={<BattleRoyaleReplayPage />} />
       <Route path="/games/:game_id/mock-stocks/replay" element={<MockStocksReplayPage />} />
@@ -102,6 +108,7 @@ function AppRoutes() {
       <Route path="/mypage" element={<MyPage />} />
       {/* 기본 진입점 */}
       <Route path="/godot-test" element={<GodotTestPage />} />
+      <Route path="/tutorial/:mode" element={<TutorialPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

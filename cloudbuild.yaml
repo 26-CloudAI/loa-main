@@ -9,6 +9,9 @@ substitutions:
   # GCS 버킷: Cloud Build 트리거 설정의 substitution 변수에서 직접 입력
   # (버킷명 노출 방지 — 여기에 실제 URI를 적지 말 것)
   _BOSS_WEIGHTS_GCS_URI: 'gs://boss-weights/trained_weights.json'
+  # BR2 헤드리스 러너(C2) WS 인증 공유 시크릿 — 빈 값이면 러너 비인증 실패.
+  # repo 에 시크릿 커밋 금지 → Cloud Build 트리거 substitution 에서 실제 값 주입.
+  _BR2_RUNNER_SECRET: ''
 
 steps:
   # 1a. 서버 Docker 이미지 빌드
@@ -61,15 +64,20 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
 
-      # 리소스
+      # 리소스 (C2 헤드리스 러너 동작 위해 상향)
+      # Redis 기반(USE_REDIS=true) 관전 릴레이/StateStore/권위 선출로 멀티 인스턴스 지원.
+      # 멀티 인스턴스 e2e(BattleRoyale2/tests/e2e_multi_instance.py) 통과 → max-instances 상향.
+      # min=1(상시 warm) ~ max=3 오토스케일. 동시 러너 최대 = max × BR2_MAX_CONCURRENT_GAMES.
       - '--memory'
-      - '512Mi'
+      - '1Gi'
       - '--cpu'
-      - '1'
+      - '2'
       - '--min-instances'
-      - '0'
+      - '1'
       - '--max-instances'
       - '3'
+      - '--timeout'
+      - '3600'   # WS 매치(~3분) 동안 연결 유지
       - '--port'
       - '8080'
 
@@ -88,7 +96,7 @@ steps:
       # 환경변수 (CORS_ORIGINS 값에 콤마가 포함되므로 | 를 구분자로 사용)
       - '--set-env-vars'
       - >-
-        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=10.114.0.3|DB_NAME=ai_arena|DB_USER=arena_user|ENV=production|BOSS_WEIGHTS_GCS_URI=${_BOSS_WEIGHTS_GCS_URI}
+        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=10.114.0.3|DB_NAME=ai_arena|DB_USER=arena_user|ENV=production|BOSS_WEIGHTS_GCS_URI=${_BOSS_WEIGHTS_GCS_URI}|BR2_RUNNER_ENABLED=1|BR2_GODOT_BIN=/usr/local/bin/godot_server|BR2_GAME_PCK=/app/BattleRoyale2/runner/game.pck|BR2_RUNNER_WS=ws://127.0.0.1:8080/battleroyale2/match/|BR2_RUNNER_SECRET=${_BR2_RUNNER_SECRET}|BR2_MAX_CONCURRENT_GAMES=4|BR2_MATCH_TIMEOUT_SEC=240
 
       - '--quiet'
 
