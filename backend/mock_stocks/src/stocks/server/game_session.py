@@ -77,6 +77,7 @@ class GameSession:
                     bot_id=bot.bot_id,
                     bot_name=bot.bot_id,
                     is_ai_filler=bot.is_ai_filler,
+                    code=bot.code if not bot.is_ai_filler else None,
                 )
             self._repo.update_game_started(self.game_id)
 

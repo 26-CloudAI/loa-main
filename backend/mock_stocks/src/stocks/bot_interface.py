@@ -40,6 +40,7 @@ class BotInterface(ABC):
     def __init__(self, bot_id: str, is_ai_filler: bool = False, **kwargs):
         self._bot_id = bot_id
         self.is_ai_filler = is_ai_filler
+        self.code: str | None = None
 
     @property
     def bot_id(self) -> str:

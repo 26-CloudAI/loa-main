@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS stock_game_participants (
     bot_id              TEXT    NOT NULL,
     bot_name            TEXT    NOT NULL,
     is_ai_filler        INTEGER NOT NULL DEFAULT 0,
+    code                TEXT,
     final_rank          INTEGER,
     initial_cash        REAL,
     final_total_value   REAL,
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS stock_game_participants (
     bot_id              TEXT             NOT NULL,
     bot_name            TEXT             NOT NULL,
     is_ai_filler        BOOLEAN          NOT NULL DEFAULT FALSE,
+    code                TEXT,
     final_rank          INTEGER,
     initial_cash        DOUBLE PRECISION,
     final_total_value   DOUBLE PRECISION,
@@ -158,6 +160,10 @@ def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
         pass
     try:
         conn.execute("ALTER TABLE stock_games ADD COLUMN name TEXT")
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE stock_game_participants ADD COLUMN code TEXT")
     except Exception:
         pass
     conn.commit()
