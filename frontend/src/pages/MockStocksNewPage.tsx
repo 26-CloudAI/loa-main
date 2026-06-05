@@ -261,7 +261,7 @@ export default function MockStocksNewPage() {
               onChange={(e) => setGameName(e.target.value)}
               placeholder="새 모의주식 1"
               maxLength={50}
-              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#F5A624] placeholder-gray-600 w-80 max-w-full"
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#F5A624] placeholder-gray-600 w-72"
             />
           </section>
 
@@ -276,7 +276,7 @@ export default function MockStocksNewPage() {
               onChange={(e) => setBotId(e.target.value)}
               placeholder="my_bot"
               maxLength={32}
-              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#F5A624] placeholder-gray-600 w-64"
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#F5A624] placeholder-gray-600 w-72"
             />
           </section>
 

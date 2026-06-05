@@ -56,7 +56,10 @@ export default function BattleRoyale2ReplayPage() {
       setTime(Math.max(0, Math.floor(msg.time ?? 0)))
       setPhase(msg.phase ?? 1)
       setAlive(msg.alive ?? 0)
-      setLb(Array.isArray(msg.leaderboard) ? msg.leaderboard : [])
+      const newLb = Array.isArray(msg.leaderboard) ? msg.leaderboard : []
+      setLb(newLb)
+      // 리더보드 첫 수신 시 1등 봇 자동 선택
+      setFollow(prev => prev ?? (newLb[0] ? { bot: newLb[0].name, nonce: Date.now() } : null))
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
@@ -76,54 +79,75 @@ export default function BattleRoyale2ReplayPage() {
           ◀ 나가기
         </button>
         <span className="text-gray-600">|</span>
-        <span className="flex items-center gap-1.5 font-semibold text-indigo-300">
-          🎬 {gameName ?? '배틀로얄 2D 리플레이'}
-        </span>
+        <span className="font-bold">🎬 {gameName ? `${gameName} 리플레이` : '리플레이'}</span>
       </div>
 
       {/* 게임 영역 */}
       <div className="flex-1 flex items-center justify-center gap-4 p-4 min-h-0">
 
-      {/* 게임 화면 (정사각형) — 리플레이 모드 */}
-      <div
-        className="relative rounded-xl overflow-hidden ring-1 ring-gray-800 shadow-2xl h-full shrink-0"
-        style={{ aspectRatio: '1 / 1', maxWidth: '100%' }}
-      >
-        <GodotGame matchId={matchId || undefined} replay apiBase={BR2_API_BASE} token={token} follow={follow} />
-      </div>
-
-      {/* 우측 패널 — 상태 + 리더보드(클릭 시점전환) */}
-      <aside className="w-72 shrink-0 h-full flex flex-col gap-3 overflow-hidden">
-        <div className="rounded-2xl bg-gray-800/80 px-4 py-3 flex items-center justify-between text-sm">
-          <span className="font-semibold text-indigo-300">⏱ {mm}:{ss}</span>
-          <span className="text-gray-400">ZONE P{phase}</span>
-          <span className="text-emerald-400">생존 {alive}</span>
+        {/* 게임 화면 (정사각형) — 리플레이 모드 */}
+        <div
+          className="relative rounded-xl overflow-hidden ring-1 ring-gray-800 shadow-2xl h-full shrink-0"
+          style={{ aspectRatio: '1 / 1', maxWidth: '100%' }}
+        >
+          <GodotGame matchId={matchId || undefined} replay apiBase={BR2_API_BASE} token={token} follow={follow} />
         </div>
 
-        <div className="rounded-2xl bg-gray-800/80 p-4">
-          <h3 className="text-sm font-bold text-gray-200 mb-2">리더보드</h3>
-          <ul className="space-y-1.5">
-            {lb.map((row, i) => (
-              <li
-                key={row.name}
-                onClick={() => setFollow({ bot: row.name, nonce: Date.now() })}
-                title="클릭하면 이 봇 시점으로"
-                className="flex items-center justify-between text-sm cursor-pointer rounded px-1 hover:bg-white/5"
-              >
-                <span className="truncate" style={{ color: botColor(row.name), opacity: row.alive ? 1 : 0.45 }}>
-                  {i + 1}. {row.name}{row.alive ? '' : ' ☠'}
-                </span>
-                <span className="ml-2 tabular-nums text-gray-300" style={{ opacity: row.alive ? 1 : 0.45 }}>
-                  {Math.round(row.score)}
-                </span>
-              </li>
-            ))}
-            {lb.length === 0 && <li className="text-xs text-gray-500">로딩 중…</li>}
-          </ul>
-        </div>
+        {/* 우측 패널 */}
+        <aside className="w-72 shrink-0 h-full flex flex-col gap-3 overflow-hidden">
+          {/* 시간/상태 */}
+          <div className="rounded-2xl bg-gray-800/80 px-4 py-3 flex items-center justify-between text-sm">
+            <span className="font-semibold text-indigo-300">⏱ {mm}:{ss}</span>
+            <span className="text-gray-400">ZONE P{phase}</span>
+            <span className="text-emerald-400">생존 {alive}</span>
+          </div>
 
-        <p className="text-xs text-gray-600 px-1">재생·배속 컨트롤은 게임 화면 안에 있습니다.</p>
-      </aside>
+          {/* 시점 선택 + 리더보드 통합 */}
+          <div className="rounded-2xl bg-gray-800/80 p-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-sm font-bold text-gray-200">리더보드</h3>
+              <span className="text-xs text-gray-500">클릭하여 시점 변경</span>
+            </div>
+
+
+            <ul className="space-y-0.5">
+              {lb.map((row, i) => {
+                const color = botColor(row.name)
+                const isActive = follow?.bot === row.name
+                return (
+                  <li
+                    key={row.name}
+                    onClick={() => setFollow({ bot: row.name, nonce: Date.now() })}
+                    className="flex items-center justify-between text-sm cursor-pointer rounded-lg px-2 py-1.5 transition-colors"
+                    style={{
+                      background: isActive ? color + '18' : 'transparent',
+                      outline: isActive ? `1px solid ${color}50` : 'none',
+                    }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ background: row.alive ? color : '#4b5563' }}
+                      />
+                      <span className="truncate" style={{ color: row.alive ? color : '#6b7280', opacity: row.alive ? 1 : 0.55 }}>
+                        {i + 1}. {row.name}{row.alive ? '' : ' ☠'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <span className="tabular-nums text-gray-400 text-xs" style={{ opacity: row.alive ? 1 : 0.45 }}>
+                        {Math.round(row.score)}
+                      </span>
+                      {isActive && <span className="text-xs" style={{ color }}>◀</span>}
+                    </div>
+                  </li>
+                )
+              })}
+              {lb.length === 0 && <li className="text-xs text-gray-500 px-2">로딩 중…</li>}
+            </ul>
+          </div>
+
+          <p className="text-xs text-gray-600 px-1">재생·배속 컨트롤은 게임 화면 안에 있습니다.</p>
+        </aside>
 
       </div>
     </div>

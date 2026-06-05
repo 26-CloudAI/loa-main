@@ -328,7 +328,7 @@ export default function WatchPage() {
           ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">{gameName ?? 'LOA - 게임 관전'}</span>
+        <span className="font-bold">⚔️ 배틀로얄{gameName ? ` — ${gameName}` : ''}</span>
       </header>
 
       {/* Main area */}

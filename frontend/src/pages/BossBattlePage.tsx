@@ -142,7 +142,7 @@ function DifficultySelector({
             ].join(' ')}
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className={`font-bold text-base ${isSelected ? info.color : 'text-gray-300'}`}>
+              <span className={`font-bold text-sm ${isSelected ? info.color : 'text-gray-300'}`}>
                 {info.label}
               </span>
               <span className={`text-xs ${isSelected ? info.color : 'text-gray-500'}`}>
@@ -163,7 +163,7 @@ function BossInfoBanner({ difficulty }: { difficulty: Difficulty }) {
     <div className="rounded-xl px-5 py-4 flex gap-4 items-start" style={{ background: 'rgba(232,51,74,.1)', border: '1px solid rgba(232,51,74,.35)' }}>
       <span className="text-3xl shrink-0">👾</span>
       <div className="flex flex-col gap-1">
-        <p className={`font-bold ${info.color}`}>
+        <p className={`font-bold text-sm ${info.color}`}>
           AI 보스 ({info.label} — {info.sub})
         </p>
         <p className="text-sm text-gray-400 leading-relaxed">{info.desc}</p>
@@ -215,7 +215,7 @@ function BotCard({
             <button
               type="button"
               onClick={onRemove}
-              className="text-gray-500 hover:text-red-400 transition-colors text-lg leading-none"
+              className="text-gray-500 hover:text-red-400 transition-colors text-sm leading-none"
               title="봇 제거"
             >
               ×
@@ -334,7 +334,7 @@ export default function BossBattlePage() {
           ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">👾 보스전</span>
+        <span className="font-bold">👾 보스전 — 새 게임</span>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-8">
@@ -392,7 +392,7 @@ export default function BossBattlePage() {
                   onClick={addBot}
                   className="flex items-center justify-center gap-2 border border-dashed border-gray-600 hover:border-red-600 rounded-xl py-3 text-sm text-gray-500 hover:text-red-400 transition-colors"
                 >
-                  <span className="text-lg leading-none">+</span>
+                  <span className="text-sm leading-none">+</span>
                   봇 추가 ({bots.length}/{MAX_BOTS})
                 </button>
               )}
