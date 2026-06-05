@@ -40,6 +40,10 @@ const ANIM_CSS = `
   .loa-sect .sect-g2{opacity:0;transform:translateY(32px);transition:opacity .75s .24s cubic-bezier(.16,1,.3,1),transform .75s .24s cubic-bezier(.16,1,.3,1)}
   .loa-sect .sect-g3{opacity:0;transform:translateY(32px);transition:opacity .75s .48s cubic-bezier(.16,1,.3,1),transform .75s .48s cubic-bezier(.16,1,.3,1)}
   .loa-sect.loa-visible .sect-g1,.loa-sect.loa-visible .sect-g2,.loa-sect.loa-visible .sect-g3{opacity:1;transform:translateY(0)}
+  /* 섹션 스냅은 JS 커스텀 스크롤(useEffect)로 처리 — 전환 속도/이징을 직접 제어하려고
+     네이티브 scroll-snap 대신 직접 애니메이션. 여기선 가로 넘침만 클립.
+     이 스타일은 랜딩 마운트 동안만 주입돼(언마운트 시 제거) 다른 페이지엔 영향 없음. */
+  html{overflow-x:hidden}
 `
 
 export default function LandingPage() {
@@ -56,9 +60,53 @@ export default function LandingPage() {
     return () => document.getElementById('loa-landing-css')?.remove()
   }, [])
 
+  // 섹션 스크롤 스냅(커스텀) — 휠 한 번에 인접 섹션까지 SNAP_MS 동안 부드럽게 이동.
+  // 네이티브 scroll-snap 은 전환 시간 조절이 안 돼서 직접 애니메이션한다. (SNAP_MS 키우면 더 느림)
+  useEffect(() => {
+    const SNAP_MS = 900   // 섹션 전환 시간(ms). 클수록 느리게.
+    const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+    let animating = false
+    let lockUntil = 0
+    let rafId = 0
+
+    const secs = () => Array.from(document.querySelectorAll<HTMLElement>('.loa-snap-root > section'))
+    const curIndex = (list: HTMLElement[]) => {
+      const mid = window.scrollY + window.innerHeight / 2
+      let idx = 0
+      for (let i = 0; i < list.length; i++) if (list[i].offsetTop <= mid) idx = i
+      return idx
+    }
+    const animateTo = (targetY: number) => {
+      const startY = window.scrollY
+      const dist = targetY - startY
+      const t0 = performance.now()
+      animating = true
+      const step = (now: number) => {
+        const t = Math.min(1, (now - t0) / SNAP_MS)
+        window.scrollTo(0, startY + dist * easeInOutCubic(t))
+        if (t < 1) rafId = requestAnimationFrame(step)
+        else { animating = false; lockUntil = performance.now() + 140 }
+      }
+      rafId = requestAnimationFrame(step)
+    }
+    const onWheel = (e: WheelEvent) => {
+      const list = secs()
+      if (list.length === 0) return
+      if (animating || performance.now() < lockUntil) { e.preventDefault(); return }
+      const dir = e.deltaY > 0 ? 1 : -1
+      const idx = curIndex(list)
+      const next = Math.max(0, Math.min(list.length - 1, idx + dir))
+      if (next === idx) return   // 첫/마지막 — 기본 동작(움직임 없음)
+      e.preventDefault()
+      animateTo(list[next].offsetTop)
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
+    return () => { window.removeEventListener('wheel', onWheel); cancelAnimationFrame(rafId) }
+  }, [])
+
   return (
     <div
-      className="min-h-screen overflow-x-hidden"
+      className="min-h-screen loa-snap-root"
       style={{ background: '#0D0F14', color: '#E8EAF0', fontFamily: '"SB Aggro", system-ui, sans-serif' }}
     >
       <Nav token={token} ctaTo={ctaTo} />
@@ -275,7 +323,10 @@ function HowItWorksSection() {
   ]
 
   return (
-    <section style={{ padding: '80px 24px 96px', borderTop: '1px solid rgba(255,255,255,.04)' }}>
+    <section style={{
+      minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+      padding: '80px 24px 96px', borderTop: '1px solid rgba(255,255,255,.04)',
+    }}>
       <div ref={ref} className="loa-sect" style={{ maxWidth: 940, margin: '0 auto' }}>
 
         {/* 헤더 */}
@@ -839,7 +890,7 @@ function BottomCTA({ ctaTo, loggedIn }: { ctaTo: string; loggedIn: boolean }) {
 
   return (
     <section
-      className="relative flex flex-col items-center justify-center text-center py-36 pb-28 px-6"
+      className="relative flex flex-col items-center justify-center text-center min-h-screen py-36 pb-28 px-6"
       style={{ borderTop: '1px solid rgba(255,255,255,.04)' }}
     >
       <div
