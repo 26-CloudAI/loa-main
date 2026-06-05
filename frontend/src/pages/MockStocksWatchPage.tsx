@@ -365,7 +365,7 @@ export default function MockStocksWatchPage() {
 
       {/* ── 헤더 ── */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games/new')} className="text-gray-400 hover:text-white text-sm transition-colors">
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 나가기
         </button>
         <span className="text-gray-600">|</span>
@@ -730,10 +730,10 @@ export default function MockStocksWatchPage() {
               </button>
               <div className="flex gap-2">
                 <button
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/games/list')}
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-xl py-2.5 text-sm font-medium transition-colors"
                 >
-                  메인 홈
+                  게임 목록
                 </button>
                 <button
                   onClick={() => setGameOverDismissed(true)}

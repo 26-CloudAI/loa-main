@@ -91,7 +91,7 @@ export default function GodotTestPage() {
       {/* 좌측 상단 바 — 나가기 / 모드 / 매치ID */}
       <div className="absolute top-3 left-4 z-50 flex items-center gap-2 rounded-xl bg-gray-900/85 backdrop-blur px-3 py-1.5 ring-1 ring-gray-700 text-sm">
         <button
-          onClick={() => navigate('/games')}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-gray-300 hover:text-white transition-colors font-medium"
         >
           ◀ 나가기

@@ -60,10 +60,10 @@ export default function MockStocksResultPage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
-          onClick={() => navigate('/games/list')}
+          onClick={() => navigate(-1)}
           className="text-gray-400 hover:text-white transition-colors text-sm"
         >
-          ← 게임 목록
+          ← 뒤로
         </button>
         <span className="font-bold text-lg">League of Agents</span>
         <span className="ml-auto text-sm text-gray-500">모의주식 결과</span>

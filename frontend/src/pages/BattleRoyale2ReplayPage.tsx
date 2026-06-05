@@ -20,13 +20,23 @@ export default function BattleRoyale2ReplayPage() {
   const { game_id } = useParams()
   const { token } = useAuth()
   const matchId = game_id ?? ''
-  const shortId = matchId ? matchId.slice(0, 8) : ''
 
+  const [gameName, setGameName] = useState<string | null>(null)
   const [time, setTime] = useState(0)   // 경과 시간(카운트업)
   const [phase, setPhase] = useState(1)
   const [alive, setAlive] = useState(0)
   const [lb, setLb] = useState<LbRow[]>([])
   const [follow, setFollow] = useState<{ bot: string; nonce: number } | null>(null)
+
+  useEffect(() => {
+    if (!matchId) return
+    fetch(`${BR2_API_BASE}/api/games/${matchId}/result`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.name) setGameName(data.name) })
+      .catch(() => {})
+  }, [matchId, token])
 
   // 봇 이름 → 고정 색상 (등장 순서대로 팔레트 배정)
   const colorMapRef = useRef<Map<string, string>>(new Map())
@@ -56,21 +66,23 @@ export default function BattleRoyale2ReplayPage() {
   const ss = String(time % 60).padStart(2, '0')
 
   return (
-    <div className="fixed inset-0 bg-gray-950 flex items-center justify-center gap-4 p-6">
+    <div className="fixed inset-0 bg-gray-950 flex flex-col">
       {/* 상단 바 */}
-      <div className="absolute top-3 left-4 z-50 flex items-center gap-2 rounded-xl bg-gray-900/85 backdrop-blur px-3 py-1.5 ring-1 ring-gray-700 text-sm">
+      <div className="shrink-0 h-11 px-4 flex items-center gap-2 bg-gray-900/90 backdrop-blur border-b border-gray-800 text-sm z-50">
         <button
-          onClick={() => navigate('/games')}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-gray-300 hover:text-white transition-colors font-medium"
         >
           ◀ 나가기
         </button>
         <span className="text-gray-600">|</span>
         <span className="flex items-center gap-1.5 font-semibold text-indigo-300">
-          🎬 배틀로얄 2D 리플레이
-          {shortId && <span className="text-gray-500 font-mono text-xs">#{shortId}</span>}
+          🎬 {gameName ?? '배틀로얄 2D 리플레이'}
         </span>
       </div>
+
+      {/* 게임 영역 */}
+      <div className="flex-1 flex items-center justify-center gap-4 p-4 min-h-0">
 
       {/* 게임 화면 (정사각형) — 리플레이 모드 */}
       <div
@@ -112,6 +124,8 @@ export default function BattleRoyale2ReplayPage() {
 
         <p className="text-xs text-gray-600 px-1">재생·배속 컨트롤은 게임 화면 안에 있습니다.</p>
       </aside>
+
+      </div>
     </div>
   )
 }

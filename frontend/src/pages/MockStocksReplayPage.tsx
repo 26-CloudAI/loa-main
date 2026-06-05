@@ -413,8 +413,8 @@ export default function MockStocksReplayPage() {
 
       {/* ── 헤더 ── */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games/list')} className="text-gray-400 hover:text-white text-sm transition-colors">
-          ◀ 게임 목록
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm transition-colors">
+          ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
         <span className="font-bold">📈 모의주식</span>
