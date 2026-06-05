@@ -304,7 +304,7 @@ export default function GameNewPage() {
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm transition-colors">◀ 뒤로</button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">새 게임 만들기 — 배틀로얄 2D</span>
+        <span className="font-bold">⚔️ 배틀로얄 2D — 새 게임</span>
         <button
           type="button"
           onClick={() => setShowRules(true)}
@@ -328,7 +328,7 @@ export default function GameNewPage() {
               onChange={(e) => setGameName(e.target.value)}
               placeholder="새 배틀로얄 2D 1"
               maxLength={40}
-              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-72"
             />
           </section>
 
@@ -343,7 +343,7 @@ export default function GameNewPage() {
               onChange={(e) => setBotId(e.target.value)}
               placeholder="my_bot"
               maxLength={32}
-              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-64"
+              className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-600 w-72"
             />
           </section>
 

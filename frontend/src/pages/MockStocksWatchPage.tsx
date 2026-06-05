@@ -234,11 +234,20 @@ export default function MockStocksWatchPage() {
   const [finalRankings, setFinalRankings]     = useState<LeaderEntry[]>([])
   const [gameOverDismissed, setGameOverDismissed] = useState(false)
   const [highlightedStocks, setHighlightedStocks] = useState<Set<string>>(new Set())
+  const [gameName, setGameName]               = useState<string | null>(null)
 
   const newsKeySet       = useRef<Set<string>>(new Set())
   const botInitialValues = useRef<Record<string, number>>({})
   const botColorAssigned = useRef<Record<string, string>>({})
   const bannerTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!game_id) return
+    fetch(`${STOCKS_API}/api/games/${game_id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.name) setGameName(data.name) })
+      .catch(() => {})
+  }, [game_id])
 
   useEffect(() => {
     if (!game_id) return
@@ -369,8 +378,7 @@ export default function MockStocksWatchPage() {
           ◀ 나가기
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">📈 모의주식</span>
-        <span className="text-gray-500 text-xs font-mono">#{game_id}</span>
+        <span className="font-bold">📈 모의주식{gameName ? ` — ${gameName}` : ''}</span>
 
         <div className="flex items-center gap-3 ml-auto">
           <div className="flex items-center gap-2">

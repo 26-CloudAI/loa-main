@@ -1033,6 +1033,7 @@ def create_app() -> FastAPI:
         return {
             "game_id": g.id,
             "name": g.name,
+            "mode": getattr(g, "mode", GAME_MODE),
             "status": g.status,
             "end_reason": g.end_reason,
             "finished_at": g.finished_at,

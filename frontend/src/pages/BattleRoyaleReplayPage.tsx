@@ -310,10 +310,7 @@ export default function BattleRoyaleReplayPage() {
           ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">{gameName ?? 'LOA - 리플레이'}</span>
-        <span className="ml-2 text-xs font-medium bg-indigo-600/30 text-indigo-300 border border-indigo-600/50 rounded-full px-2 py-0.5">
-          🎬 리플레이
-        </span>
+        <span className="font-bold">🎬 {gameName ? `${gameName} 리플레이` : '리플레이'}</span>
       </header>
 
       {/* Main area */}
