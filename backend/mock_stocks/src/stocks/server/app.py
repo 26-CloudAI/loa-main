@@ -478,6 +478,15 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             "result": result_data,
         }
 
+    @app.get("/api/users/me/stats")
+    async def get_my_stats(request: Request):
+        """인증된 유저의 모의주식 전적을 반환한다."""
+        uid = _require_uid(request)
+        repo = registry._repo
+        if repo is None:
+            return {"games_played": 0, "wins": 0, "losses": 0}
+        return repo.get_user_stats(uid)
+
     @app.delete("/api/games/{game_id}", status_code=204)
     async def delete_game(game_id: str):
         session = registry.get_game(game_id)

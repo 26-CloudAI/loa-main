@@ -151,6 +151,32 @@ class StockGameRepository:
             )
         return [self._row_to_game(row) for row in cursor.fetchall()]
 
+    def get_user_stats(self, owner_uid: str) -> dict:
+        """유저의 모의주식 게임 수 및 1위 횟수를 반환한다."""
+        cursor = self._execute(
+            "SELECT COUNT(*) as cnt FROM stock_games WHERE owner_uid = ? AND status = 'finished'",
+            (owner_uid,),
+        )
+        row = cursor.fetchone()
+        games_played = row["cnt"] if row else 0
+
+        cursor = self._execute(
+            """
+            SELECT COUNT(*) as cnt
+            FROM stock_games sg
+            JOIN stock_game_participants sgp ON sg.id = sgp.game_id
+            WHERE sg.owner_uid = ?
+              AND sg.status = 'finished'
+              AND sgp.is_ai_filler = 0
+              AND sgp.final_rank = 1
+            """,
+            (owner_uid,),
+        )
+        row = cursor.fetchone()
+        wins = row["cnt"] if row else 0
+
+        return {"games_played": games_played, "wins": wins, "losses": games_played - wins}
+
     def cleanup_stale_games(self) -> int:
         """서버 재시작 시 미완료 게임을 error 상태로 변경. 변경된 수를 반환."""
         cursor = self._execute(
