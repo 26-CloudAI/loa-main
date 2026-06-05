@@ -240,6 +240,7 @@ export default function MainPage() {
 
   const [myRanking, setMyRanking] = useState<RankingEntry | null>(null)
   const [botCount, setBotCount] = useState<number | null>(null)
+  const [stocksStats, setStocksStats] = useState<{ games_played: number; wins: number; losses: number } | null>(null)
   const [top5, setTop5] = useState<RankingEntry[]>([])
   const [recentGames, setRecentGames] = useState<GameInfo[]>([])
   const [statsLoading, setStatsLoading] = useState(true)
@@ -266,7 +267,8 @@ export default function MainPage() {
     Promise.allSettled([
       fetchJson<{ rankings: RankingEntry[] }>(`${API_BASE}/api/rankings`),
       user ? fetchJson<{ bots: unknown[] }>(`${API_BASE}/api/users/${user.id}/bots`, { headers }) : Promise.reject('no user'),
-    ]).then(([rankRes, botRes]) => {
+      user ? fetch(`${STOCKS_API_BASE}/api/users/me/stats`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+    ]).then(([rankRes, botRes, ssRes]) => {
       if (rankRes.status === 'fulfilled') {
         const list = rankRes.value.rankings ?? []
         setTop5(list.slice(0, 5))
@@ -276,6 +278,8 @@ export default function MainPage() {
       if (botRes.status === 'fulfilled') {
         setBotCount(botRes.value.bots?.length ?? 0)
       }
+      const ss = ssRes.status === 'fulfilled' ? ssRes.value : null
+      if (ss) setStocksStats(ss)
     }).finally(() => setStatsLoading(false))
   }, [user, token])
 
@@ -326,10 +330,13 @@ export default function MainPage() {
   }
 
   // ── Stat values ──
+  const totalGames  = (myRanking?.games_played ?? 0) + (stocksStats?.games_played ?? 0)
+  const totalWins   = (myRanking?.wins ?? 0) + (stocksStats?.wins ?? 0)
+  const totalBots   = (botCount ?? 0) + (stocksStats?.games_played ?? 0)
   const rankValue   = statsLoading ? '…' : myRanking ? `#${myRanking.rank}` : '—'
-  const recordValue = statsLoading ? '…' : myRanking ? `${myRanking.games_played}전` : '—'
-  const winRate     = statsLoading ? '…' : myRanking ? `${(myRanking.win_rate * 100).toFixed(0)}%` : '—'
-  const botCountVal = statsLoading ? '…' : botCount !== null ? String(botCount) : '—'
+  const recordValue = statsLoading ? '…' : (myRanking || stocksStats) ? `${totalGames}전` : '—'
+  const winRate     = statsLoading ? '…' : totalGames > 0 ? `${(totalWins / totalGames * 100).toFixed(0)}%` : '—'
+  const botCountVal = statsLoading ? '…' : (botCount !== null || stocksStats) ? String(totalBots) : '—'
 
   return (
     <div style={{
