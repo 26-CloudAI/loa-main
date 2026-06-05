@@ -1106,7 +1106,7 @@ def create_app(
                     FROM stock_games sg
                     JOIN stock_game_participants sgp ON sg.id = sgp.game_id
                     WHERE sg.owner_uid = ? AND sg.status = 'finished'
-                      AND sgp.is_ai_filler = 0 AND sgp.final_rank = 1
+                      AND NOT sgp.is_ai_filler AND sgp.final_rank = 1
                     """,
                     (firebase_uid,),
                 ).fetchone()
@@ -1120,7 +1120,7 @@ def create_app(
                            sg.id AS game_id, sg.name AS game_name, sg.created_at
                     FROM stock_games sg
                     JOIN stock_game_participants sgp ON sg.id = sgp.game_id
-                    WHERE sg.owner_uid = ? AND sgp.is_ai_filler = 0 AND sgp.code IS NOT NULL
+                    WHERE sg.owner_uid = ? AND NOT sgp.is_ai_filler AND sgp.code IS NOT NULL
                     ORDER BY sg.created_at DESC LIMIT 50
                     """,
                     (firebase_uid,),
