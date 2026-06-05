@@ -63,7 +63,7 @@ export default function BattleRoyale2ResultPage() {
     <div className="min-h-screen bg-gray-950 text-white px-4 py-8">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/games')} className="text-gray-400 hover:text-white text-sm">◀ 목록</button>
+          <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm">◀ 뒤로</button>
           <span className="text-gray-600">|</span>
           <span className="font-bold">⚔️ 배틀로얄 2D 결과</span>
         </div>
@@ -114,7 +114,7 @@ export default function BattleRoyale2ResultPage() {
             </table>
 
             <div className="flex gap-3">
-              <button onClick={() => navigate('/games')}
+              <button onClick={() => navigate('/games/list')}
                 className="flex-1 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white text-sm rounded-lg py-2">
                 게임 목록
               </button>
