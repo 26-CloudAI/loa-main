@@ -83,10 +83,10 @@ export default function GameSelectPage() {
     }}>
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
         <button
-          onClick={() => navigate('/games')}
+          onClick={() => navigate(-1)}
           className="text-gray-400 hover:text-white text-sm transition-colors"
         >
-          ◀ 메인
+          ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
         <span className="font-bold">게임 모드 선택</span>

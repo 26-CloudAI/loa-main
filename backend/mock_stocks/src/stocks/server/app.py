@@ -398,6 +398,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                 initial_cash = session._cfg.game.starting_cash
                 return {
                     "game_id": game_id,
+                    "name": session.name,
                     "status": "finished",
                     "final_tick": result.final_tick,
                     "end_reason": "finished",
@@ -425,6 +426,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         participants = repo.get_participants(game_id)
         return {
             "game_id": game_id,
+            "name": game.name,
             "status": "finished",
             "final_tick": game.final_tick,
             "end_reason": game.end_reason,
@@ -475,6 +477,15 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             "frames": frames,
             "result": result_data,
         }
+
+    @app.get("/api/users/me/stats")
+    async def get_my_stats(request: Request):
+        """인증된 유저의 모의주식 전적을 반환한다."""
+        uid = _require_uid(request)
+        repo = registry._repo
+        if repo is None:
+            return {"games_played": 0, "wins": 0, "losses": 0}
+        return repo.get_user_stats(uid)
 
     @app.delete("/api/games/{game_id}", status_code=204)
     async def delete_game(game_id: str):

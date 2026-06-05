@@ -384,7 +384,7 @@ function GameCard({ game }: { game: GameInfo }) {
       </div>
 
       {/* 오른쪽: 관전 / 결과 + 리플레이 버튼 */}
-      <div className="shrink-0 flex items-center gap-2">
+      <div className="shrink-0 flex items-center justify-end gap-2 w-48">
         {isFinished ? (
           <>
             <button

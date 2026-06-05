@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import PythonEditor from '../components/PythonEditor'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+const API_BASE    = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+const STOCKS_API  = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 
 const DISPLAY_FONT = '"SB Aggro",system-ui,sans-serif'
 const PANEL_BG     = '#161A23'
@@ -94,6 +95,7 @@ export default function MyPage() {
   const [bots, setBots]         = useState<BotInfo[]>([])
   const [myRank, setMyRank]     = useState<number | null>(null)
   const [loading, setLoading]   = useState(true)
+  const [stocksStats, setStocksStats] = useState<{ games_played: number; wins: number; losses: number } | null>(null)
   const [toggling, setToggling]             = useState<number | null>(null)
   const [barProgress, setBarProgress]       = useState(0)
   const [selectedMode, setSelectedMode]     = useState<string | null>(null)
@@ -122,9 +124,12 @@ export default function MyPage() {
     Promise.all([
       fetch(`${API_BASE}/api/users/${user.id}/bots`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(`${API_BASE}/api/rankings`).then(r => r.json()),
-    ]).then(([ud, rd]) => {
+      fetch(`${STOCKS_API}/api/users/me/stats`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([ud, rd, ss]) => {
       setUserInfo(ud.user)
       setBots(ud.bots ?? [])
+      if (ss) setStocksStats(ss)
       const found = (rd.rankings as RankEntry[])?.find(r => r.username === user.username)
       setMyRank(found?.rank ?? null)
 
@@ -169,9 +174,11 @@ export default function MyPage() {
   }
 
 
-  const tier    = userInfo ? getTier(userInfo.elo) : null
-  const winRate = userInfo?.games_played
-    ? ((userInfo.wins / userInfo.games_played) * 100).toFixed(1) : '0.0'
+  const tier       = userInfo ? getTier(userInfo.elo) : null
+  const totalWins  = (userInfo?.wins ?? 0) + (stocksStats?.wins ?? 0)
+  const totalLosses = (userInfo?.losses ?? 0) + (stocksStats?.losses ?? 0)
+  const totalGames = (userInfo?.games_played ?? 0) + (stocksStats?.games_played ?? 0)
+  const winRate    = totalGames > 0 ? ((totalWins / totalGames) * 100).toFixed(1) : '0.0'
 
   return (
     <div style={{
@@ -285,7 +292,7 @@ export default function MyPage() {
                   { label: '현재 랭킹', value: myRank ? `${myRank}위` : '—', color: '#F5A624' },
                   { label: 'ELO',       value: String(userInfo?.elo ?? 0),   color: '#E8334A' },
                   { label: '승률',      value: `${winRate}%`,                color: '#4ade80' },
-                  { label: '총 전적',   value: `${userInfo?.wins ?? 0}승 ${userInfo?.losses ?? 0}패`, color: '#F0EBFF' },
+                  { label: '총 전적',   value: `${totalWins}승 ${totalLosses}패`, color: '#F0EBFF' },
                 ].map(({ label, value, color }, i, arr) => (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
                     <div style={{ textAlign: 'center' }}>
@@ -311,9 +318,15 @@ export default function MyPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
                   {modes.map((mode) => {
                     const mc = MODE_COLOR[mode]
-                    const modeBots = bots.filter(b => b.game_mode === mode)
-                    const wins = modeBots.filter(b => b.wins > 0).length
-                    const total = modeBots.length
+                    let total: number, wins: number
+                    if (mode === '모의주식') {
+                      total = stocksStats?.games_played ?? 0
+                      wins  = stocksStats?.wins ?? 0
+                    } else {
+                      const modeBots = bots.filter(b => b.game_mode === mode)
+                      wins  = modeBots.filter(b => b.wins > 0).length
+                      total = modeBots.length
+                    }
                     const isSelected = selectedMode === mode
                     const borderCol = mc.border.replace('.4', isSelected ? '.7' : '.25')
                     const glowCol   = mc.bg.replace('.15', isSelected ? '.25' : '.12')

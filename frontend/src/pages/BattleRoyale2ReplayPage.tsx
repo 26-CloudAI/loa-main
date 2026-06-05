@@ -73,7 +73,7 @@ export default function BattleRoyale2ReplayPage() {
       {/* 상단 바 */}
       <div className="shrink-0 h-11 px-4 flex items-center gap-2 bg-gray-900/90 backdrop-blur border-b border-gray-800 text-sm z-50">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/games/list')}
           className="flex items-center gap-1 text-gray-300 hover:text-white transition-colors font-medium"
         >
           ◀ 나가기
