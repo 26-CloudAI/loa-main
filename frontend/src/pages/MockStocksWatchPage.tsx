@@ -374,7 +374,7 @@ export default function MockStocksWatchPage() {
 
       {/* ── 헤더 ── */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm transition-colors">
+        <button onClick={() => navigate('/games/list')} className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 나가기
         </button>
         <span className="text-gray-600">|</span>

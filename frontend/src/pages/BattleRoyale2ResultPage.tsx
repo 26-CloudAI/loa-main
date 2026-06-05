@@ -73,7 +73,7 @@ export default function BattleRoyale2ResultPage() {
       backgroundSize: '24px 24px',
     }}>
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games/list')} className="text-gray-400 hover:text-white transition-colors text-sm">
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white transition-colors text-sm">
           ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
