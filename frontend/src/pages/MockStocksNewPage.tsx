@@ -303,95 +303,97 @@ export default function MockStocksNewPage() {
           </section>
 
           {/* 게임 옵션 */}
-          <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
+          <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-3">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
 
-            {/* 봇 코드 공개 여부 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">봇 코드 공개</p>
-                <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPublic((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-[#F5A624]' : 'bg-gray-700'}`}
-              >
-                <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">AI로 빈 슬롯 채우기</p>
-                <p className="text-xs text-gray-500">장기봇 · 단기봇 · 랜덤봇으로 채웁니다</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFillWithAi((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${fillWithAi ? 'bg-[#F5A624]' : 'bg-gray-700'}`}
-              >
-                <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${fillWithAi ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">최소 봇 수</p>
-                <p className="text-xs text-gray-500">2 ~ 20</p>
-              </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={minBots}
-                onChange={(e) => {
-                  const raw = e.target.value.replace(/[^0-9]/g, '')
-                  if (raw === '') { setMinBots(''); return }
-                  setMinBots(Math.min(20, Number(raw)))
-                }}
-                onBlur={() => setMinBots((v) => (v === '' || v < 2 ? 2 : v))}
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#F5A624] w-16 text-center"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
+            <div className="flex flex-col divide-y divide-gray-700/50">
+              {/* 봇 코드 공개 여부 */}
+              <div className="pb-3 flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-white">틱 간격 (속도)</p>
-                  <p className="text-xs text-gray-500">값이 작을수록 빠름</p>
+                  <p className="text-sm text-white">봇 코드 공개</p>
+                  <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
                 </div>
-                <span className="text-sm font-mono" style={{ color: '#F5A624' }}>{tickInterval.toFixed(2)}s</span>
+                <button
+                  type="button"
+                  onClick={() => setIsPublic((v) => !v)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-[#F5A624]' : 'bg-gray-700'}`}
+                >
+                  <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
-              <input
-                type="range"
-                min={0.01}
-                max={1.0}
-                step={0.01}
-                value={tickInterval}
-                onChange={(e) => setTickInterval(parseFloat(e.target.value))}
-                className="w-full accent-[#F5A624]"
-              />
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>0.01s (빠름)</span>
-                <span>1.0s (느림)</span>
-              </div>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">시드 (재현용, 선택)</p>
-                <p className="text-xs text-gray-500">비우면 랜덤</p>
+              <div className="py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white">AI로 빈 슬롯 채우기</p>
+                  <p className="text-xs text-gray-500">장기봇 · 단기봇 · 랜덤봇으로 채웁니다</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFillWithAi((v) => !v)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${fillWithAi ? 'bg-[#F5A624]' : 'bg-gray-700'}`}
+                >
+                  <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${fillWithAi ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={seed}
-                onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="랜덤"
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#F5A624] w-20 text-center placeholder-gray-400"
-              />
+
+              <div className="py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white">최소 봇 수</p>
+                  <p className="text-xs text-gray-500">2 ~ 20</p>
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={minBots}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9]/g, '')
+                    if (raw === '') { setMinBots(''); return }
+                    setMinBots(Math.min(20, Number(raw)))
+                  }}
+                  onBlur={() => setMinBots((v) => (v === '' || v < 2 ? 2 : v))}
+                  className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#F5A624] w-16 text-center"
+                />
+              </div>
+
+              <div className="py-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-white">틱 간격 (속도)</p>
+                    <p className="text-xs text-gray-500">값이 작을수록 빠름</p>
+                  </div>
+                  <span className="text-sm font-mono" style={{ color: '#F5A624' }}>{tickInterval.toFixed(2)}s</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.01}
+                  max={1.0}
+                  step={0.01}
+                  value={tickInterval}
+                  onChange={(e) => setTickInterval(parseFloat(e.target.value))}
+                  className="w-full accent-[#F5A624]"
+                />
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>0.01s (빠름)</span>
+                  <span>1.0s (느림)</span>
+                </div>
+              </div>
+
+              <div className="pt-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white">시드 (재현용, 선택)</p>
+                  <p className="text-xs text-gray-500">비우면 랜덤</p>
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={seed}
+                  onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="랜덤"
+                  className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#F5A624] w-20 text-center placeholder-gray-400"
+                />
+              </div>
             </div>
           </section>
 

@@ -104,7 +104,11 @@ export default function GodotTestPage() {
   const modeLabel = isBoss ? '👾 보스전' : '⚔️ 배틀로얄 2D'
 
   return (
-    <div className="fixed inset-0 bg-gray-950 flex flex-col">
+    <div className="fixed inset-0 flex flex-col" style={{
+      background: '#0D0F14',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
       {/* 상단 헤더 */}
       <div className="shrink-0 h-11 px-4 flex items-center gap-2 bg-gray-900/90 backdrop-blur border-b border-gray-800 text-sm z-50">
         <button

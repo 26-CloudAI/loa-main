@@ -401,37 +401,39 @@ export default function BossBattlePage() {
           </div>
 
           {/* 게임 옵션 */}
-          <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
+          <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-3">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
 
-            {/* 봇 코드 공개 여부 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">봇 코드 공개</p>
-                <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
+            <div className="flex flex-col divide-y divide-gray-700/50">
+              {/* 봇 코드 공개 여부 */}
+              <div className="pb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white">봇 코드 공개</p>
+                  <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPublic((v) => !v)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-[#E8334A]' : 'bg-gray-700'}`}
+                >
+                  <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsPublic((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-[#E8334A]' : 'bg-gray-700'}`}
-              >
-                <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">시드 (재현용, 선택)</p>
-                <p className="text-xs text-gray-500">비우면 랜덤</p>
+              <div className="pt-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white">시드 (재현용, 선택)</p>
+                  <p className="text-xs text-gray-500">비우면 랜덤</p>
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={seed}
+                  onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="랜덤"
+                  className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-20 text-center placeholder-gray-400"
+                />
               </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={seed}
-                onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="랜덤"
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-20 text-center placeholder-gray-400"
-              />
             </div>
           </section>
 
