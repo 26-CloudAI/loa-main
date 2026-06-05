@@ -529,10 +529,10 @@ export default function MainPage() {
                           {game.name ?? `게임 ${game.game_id.slice(0, 8)}`}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, fontSize: 12 }}>
-                        <span style={{ color: statusColor }}>{statusText}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, fontSize: 12 }}>
+                        <span style={{ color: statusColor, minWidth: 44, textAlign: 'right' }}>{statusText}</span>
                         {game.created_at && (
-                          <span style={{ color: MUTED }}>{timeAgo(game.created_at)}</span>
+                          <span style={{ color: MUTED, minWidth: 56, textAlign: 'right' }}>{timeAgo(game.created_at)}</span>
                         )}
                       </div>
                     </div>

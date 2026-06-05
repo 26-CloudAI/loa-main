@@ -1141,6 +1141,10 @@ def create_app(
                 ]
             except Exception:
                 logger.exception("모의주식 통계 조회 실패 (user_id=%s)", user_id)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
         return {
             "user": {
