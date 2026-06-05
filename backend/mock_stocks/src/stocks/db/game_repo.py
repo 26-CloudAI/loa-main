@@ -168,7 +168,7 @@ class StockGameRepository:
             JOIN stock_game_participants sgp ON sg.id = sgp.game_id
             WHERE sg.owner_uid = ?
               AND sg.status = 'finished'
-              AND sgp.is_ai_filler = 0
+              AND NOT sgp.is_ai_filler
               AND sgp.final_rank = 1
             """,
             (owner_uid,),
@@ -287,7 +287,7 @@ class StockGameRepository:
             FROM stock_games sg
             JOIN stock_game_participants sgp ON sg.id = sgp.game_id
             WHERE sg.owner_uid = ?
-              AND sgp.is_ai_filler = 0
+              AND NOT sgp.is_ai_filler
               AND sgp.code IS NOT NULL
             ORDER BY sg.created_at DESC
             LIMIT ?

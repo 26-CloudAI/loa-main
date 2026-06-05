@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..bot_interface import BotInterface
@@ -184,6 +185,11 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(request, exc):
+        logger.exception("Unhandled exception in MockStocks: %s %s", request.method, request.url)
+        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
     registry = GameRegistry(spectator_manager)
 
