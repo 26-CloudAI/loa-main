@@ -398,6 +398,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                 initial_cash = session._cfg.game.starting_cash
                 return {
                     "game_id": game_id,
+                    "name": session.name,
                     "status": "finished",
                     "final_tick": result.final_tick,
                     "end_reason": "finished",
@@ -425,6 +426,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         participants = repo.get_participants(game_id)
         return {
             "game_id": game_id,
+            "name": game.name,
             "status": "finished",
             "final_tick": game.final_tick,
             "end_reason": game.end_reason,
