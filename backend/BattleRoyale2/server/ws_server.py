@@ -21,6 +21,7 @@ import logging
 import os
 import random
 import time
+import urllib.request
 import uuid
 from typing import Any
 
@@ -65,6 +66,121 @@ _AI_FILLERS: list[tuple[str, type[BattleRoyale2DBot]]] = [
 ]
 
 # 기존 battle_royale 의 GameRepository 재활용 (games / game_participants 테이블 공유).
+# ── Gemini API 키 (코드 생성용) ────────────────────────────────────────────
+try:
+    from gemini_key import GEMINI_API_KEY as _GEMINI_KEY  # type: ignore[import]
+    if _GEMINI_KEY == "여기에_Gemini_API_키_입력":
+        _GEMINI_KEY = None
+except ImportError:
+    _GEMINI_KEY = os.getenv("GEMINI_API_KEY") or None
+
+
+def _call_gemini(prompt: str, timeout: int = 30) -> str | None:
+    """Gemini REST API 단일 호출. 응답 텍스트 반환, 실패 시 None."""
+    if not _GEMINI_KEY:
+        return None
+    try:
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta"
+            f"/models/gemini-2.5-flash:generateContent?key={_GEMINI_KEY}"
+        )
+        body = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"thinkingConfig": {"thinkingBudget": 0}},
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as e:
+        logger.warning("Gemini API 호출 실패: %s", e)
+        return None
+
+
+def _extract_code(text: str) -> str:
+    """응답에서 Python 코드 블록 추출."""
+    if "```" in text:
+        for part in text.split("```"):
+            part = part.strip().lstrip("python").strip()
+            if part.startswith(("import ", "from ", "class ", "def ", "#")):
+                return part
+    return text.strip()
+
+
+_BR2D_SYSTEM_PROMPT = """\
+You are a Python bot code generator for a BattleRoyale2D game.
+Output ONLY valid Python code with NO explanations, NO markdown.
+
+RULES:
+- Must define: class Bot(BattleRoyale2DBot)
+- Must implement: get_action(self, state) -> dict
+- Optional: choose_spawn(self, map_info) -> (x, y) or None
+- Allowed imports ONLY: math, random, json, collections, heapq, itertools
+
+STATE (passed to get_action every 100ms):
+  state["self"]: {pos:[x,y], hp, max_hp(200), atk, def, speed,
+                  attack_cd, dash_cd, guard_cd, has_potion, has_ranged, guarding}
+  state["vision"]: {enemies:[{id,pos,hp,guarding}], nodes:[{pos,rare}],
+                    items:[{pos,type}], chests:[{pos}], projectiles:[{pos,vel,owner_id}]}
+  state["zone"]: {active:bool, center:[x,y], radius, damage, phase}
+  state["leaderboard"]: [{id, score}]  # top 3
+
+ACTION (return this dict every tick):
+  move_dir:[x,y]   # direction vector, length 0-1 = speed ratio
+  aim_dir:[x,y]    # aim direction unit vector
+  attack:bool      # melee 60px/90deg fan OR ranged if has_ranged; cd 0.5/0.7s
+  guard:bool       # 1s guard, 10s cd; blocks 100% from ±60deg front
+  dash:bool        # 0.2s burst, cd 5s
+  pickup:bool      # open nearby chest (hold 1s)
+  use_potion:bool  # HP +50 instantly
+
+Map: 3000x3000. Vision radius: 200px. No respawn. Max match: 180s.
+Zone shrinks in 3 phases after 60s (damage 2→3→5 per second outside).
+"""
+
+_BOSS_SYSTEM_PROMPT = _BR2D_SYSTEM_PROMPT + """\
+
+BOSS MODE: There is one very strong boss enemy bot. Your goal is to defeat or outlast the boss.
+The boss has higher stats. Focus on hit-and-run tactics, use guard wisely, collect items first.
+"""
+
+_STOCKS_SYSTEM_PROMPT = """\
+You are a Python trading bot code generator for a MockStocks game.
+Output ONLY valid Python code with NO explanations, NO markdown.
+
+RULES:
+- Must define: def action(state: dict) -> dict
+- Allowed imports ONLY: math, random, json, collections
+
+STATE:
+  state["tick"]: int                    # current turn 1-200
+  state["my_bot"]["cash"]: float
+  state["my_bot"]["total_value"]: float
+  state["my_bot"]["portfolio"]: dict    # {symbol: quantity_held}
+  state["my_bot"]["short_positions"]: dict  # {symbol: quantity_shorted}
+  state["my_bot"]["credit_score"]: int  # 0-1000; SHORT requires >= 800
+  state["market"]["stocks"]: list of {symbol, price, price_history:[floats], volume}
+  state["market"]["news"]: list of str  # recent news strings
+
+RETURN one of:
+  {"action": "HOLD"}
+  {"action": "BUY",   "symbol": "X", "quantity": N}
+  {"action": "SELL",  "symbol": "X", "quantity": N}
+  {"action": "SHORT", "symbol": "X", "quantity": N}   # credit_score >= 800
+  {"action": "COVER", "symbol": "X", "quantity": N}
+  {"action": "INQUIRY"}                               # get next news hint
+
+Initial capital: 100,000,000 KRW. Win: highest total_value after 200 turns.
+Available stocks: NeoChips, BioFusion, QuantumDrive, SolarEdge, CyberMed,
+DataVault, AeroNext, GreenCore, RoboTech, SpaceMine, NanoMed, HyperGrid,
+OceanFarm, CryptoBase, MindLink.
+"""
+
+
 # 통합 서버(run_server.py)에서 virtual 'src' 패키지가 battle_royale/src 를 가리키므로
 # 'from src.arena.db import ...' 가 동작. 단독 실행 등으로 import 실패 시 저장 비활성(None).
 _GAME_REPO = None          # GameRepository 인스턴스
@@ -1040,6 +1156,23 @@ def create_app() -> FastAPI:
             "final_tick": g.final_tick,
             "rankings": rankings,
         }
+
+    @app.post("/api/bots/generate")
+    def generate_bot_code(body: dict[str, Any] = Body(default={})):
+        """자연어 프롬프트로 봇 코드 생성 (Gemini 2.5 Flash)."""
+        user_prompt = str(body.get("prompt", "")).strip()
+        mode = str(body.get("mode", "br2d")).strip()
+        if not user_prompt:
+            raise HTTPException(400, "prompt가 필요합니다.")
+        if not _GEMINI_KEY:
+            raise HTTPException(503, "AI 코드 생성을 사용할 수 없습니다. (GEMINI_API_KEY 미설정)")
+        system = _BOSS_SYSTEM_PROMPT if mode == "boss" else _BR2D_SYSTEM_PROMPT
+        full_prompt = f"{system}\n\nUser request: {user_prompt}"
+        raw = _call_gemini(full_prompt, timeout=30)
+        if raw is None:
+            raise HTTPException(502, "AI 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.")
+        code = _extract_code(raw)
+        return {"code": code, "source": "gemini"}
 
     @app.get("/api/games/{game_id}/replay")
     async def get_replay(game_id: str):

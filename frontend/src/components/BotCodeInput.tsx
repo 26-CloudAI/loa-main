@@ -3,14 +3,17 @@
  *
  * 봇 코드 입력 방식을 탭으로 전환할 수 있는 공통 컴포넌트.
  *
- * - "직접 입력" 탭 : PythonEditor (CodeMirror)
- * - "파일 업로드"  탭 : .py 파일 드래그&드롭 / 클릭 업로드
+ * - "직접 입력"      탭 : PythonEditor (CodeMirror)
+ * - "파일 업로드"    탭 : .py 파일 드래그&드롭 / 클릭 업로드
+ * - "프롬프트로 생성" 탭 : 자연어 → Gemini 코드 생성 (generateApiBase 제공 시 표시)
  *
  * Props:
- *   value       — 현재 코드 문자열
- *   onChange    — 코드가 바뀔 때 호출
- *   hasError    — 바이트 초과 등 에러 상태 (에디터 테두리 빨간색)
- *   accentColor — 탭 활성 강조색 ('indigo' | 'red' | 'green'), 기본 'indigo'
+ *   value            — 현재 코드 문자열
+ *   onChange         — 코드가 바뀔 때 호출
+ *   hasError         — 바이트 초과 등 에러 상태 (에디터 테두리 빨간색)
+ *   accentColor      — 탭 활성 강조색 ('indigo' | 'red' | 'green' | 'gold'), 기본 'indigo'
+ *   generateApiBase  — 코드 생성 API 베이스 URL (없으면 프롬프트 탭 숨김)
+ *   generateMode     — 생성 요청에 포함할 모드 문자열 ('br2d' | 'boss' | 'stocks')
  */
 
 import { useRef, useState, useCallback } from 'react'
@@ -23,6 +26,8 @@ interface BotCodeInputProps {
   onChange: (value: string) => void
   hasError?: boolean
   accentColor?: AccentColor
+  generateApiBase?: string
+  generateMode?: string
 }
 
 const ACCENT: Record<AccentColor, { active: string; ring: string; border: string; text: string }> = {
@@ -52,13 +57,15 @@ const ACCENT: Record<AccentColor, { active: string; ring: string; border: string
   },
 }
 
-type InputMode = 'editor' | 'upload'
+type InputMode = 'editor' | 'upload' | 'prompt'
 
 export default function BotCodeInput({
   value,
   onChange,
   hasError = false,
   accentColor = 'indigo',
+  generateApiBase,
+  generateMode,
 }: BotCodeInputProps) {
   const ac = ACCENT[accentColor]
   const [mode, setMode] = useState<InputMode>('editor')
@@ -66,6 +73,12 @@ export default function BotCodeInput({
   const [dragOver, setDragOver]         = useState(false)
   const [uploadError, setUploadError]   = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // 프롬프트 탭 상태
+  const [promptText, setPromptText]     = useState('')
+  const [generating, setGenerating]     = useState(false)
+  const [generateError, setGenerateError] = useState('')
+  const [generatedPreview, setGeneratedPreview] = useState<string | null>(null)
 
   const handleFile = useCallback((file: File) => {
     setUploadError('')
@@ -99,7 +112,6 @@ export default function BotCodeInput({
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) handleFile(file)
-    // input을 초기화해 같은 파일 재선택 허용
     e.target.value = ''
   }
 
@@ -111,11 +123,54 @@ export default function BotCodeInput({
 
   function switchMode(next: InputMode) {
     setMode(next)
-    // 파일 업로드 → 에디터로 돌아갈 때 업로드 상태만 지움 (코드는 유지)
     if (next === 'editor') {
       setUploadedFile(null)
       setUploadError('')
     }
+    if (next === 'prompt') {
+      setGenerateError('')
+      setGeneratedPreview(null)
+    }
+  }
+
+  async function handleGenerate() {
+    if (!promptText.trim() || !generateApiBase) return
+    setGenerating(true)
+    setGenerateError('')
+    setGeneratedPreview(null)
+    try {
+      const res = await fetch(`${generateApiBase}/api/bots/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText.trim(), mode: generateMode ?? '' }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail ?? `서버 오류 (${res.status})`)
+      }
+      const { code } = await res.json()
+      setGeneratedPreview(code)
+    } catch (e) {
+      setGenerateError(e instanceof Error ? e.message : '코드 생성에 실패했습니다.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function applyGenerated() {
+    if (!generatedPreview) return
+    onChange(generatedPreview)
+    setGeneratedPreview(null)
+    setMode('editor')
+  }
+
+  const goldActive = accentColor === 'gold' ? { background: '#F5A624' } : {}
+
+  function tabStyle(t: InputMode) {
+    return [
+      'flex items-center text-xs font-medium rounded-md py-1.5 transition-colors',
+      mode === t ? ac.active : 'text-gray-400 hover:text-gray-200',
+    ].join(' ')
   }
 
   return (
@@ -125,31 +180,29 @@ export default function BotCodeInput({
         <button
           type="button"
           onClick={() => switchMode('editor')}
-          className={[
-            'flex items-center text-xs font-medium rounded-md py-1.5 transition-colors',
-            mode === 'editor' ? ac.active : 'text-gray-400 hover:text-gray-200',
-          ].join(' ')}
-          style={{
-            paddingLeft: 8, paddingRight: 12,
-            ...(mode === 'editor' && accentColor === 'gold' ? { background: '#F5A624' } : {}),
-          }}
+          className={tabStyle('editor')}
+          style={{ paddingLeft: 8, paddingRight: 12, ...(mode === 'editor' ? goldActive : {}) }}
         >
           <span style={{ fontSize: 11 }}>✏️</span>&nbsp;코드 직접입력
         </button>
         <button
           type="button"
           onClick={() => switchMode('upload')}
-          className={[
-            'flex items-center text-xs font-medium rounded-md py-1.5 transition-colors',
-            mode === 'upload' ? ac.active : 'text-gray-400 hover:text-gray-200',
-          ].join(' ')}
-          style={{
-            paddingLeft: 8, paddingRight: 12,
-            ...(mode === 'upload' && accentColor === 'gold' ? { background: '#F5A624' } : {}),
-          }}
+          className={tabStyle('upload')}
+          style={{ paddingLeft: 8, paddingRight: 12, ...(mode === 'upload' ? goldActive : {}) }}
         >
           <span style={{ fontSize: 11 }}>📁</span>&nbsp;파일 업로드
         </button>
+        {generateApiBase && (
+          <button
+            type="button"
+            onClick={() => switchMode('prompt')}
+            className={tabStyle('prompt')}
+            style={{ paddingLeft: 8, paddingRight: 12, ...(mode === 'prompt' ? goldActive : {}) }}
+          >
+            <span style={{ fontSize: 11 }}>🖥️</span>&nbsp;프롬프트로 생성
+          </button>
+        )}
       </div>
 
       {/* ── 직접입력 모드 ── */}
@@ -160,7 +213,6 @@ export default function BotCodeInput({
       {/* ── 파일 업로드 모드 ── */}
       {mode === 'upload' && (
         <div className="flex flex-col gap-3">
-          {/* 히든 파일 input */}
           <input
             ref={inputRef}
             type="file"
@@ -170,7 +222,6 @@ export default function BotCodeInput({
           />
 
           {uploadedFile ? (
-            /* 업로드 완료 상태 */
             <div className={[
               'rounded-xl border-2 px-5 py-4 flex items-center gap-4',
               hasError ? 'border-red-500/60 bg-red-500/5' : 'border-green-500/40 bg-green-500/5',
@@ -180,9 +231,7 @@ export default function BotCodeInput({
                 <p className="text-sm font-medium text-white truncate">{uploadedFile.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {(uploadedFile.size / 1024).toFixed(1)} KB
-                  {hasError && (
-                    <span className="text-red-400 ml-2">— 50KB 초과</span>
-                  )}
+                  {hasError && <span className="text-red-400 ml-2">— 50KB 초과</span>}
                 </p>
               </div>
               <div className="flex gap-2 shrink-0">
@@ -203,7 +252,6 @@ export default function BotCodeInput({
               </div>
             </div>
           ) : (
-            /* 드래그&드롭 / 클릭 업로드 영역 */
             <div
               onDrop={handleDrop}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -226,15 +274,12 @@ export default function BotCodeInput({
             </div>
           )}
 
-          {/* 업로드 에러 */}
           {uploadError && (
             <p className="text-xs text-red-400 flex items-center gap-1.5">
-              <span>⚠️</span>
-              {uploadError}
+              <span>⚠️</span>{uploadError}
             </p>
           )}
 
-          {/* 파일 업로드 후 코드 미리보기 (읽기 전용) */}
           {uploadedFile && value && (
             <details className="group">
               <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-300 select-none transition-colors list-none flex items-center gap-1.5">
@@ -245,6 +290,70 @@ export default function BotCodeInput({
                 <PythonEditor value={value} onChange={onChange} hasError={hasError} />
               </div>
             </details>
+          )}
+        </div>
+      )}
+
+      {/* ── 프롬프트로 생성 모드 ── */}
+      {mode === 'prompt' && (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              placeholder={
+                generateMode === 'stocks'
+                  ? '어떤 투자 전략을 쓸지 설명해주세요.\n예) "뉴스 기반으로 상승 종목에 집중 투자하는 봇", "분산 투자로 안정적인 수익을 추구하는 봇"'
+                  : generateMode === 'boss'
+                  ? '보스전 전략을 설명해주세요.\n예) "보스를 피하면서 아이템을 먼저 챙기는 봇", "보스에게 정면으로 달려드는 공격적인 봇"'
+                  : '어떤 전략의 봇을 만들고 싶은지 설명해주세요.\n예) "공격적으로 적에게 달려드는 봇", "코인만 먹고 자기장 피해 도망다니는 봇"'
+              }
+              rows={4}
+              className="w-full rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-100 placeholder-gray-600 px-4 py-3 resize-none focus:outline-none focus:border-gray-500 transition-colors"
+              disabled={generating}
+            />
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={generating || !promptText.trim()}
+              className={[
+                'self-start flex items-center gap-2 text-sm font-medium rounded-lg pl-3 pr-4 py-2 transition-colors',
+                generating || !promptText.trim()
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer',
+              ].join(' ')}
+            >
+              {generating ? (
+                <>
+                  <span className="inline-block animate-spin">⏳</span>
+                  <span>생성 중...</span>
+                </>
+              ) : (
+                <><span>🖥️</span><span>코드 생성</span></>
+              )}
+            </button>
+          </div>
+
+          {generateError && (
+            <p className="text-xs text-red-400 flex items-center gap-1.5">
+              <span>⚠️</span>{generateError}
+            </p>
+          )}
+
+          {generatedPreview && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-400">생성된 코드를 확인하고 적용하세요.</p>
+                <button
+                  type="button"
+                  onClick={applyGenerated}
+                  className="flex items-center gap-1.5 text-xs font-medium bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  ✅ 에디터에 적용
+                </button>
+              </div>
+              <PythonEditor value={generatedPreview} onChange={() => {}} readOnly hasError={false} />
+            </div>
           )}
         </div>
       )}

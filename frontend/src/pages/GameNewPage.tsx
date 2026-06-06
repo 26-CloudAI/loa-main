@@ -358,7 +358,7 @@ export default function GameNewPage() {
                 {codeOverLimit && ' — 초과'}
               </span>
             </div>
-            <BotCodeInput value={code} onChange={setCode} hasError={codeOverLimit} accentColor="indigo" />
+            <BotCodeInput value={code} onChange={setCode} hasError={codeOverLimit} accentColor="indigo" generateApiBase={API_BASE} generateMode="br2d" />
             {codeOverLimit && <p className="text-red-400 text-xs">코드가 50KB를 초과합니다. 줄여주세요.</p>}
             <p className="text-xs text-gray-500">우측 상단 <b>📋 룰 확인</b> 에서 state/action 스키마를 확인하세요.</p>
           </section>

@@ -296,6 +296,8 @@ export default function MockStocksNewPage() {
                   onChange={setCode}
                   hasError={codeOverLimit}
                   accentColor="gold"
+                  generateApiBase={STOCKS_API}
+                  generateMode="stocks"
                 />
               </div>
               <QuickRefPanel mode="stocks" />

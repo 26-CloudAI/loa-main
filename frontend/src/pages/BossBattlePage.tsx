@@ -231,6 +231,8 @@ function BotCard({
           onChange={(v) => onUpdate('code', v)}
           hasError={overLimit}
           accentColor="red"
+          generateApiBase={API_BASE}
+          generateMode="boss"
         />
         {overLimit && (
           <p className="text-red-400 text-xs mt-1">코드가 50KB를 초과합니다. 줄여주세요.</p>
