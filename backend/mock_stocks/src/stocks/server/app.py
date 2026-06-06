@@ -77,6 +77,39 @@ def _require_uid(request: Request) -> str:
 
 # ── InProcessBot ──────────────────────────────────────────────────────────────
 
+_FORBIDDEN_BUILTINS = frozenset({
+    "open", "exec", "eval", "compile", "__import__",
+    "input", "breakpoint", "memoryview",
+    "globals", "vars",
+})
+
+_ALLOWED_MODULES = frozenset({"math", "random", "json", "collections", "heapq", "itertools"})
+
+
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
+    root = name.split(".")[0]
+    if root not in _ALLOWED_MODULES:
+        raise ImportError("허용되지 않은 모듈 import: %s" % name)
+    return __import__(name, globals, locals, fromlist, level)
+
+
+def _restricted_builtins() -> dict:
+    import builtins as _b
+    safe = {}
+    for name in dir(_b):
+        if name.startswith("_"):
+            continue
+        if name in _FORBIDDEN_BUILTINS:
+            continue
+        safe[name] = getattr(_b, name)
+    safe["__import__"] = _safe_import
+    safe["__build_class__"] = _b.__build_class__
+    return safe
+
+
+_RESTRICTED_BUILTINS = _restricted_builtins()
+
+
 class InProcessBot(BotInterface):
     """유저 제출 코드를 실행하는 어댑터."""
 
@@ -85,7 +118,7 @@ class InProcessBot(BotInterface):
         self._action_fn = None
         self._load_error: Optional[str] = None
         try:
-            ns: dict = {"__builtins__": __builtins__}
+            ns: dict = {"__builtins__": _RESTRICTED_BUILTINS}
             exec(code, ns)
             fn = ns.get("action")
             if fn is None or not callable(fn):
@@ -324,6 +357,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
 
     @app.post("/api/games", status_code=201)
     async def create_game(body: CreateGameRequest, request: Request):
+        uid = _require_uid(request)
         cfg = DEFAULT_CONFIG
 
         user_bots: list[BotInterface] = []
@@ -357,7 +391,6 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             if entry is not None:
                 prepared_news = entry.get("queue") or None
 
-        uid = _require_uid(request)
         if registry._repo is None:
             raise HTTPException(503, "MockStocks DB를 사용할 수 없습니다.")
         name = body.name.strip() if body.name else None
