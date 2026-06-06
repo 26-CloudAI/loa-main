@@ -5,13 +5,13 @@ metadata:
   namespace: arena
 data:
   USE_REDIS: "true"
-  REDIS_HOST: "10.197.54.43"
+  REDIS_HOST: "PLACEHOLDER"   # Cloud Build 트리거 substitution 변수로 주입
   LOG_FORMAT: "json"
   CORS_ORIGINS: "https://leagueofagents.net,https://www.leagueofagents.net,https://ai-arena-b2b4b.web.app,https://ai-arena-b2b4b.firebaseapp.com,https://ai-arena-b2b4b--gke-demo-9gp3ldb7.web.app"
   DB_TYPE: "postgresql"
-  DB_HOST: "10.114.0.3"
-  DB_NAME: "ai_arena"
-  DB_USER: "arena_user"
+  DB_HOST: "PLACEHOLDER"      # Cloud Build 트리거 substitution 변수로 주입
+  DB_NAME: "PLACEHOLDER"      # Cloud Build 트리거 substitution 변수로 주입
+  DB_USER: "PLACEHOLDER"      # Cloud Build 트리거 substitution 변수로 주입
   ENV: "production"
   BOT_RUNNER_URL: "http://bot-runner.arena.svc.cluster.local:8001"
   BOT_RUNNER_REQUIRED: "true"

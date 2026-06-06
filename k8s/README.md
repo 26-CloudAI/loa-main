@@ -55,11 +55,11 @@ gcloud container clusters create-auto loa-arena \
     --release-channel regular \
     --network default \
     --subnetwork default \
-    --project knu-2026-sungjin0418
+    --project YOUR_PROJECT_ID
 
 # kubectl context 등록 (생성 직후 한 번)
 gcloud container clusters get-credentials loa-arena \
-    --region asia-northeast3 --project knu-2026-sungjin0418
+    --region asia-northeast3 --project YOUR_PROJECT_ID
 
 # 삭제 (비용 즉시 0 — 매니페스트/코드는 레포에 남아있으므로 재생성 가능)
 gcloud container clusters delete loa-arena --region asia-northeast3
@@ -77,7 +77,7 @@ gcloud container clusters delete loa-arena --region asia-northeast3
 ```bash
 # 1. GKE 클러스터 인증
 gcloud container clusters get-credentials arena-cluster \
-  --region asia-northeast3 --project knu-2026-sungjin0418
+  --region asia-northeast3 --project YOUR_PROJECT_ID
 
 # 2. Secret 먼저 생성 (한 번만)
 kubectl create secret generic arena-secrets \
@@ -96,10 +96,10 @@ kubectl apply -k k8s/base/
 #    재현 가능성을 위해 `:latest`보다 빌드된 SHA 태그 또는 @sha256:... digest 권장.
 IMAGE_TAG=<빌드한_구체_태그_또는_SHA>   # 예: 20260519-abc1234
 kubectl set image deployment/game-server \
-  game-server=asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/server:${IMAGE_TAG} \
+  game-server=asia-northeast3-docker.pkg.dev/YOUR_PROJECT_ID/ai-arena/server:${IMAGE_TAG} \
   -n arena
 kubectl set image deployment/bot-runner \
-  bot-runner=asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/bot-runner:${IMAGE_TAG} \
+  bot-runner=asia-northeast3-docker.pkg.dev/YOUR_PROJECT_ID/ai-arena/bot-runner:${IMAGE_TAG} \
   -n arena
 
 # 5. 롤아웃 완료 확인

@@ -20,7 +20,7 @@ spec:
         - name: bot-runner
           # 절대 그대로 적용하지 말 것 — Cloud Build 또는 `kubectl set image`로 실제 태그/digest 주입 필수.
           # 직접 `kubectl apply`하면 ImagePullBackOff로 명백히 실패하도록 placeholder 사용.
-          image: asia-northeast3-docker.pkg.dev/knu-2026-sungjin0418/ai-arena/bot-runner:PLACEHOLDER
+          image: asia-northeast3-docker.pkg.dev/YOUR_PROJECT_ID/ai-arena/bot-runner:PLACEHOLDER
           ports:
             - containerPort: 8001
           env:
