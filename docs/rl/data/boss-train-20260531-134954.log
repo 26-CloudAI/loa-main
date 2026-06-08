@@ -1,0 +1,524 @@
+nohup: ignoring input
+2026-05-31 13:49:54,637 [WARNING] quality_bots.json 없음 — 학습 봇 없이 진행
+======================================================================
+  RLBossBotTorch 병렬 학습
+  품질 봇: 전체 0개 → 신규 0개 선정
+  마지막 학습: 999일 전
+  비용 상한: 봇 20개 / 총 600ep / 7h
+======================================================================
+  선택된 품질 봇 없음 — 콜드스타트 봇으로만 학습
+  workers=3  ep/worker=100  총=300ep
+  device=cpu
+======================================================================
+2026-05-31 13:49:58,140 [INFO] W0: League 로드 — 3개 체크포인트
+2026-05-31 13:49:58,196 [INFO] W2: League 로드 — 3개 체크포인트
+2026-05-31 13:49:58,209 [INFO] W1: League 로드 — 3개 체크포인트
+2026-05-31 13:50:00,341 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:03,016 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:06,562 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:12,719 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:18,229 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:19,142 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:19,701 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:28,259 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:33,441 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:37,373 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:39,145 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:47,641 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:53,085 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:54,001 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:54,488 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:50:59,011 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:04,103 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:07,555 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:12,525 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:16,533 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:22,320 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:28,855 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:29,975 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:33,009 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:38,878 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:43,885 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:48,759 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:54,654 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:51:57,154 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.079
+  [W2 ep   1/100] scen=boss_mode_trio rank=3/4  score=  306.1  win_rate=0%  eps=0.078  step= 86380  (1s)
+  [W2 ep   2/100] scen=boss_mode_trio rank=3/4  score=  286.5  win_rate=0%  eps=0.078  step= 86380  (2s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep   3/100] scen=pfsp           rank=2/5  score=  150.2  win_rate=0%  eps=0.077  step= 86380  (2s)
+  [W2 ep   4/100] scen=boss_mode_trio rank=4/4  score=  122.4  win_rate=0%  eps=0.077  step= 86488  (5s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep   5/100] scen=pfsp           rank=2/5  score=  463.9  win_rate=0%  eps=0.076  step= 86879  (7s)
+  [W2 ep   6/100] scen=boss_mode_trio rank=2/4  score=  380.1  win_rate=0%  eps=0.075  step= 87232  (8s)
+  [W2 ep   7/100] scen=boss_mode_solo rank=2/2  score=  191.6  win_rate=0%  eps=0.075  step= 87450  (10s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep   8/100] scen=pfsp           rank=2/5  score=  245.9  win_rate=0%  eps=0.074  step= 87661  (14s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep   9/100] scen=pfsp           rank=4/5  score=  307.0  win_rate=0%  eps=0.074  step= 87983  (20s)
+  [W2 ep  10/100] scen=pure_rule      rank=2/5  score=  291.1  win_rate=0%  eps=0.073  step= 88246  (23s)
+  [W2 ep  11/100] scen=boss_mode_trio rank=4/4  score=   84.4  win_rate=0%  eps=0.072  step= 88417  (26s)
+  [W2 ep  12/100] scen=boss_mode_trio rank=3/4  score=  306.2  win_rate=0%  eps=0.072  step= 88731  (27s)
+  [W2 ep  13/100] scen=boss_mode_solo rank=1/2  score=  670.0  win_rate=8%  eps=0.071  step= 89132  (31s)
+  [W2 ep  14/100] scen=boss_mode_solo rank=2/2  score=  378.8  win_rate=7%  eps=0.071  step= 89472  (39s)
+  [W2 ep  15/100] scen=boss_mode_trio rank=4/4  score=   57.8  win_rate=7%  eps=0.070  step= 89652  (44s)
+  [W2 ep  16/100] scen=boss_mode_solo rank=2/2  score=  251.4  win_rate=6%  eps=0.069  step= 89918  (45s)
+  [W2 ep  17/100] scen=boss_mode_trio rank=4/4  score=  303.0  win_rate=6%  eps=0.069  step= 90200  (47s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  18/100] scen=pfsp           rank=2/5  score=  343.8  win_rate=6%  eps=0.068  step= 90540  (48s)
+  [W2 ep  19/100] scen=boss_mode_solo rank=2/2  score=  309.4  win_rate=5%  eps=0.068  step= 90836  (49s)
+  [W2 ep  20/100] scen=pure_rule      rank=1/5  score=  384.8  win_rate=10%  eps=0.067  step= 91085  (51s)
+  [W2 ep  21/100] scen=boss_mode_solo rank=2/2  score=  249.1  win_rate=10%  eps=0.067  step= 91177  (51s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  22/100] scen=pfsp           rank=1/5  score=  526.1  win_rate=14%  eps=0.066  step= 91489  (52s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  23/100] scen=pfsp           rank=1/5  score=  309.9  win_rate=17%  eps=0.066  step= 91739  (53s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  24/100] scen=pfsp           rank=2/5  score=  207.0  win_rate=17%  eps=0.065  step= 91961  (56s)
+  [W2 ep  25/100] scen=boss_mode_solo rank=2/2  score=  209.0  win_rate=16%  eps=0.065  step= 92203  (61s)
+  [W2 ep  26/100] scen=boss_mode_solo rank=1/2  score=  181.9  win_rate=19%  eps=0.064  step= 92424  (66s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  27/100] scen=pfsp           rank=2/5  score=  381.2  win_rate=19%  eps=0.064  step= 92738  (67s)
+  [W2 ep  28/100] scen=boss_mode_trio rank=4/4  score=  168.9  win_rate=18%  eps=0.063  step= 92979  (68s)
+  [W2 ep  29/100] scen=boss_mode_trio rank=4/4  score=  162.9  win_rate=17%  eps=0.063  step= 93160  (69s)
+  [W2 ep  30/100] scen=pure_rule      rank=3/5  score=   69.2  win_rate=17%  eps=0.062  step= 93204  (71s)
+  [W2 ep  31/100] scen=boss_mode_trio rank=3/4  score=  121.3  win_rate=16%  eps=0.062  step= 93419  (75s)
+  [W2 ep  32/100] scen=boss_mode_trio rank=3/4  score=  153.8  win_rate=16%  eps=0.061  step= 93609  (76s)
+  [W2 ep  33/100] scen=boss_mode_solo rank=1/2  score=  595.0  win_rate=18%  eps=0.061  step= 94010  (77s)
+  [W2 ep  34/100] scen=boss_mode_solo rank=2/2  score=  220.4  win_rate=18%  eps=0.060  step= 94266  (78s)
+  [W2 ep  35/100] scen=boss_mode_solo rank=2/2  score=  151.7  win_rate=17%  eps=0.060  step= 94485  (79s)
+  [W2 ep  36/100] scen=boss_mode_trio rank=4/4  score=  222.3  win_rate=17%  eps=0.059  step= 94760  (80s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  37/100] scen=pfsp           rank=3/5  score=  109.3  win_rate=16%  eps=0.059  step= 94955  (81s)
+  [W2 ep  38/100] scen=boss_mode_solo rank=2/2  score=  189.0  win_rate=16%  eps=0.058  step= 95197  (82s)
+  [W2 ep  39/100] scen=boss_mode_trio rank=4/4  score=  226.0  win_rate=15%  eps=0.058  step= 95459  (84s)
+  [W2 ep  40/100] scen=pure_rule      rank=2/5  score=  198.4  win_rate=15%  eps=0.057  step= 95695  (88s)
+  [W2 ep  41/100] scen=boss_mode_trio rank=4/4  score=  257.3  win_rate=15%  eps=0.057  step= 96020  (90s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  42/100] scen=pfsp           rank=3/5  score=  284.5  win_rate=14%  eps=0.056  step= 96317  (93s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  43/100] scen=pfsp           rank=3/5  score=  101.6  win_rate=14%  eps=0.056  step= 96535  (94s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  44/100] scen=pfsp           rank=2/5  score=  250.5  win_rate=14%  eps=0.055  step= 96792  (95s)
+  [W2 ep  45/100] scen=boss_mode_trio rank=4/4  score=  265.4  win_rate=13%  eps=0.055  step= 97098  (96s)
+  [W2 ep  46/100] scen=boss_mode_solo rank=2/2  score=  134.3  win_rate=13%  eps=0.055  step= 97293  (97s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  47/100] scen=pfsp           rank=4/5  score=  250.1  win_rate=13%  eps=0.054  step= 97596  (98s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  48/100] scen=pfsp           rank=3/5  score=  129.7  win_rate=12%  eps=0.054  step= 97795  (99s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  49/100] scen=pfsp           rank=3/5  score=  450.5  win_rate=12%  eps=0.053  step= 98152  (101s)
+  [W2 ep  50/100] scen=pure_rule      rank=2/5  score=  231.9  win_rate=12%  eps=0.053  step= 98423  (102s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  51/100] scen=pfsp           rank=2/5  score=  217.1  win_rate=12%  eps=0.052  step= 98646  (103s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  52/100] scen=pfsp           rank=2/5  score=  250.6  win_rate=12%  eps=0.052  step= 98904  (104s)
+  [W2 ep  53/100] scen=boss_mode_trio rank=3/4  score=  220.2  win_rate=11%  eps=0.052  step= 99158  (105s)
+  [W2 ep  54/100] scen=boss_mode_solo rank=2/2  score=  124.0  win_rate=11%  eps=0.051  step= 99350  (106s)
+  [W2 ep  55/100] scen=boss_mode_solo rank=2/2  score=  269.1  win_rate=11%  eps=0.051  step= 99643  (107s)
+  [W2 ep  56/100] scen=boss_mode_trio rank=3/4  score=   72.9  win_rate=11%  eps=0.050  step= 99824  (108s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  57/100] scen=pfsp           rank=4/5  score=  258.0  win_rate=11%  eps=0.050  step=100106  (109s)
+  [W2 ep  58/100] scen=boss_mode_trio rank=3/4  score=   82.4  win_rate=10%  eps=0.050  step=100282  (110s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  59/100] scen=pfsp           rank=4/5  score=  125.0  win_rate=10%  eps=0.050  step=100484  (111s)
+  [W2 ep  60/100] scen=pure_rule      rank=3/5  score=  180.1  win_rate=10%  eps=0.050  step=100687  (111s)
+  [W2 ep  61/100] scen=boss_mode_trio rank=4/4  score=  230.6  win_rate=10%  eps=0.050  step=100945  (112s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  62/100] scen=pfsp           rank=3/5  score=  591.1  win_rate=10%  eps=0.050  step=101308  (117s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  63/100] scen=pfsp           rank=3/5  score=  173.0  win_rate=10%  eps=0.050  step=101540  (118s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+2026-05-31 13:52:04,656 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:11,010 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.079
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep   1/100] scen=pfsp           rank=1/5  score=  647.6  win_rate=100%  eps=0.078  step= 86380  (0s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep   2/100] scen=pfsp           rank=1/5  score=  434.6  win_rate=100%  eps=0.078  step= 86380  (0s)
+  [W0 ep   3/100] scen=boss_mode_solo rank=2/2  score=  525.0  win_rate=67%  eps=0.077  step= 86454  (1s)
+  [W0 ep   4/100] scen=boss_mode_solo rank=2/2  score=  261.1  win_rate=50%  eps=0.077  step= 86717  (2s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep   5/100] scen=pfsp           rank=3/5  score=  241.0  win_rate=40%  eps=0.076  step= 86979  (3s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep   6/100] scen=pfsp           rank=2/5  score=  154.3  win_rate=33%  eps=0.075  step= 87174  (5s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep   7/100] scen=pfsp           rank=3/5  score=  149.6  win_rate=29%  eps=0.075  step= 87372  (8s)
+  [W0 ep   8/100] scen=boss_mode_trio rank=4/4  score=  214.4  win_rate=25%  eps=0.074  step= 87618  (13s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep   9/100] scen=pfsp           rank=3/5  score=  132.3  win_rate=22%  eps=0.074  step= 87793  (15s)
+  [W0 ep  10/100] scen=pure_rule      rank=3/5  score=  142.4  win_rate=20%  eps=0.073  step= 87819  (15s)
+  [W0 ep  11/100] scen=boss_mode_solo rank=2/2  score=  175.6  win_rate=18%  eps=0.072  step= 88027  (16s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  12/100] scen=pfsp           rank=4/5  score=  373.4  win_rate=17%  eps=0.072  step= 88363  (18s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  13/100] scen=pfsp           rank=5/5  score=  168.3  win_rate=15%  eps=0.071  step= 88598  (19s)
+  [W0 ep  14/100] scen=boss_mode_trio rank=1/4  score=  750.0  win_rate=21%  eps=0.071  step= 88999  (21s)
+  [W0 ep  15/100] scen=boss_mode_trio rank=4/4  score=  110.8  win_rate=20%  eps=0.070  step= 89209  (22s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  16/100] scen=pfsp           rank=4/5  score=  106.3  win_rate=19%  eps=0.069  step= 89424  (24s)
+  [W0 ep  17/100] scen=boss_mode_solo rank=2/2  score=  355.9  win_rate=18%  eps=0.069  step= 89735  (25s)
+  [W0 ep  18/100] scen=boss_mode_trio rank=4/4  score=   99.8  win_rate=17%  eps=0.068  step= 89910  (29s)
+  [W0 ep  19/100] scen=boss_mode_trio rank=4/4  score=  100.9  win_rate=16%  eps=0.068  step= 90121  (30s)
+  [W0 ep  20/100] scen=pure_rule      rank=3/5  score=  188.2  win_rate=15%  eps=0.067  step= 90355  (31s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  21/100] scen=pfsp           rank=1/5  score=  195.9  win_rate=19%  eps=0.067  step= 90565  (32s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  22/100] scen=pfsp           rank=3/5  score=  136.6  win_rate=18%  eps=0.066  step= 90783  (33s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  23/100] scen=pfsp           rank=2/5  score=  230.5  win_rate=17%  eps=0.066  step= 91040  (34s)
+  [W0 ep  24/100] scen=boss_mode_trio rank=4/4  score=   87.4  win_rate=17%  eps=0.065  step= 91266  (35s)
+  [W0 ep  25/100] scen=boss_mode_trio rank=3/4  score=  590.0  win_rate=16%  eps=0.065  step= 91667  (37s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  26/100] scen=pfsp           rank=2/5  score=  345.6  win_rate=15%  eps=0.064  step= 91975  (38s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  27/100] scen=pfsp           rank=1/5  score=  433.3  win_rate=19%  eps=0.064  step= 92259  (41s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  28/100] scen=pfsp           rank=3/5  score=  279.5  win_rate=18%  eps=0.063  step= 92556  (49s)
+  [W0 ep  29/100] scen=boss_mode_solo rank=2/2  score=  690.0  win_rate=17%  eps=0.063  step= 92957  (55s)
+  [W0 ep  30/100] scen=pure_rule      rank=3/5  score=  540.0  win_rate=17%  eps=0.062  step= 93358  (60s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  31/100] scen=pfsp           rank=5/5  score=   69.2  win_rate=16%  eps=0.062  step= 93552  (62s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  32/100] scen=pfsp           rank=2/5  score=  462.5  win_rate=16%  eps=0.061  step= 93929  (63s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  33/100] scen=pfsp           rank=4/5  score=  205.7  win_rate=15%  eps=0.061  step= 94188  (65s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  34/100] scen=pfsp           rank=1/5  score=  359.7  win_rate=18%  eps=0.060  step= 94386  (66s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  35/100] scen=pfsp           rank=2/5  score=  228.5  win_rate=17%  eps=0.060  step= 94623  (70s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  36/100] scen=pfsp           rank=3/5  score=  258.2  win_rate=17%  eps=0.059  step= 94907  (71s)
+  [W0 ep  37/100] scen=boss_mode_solo rank=2/2  score=  129.8  win_rate=16%  eps=0.059  step= 95107  (72s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  38/100] scen=pfsp           rank=2/5  score=  313.0  win_rate=16%  eps=0.058  step= 95389  (73s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  39/100] scen=pfsp           rank=3/5  score=  142.8  win_rate=15%  eps=0.058  step= 95619  (74s)
+  [W0 ep  40/100] scen=pure_rule      rank=2/5  score=  310.0  win_rate=15%  eps=0.057  step= 95921  (82s)
+  [W0 ep  41/100] scen=boss_mode_trio rank=3/4  score=  489.3  win_rate=15%  eps=0.057  step= 96316  (85s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  42/100] scen=pfsp           rank=3/5  score=  207.7  win_rate=14%  eps=0.056  step= 96595  (86s)
+  [W0 ep  43/100] scen=boss_mode_solo rank=2/2  score=  545.0  win_rate=14%  eps=0.056  step= 96996  (88s)
+  [W0 ep  44/100] scen=boss_mode_trio rank=3/4  score=  402.7  win_rate=14%  eps=0.055  step= 97325  (92s)
+  [W0 ep  45/100] scen=boss_mode_trio rank=4/4  score=  162.9  win_rate=13%  eps=0.055  step= 97556  (99s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  46/100] scen=pfsp           rank=3/5  score=  353.0  win_rate=13%  eps=0.055  step= 97888  (111s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  47/100] scen=pfsp           rank=2/5  score=  690.0  win_rate=13%  eps=0.054  step= 98289  (114s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  48/100] scen=pfsp           rank=3/5  score=  196.8  win_rate=12%  eps=0.054  step= 98559  (115s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  49/100] scen=pfsp           rank=3/5  score=  152.2  win_rate=12%  eps=0.053  step= 98783  (117s)
+  [W0 ep  50/100] scen=pure_rule      rank=2/5  score=  398.3  win_rate=12%  eps=0.053  step= 99168  (121s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  51/100] scen=pfsp           rank=2/5  score=  237.9  win_rate=12%  eps=0.052  step= 99449  (122s)
+  [W0 ep  52/100] scen=boss_mode_trio rank=4/4  score=  221.9  win_rate=12%  eps=0.052  step= 99720  (124s)
+  [W0 ep  53/100] scen=boss_mode_trio rank=3/4  score=  401.8  win_rate=11%  eps=0.052  step=100040  (125s)
+  [W0 ep  54/100] scen=boss_mode_solo rank=1/2  score=  600.0  win_rate=13%  eps=0.051  step=100441  (127s)
+  [W0 ep  55/100] scen=boss_mode_trio rank=4/4  score=  247.5  win_rate=13%  eps=0.051  step=100718  (128s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  56/100] scen=pfsp           rank=2/5  score=  605.0  win_rate=12%  eps=0.050  step=101119  (129s)
+  [W0 ep  57/100] scen=boss_mode_solo rank=2/2  score=  555.0  win_rate=12%  eps=0.050  step=101520  (131s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  58/100] scen=pfsp           rank=3/5  score=  146.6  win_rate=12%  eps=0.050  step=101738  (132s)
+2026-05-31 13:52:11,980 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:14,431 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:19,006 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:26,249 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:28,726 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:33,314 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:39,296 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:41,920 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:44,152 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:48,098 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:51,107 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:52:55,380 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:02,040 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:02,477 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.079
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep   1/100] scen=pfsp           rank=2/5  score=  720.0  win_rate=0%  eps=0.078  step= 86380  (1s)
+  [W1 ep   2/100] scen=boss_mode_trio rank=3/4  score=  270.5  win_rate=0%  eps=0.078  step= 86380  (2s)
+  [W1 ep   3/100] scen=boss_mode_trio rank=2/4  score=  645.0  win_rate=0%  eps=0.077  step= 86488  (4s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep   4/100] scen=pfsp           rank=2/5  score=  341.2  win_rate=0%  eps=0.077  step= 86802  (8s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep   5/100] scen=pfsp           rank=3/5  score=  284.3  win_rate=0%  eps=0.076  step= 87097  (10s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep   6/100] scen=pfsp           rank=1/5  score=  566.3  win_rate=17%  eps=0.075  step= 87361  (12s)
+  [W1 ep   7/100] scen=boss_mode_trio rank=3/4  score=  425.7  win_rate=14%  eps=0.075  step= 87720  (13s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep   8/100] scen=pfsp           rank=3/5  score=  263.9  win_rate=12%  eps=0.074  step= 88011  (16s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep   9/100] scen=pfsp           rank=2/5  score=  240.9  win_rate=11%  eps=0.074  step= 88272  (21s)
+  [W1 ep  10/100] scen=pure_rule      rank=4/5  score=   36.9  win_rate=10%  eps=0.073  step= 88293  (22s)
+  [W1 ep  11/100] scen=boss_mode_trio rank=4/4  score=  332.9  win_rate=9%  eps=0.072  step= 88624  (28s)
+  [W1 ep  12/100] scen=boss_mode_trio rank=1/4  score=  670.0  win_rate=17%  eps=0.072  step= 89025  (35s)
+  [W1 ep  13/100] scen=boss_mode_solo rank=2/2  score=  426.3  win_rate=15%  eps=0.071  step= 89390  (40s)
+  [W1 ep  14/100] scen=boss_mode_solo rank=2/2  score=  144.2  win_rate=14%  eps=0.071  step= 89584  (41s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  15/100] scen=pfsp           rank=3/5  score=   76.6  win_rate=13%  eps=0.070  step= 89752  (42s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  16/100] scen=pfsp           rank=3/5  score=  242.3  win_rate=12%  eps=0.069  step= 90027  (43s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  17/100] scen=pfsp           rank=5/5  score=  105.0  win_rate=12%  eps=0.069  step= 90229  (44s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  18/100] scen=pfsp           rank=2/5  score=  352.8  win_rate=11%  eps=0.068  step= 90559  (51s)
+  [W1 ep  19/100] scen=boss_mode_trio rank=4/4  score=  196.1  win_rate=11%  eps=0.068  step= 90822  (56s)
+  [W1 ep  20/100] scen=pure_rule      rank=1/5  score=  162.1  win_rate=15%  eps=0.067  step= 90844  (56s)
+  [W1 ep  21/100] scen=boss_mode_trio rank=4/4  score=  220.9  win_rate=14%  eps=0.067  step= 91105  (57s)
+  [W1 ep  22/100] scen=boss_mode_solo rank=2/2  score=  315.1  win_rate=14%  eps=0.066  step= 91408  (59s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  23/100] scen=pfsp           rank=4/5  score=  204.7  win_rate=13%  eps=0.066  step= 91657  (60s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  24/100] scen=pfsp           rank=1/5  score=  263.7  win_rate=17%  eps=0.065  step= 91845  (61s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  25/100] scen=pfsp           rank=2/5  score=  331.4  win_rate=16%  eps=0.065  step= 92161  (68s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  26/100] scen=pfsp           rank=2/5  score=  185.5  win_rate=15%  eps=0.064  step= 92418  (74s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  27/100] scen=pfsp           rank=3/5  score=  199.6  win_rate=15%  eps=0.064  step= 92666  (81s)
+  [W1 ep  28/100] scen=boss_mode_solo rank=2/2  score=  173.0  win_rate=14%  eps=0.063  step= 92898  (84s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  29/100] scen=pfsp           rank=1/5  score=  765.0  win_rate=17%  eps=0.063  step= 93299  (91s)
+  [W1 ep  30/100] scen=pure_rule      rank=1/5  score=  312.6  win_rate=20%  eps=0.062  step= 93526  (96s)
+  [W1 ep  31/100] scen=boss_mode_solo rank=1/2  score=  655.0  win_rate=23%  eps=0.062  step= 93927  (108s)
+  [W1 ep  32/100] scen=boss_mode_trio rank=4/4  score=  159.7  win_rate=22%  eps=0.061  step= 94176  (116s)
+  [W1 ep  33/100] scen=boss_mode_solo rank=2/2  score=  363.1  win_rate=21%  eps=0.061  step= 94509  (128s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  34/100] scen=pfsp           rank=4/5  score=  195.8  win_rate=21%  eps=0.060  step= 94769  (134s)
+  [W1 ep  35/100] scen=boss_mode_trio rank=4/4  score=  192.6  win_rate=20%  eps=0.060  step= 95047  (137s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  36/100] scen=pfsp           rank=1/5  score=  495.5  win_rate=22%  eps=0.059  step= 95353  (138s)
+  [W1 ep  37/100] scen=boss_mode_trio rank=3/4  score=  135.4  win_rate=22%  eps=0.059  step= 95559  (139s)
+  [W1 ep  38/100] scen=boss_mode_solo rank=2/2  score=   58.9  win_rate=21%  eps=0.058  step= 95650  (139s)
+  [W1 ep  39/100] scen=boss_mode_trio rank=4/4  score=  281.1  win_rate=21%  eps=0.058  step= 95963  (141s)
+  [W1 ep  40/100] scen=pure_rule      rank=3/5  score=  236.0  win_rate=20%  eps=0.057  step= 96225  (143s)
+  [W1 ep  41/100] scen=boss_mode_trio rank=4/4  score=   57.4  win_rate=20%  eps=0.057  step= 96401  (144s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  42/100] scen=pfsp           rank=5/5  score=   72.2  win_rate=19%  eps=0.056  step= 96575  (145s)
+  [W1 ep  43/100] scen=boss_mode_trio rank=1/4  score=  540.0  win_rate=21%  eps=0.056  step= 96976  (152s)
+  [W1 ep  44/100] scen=boss_mode_trio rank=4/4  score=   89.9  win_rate=20%  eps=0.055  step= 97177  (161s)
+  [W1 ep  45/100] scen=boss_mode_trio rank=3/4  score=  304.6  win_rate=20%  eps=0.055  step= 97425  (162s)
+  [W1 ep  46/100] scen=boss_mode_trio rank=4/4  score=   83.9  win_rate=20%  eps=0.055  step= 97616  (163s)
+  [W1 ep  47/100] scen=boss_mode_trio rank=4/4  score=  135.2  win_rate=19%  eps=0.054  step= 97820  (164s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  48/100] scen=pfsp           rank=2/5  score=  265.6  win_rate=19%  eps=0.054  step= 98078  (165s)
+  [W1 ep  49/100] scen=boss_mode_trio rank=3/4  score=  166.7  win_rate=18%  eps=0.053  step= 98297  (166s)
+  [W1 ep  50/100] scen=pure_rule      rank=4/5  score=  124.5  win_rate=18%  eps=0.053  step= 98494  (167s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  51/100] scen=pfsp           rank=4/5  score=  113.6  win_rate=18%  eps=0.052  step= 98682  (168s)
+  [W1 ep  52/100] scen=boss_mode_trio rank=4/4  score=  119.6  win_rate=17%  eps=0.052  step= 98880  (168s)
+  [W1 ep  53/100] scen=boss_mode_solo rank=2/2  score=  116.5  win_rate=17%  eps=0.052  step= 99047  (169s)
+  [W1 ep  54/100] scen=boss_mode_solo rank=2/2  score=  169.0  win_rate=17%  eps=0.051  step= 99239  (170s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  55/100] scen=pfsp           rank=2/5  score=  144.0  win_rate=16%  eps=0.051  step= 99431  (171s)
+  [W1 ep  56/100] scen=boss_mode_trio rank=4/4  score=   87.2  win_rate=16%  eps=0.050  step= 99655  (172s)
+  [W1 ep  57/100] scen=boss_mode_trio rank=4/4  score=  142.2  win_rate=16%  eps=0.050  step= 99879  (173s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  58/100] scen=pfsp           rank=3/5  score=  187.3  win_rate=16%  eps=0.050  step=100104  (178s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  59/100] scen=pfsp           rank=4/5  score=   98.5  win_rate=15%  eps=0.050  step=100291  (184s)
+  [W1 ep  60/100] scen=pure_rule      rank=3/5  score=  208.8  win_rate=15%  eps=0.050  step=100531  (187s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  61/100] scen=pfsp           rank=3/5  score=   65.3  win_rate=15%  eps=0.050  step=100686  (188s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+2026-05-31 13:53:08,548 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:08,563 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:12,727 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:19,467 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:22,055 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:26,615 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:31,239 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:34,309 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+  [W2 ep  64/100] scen=pfsp           rank=5/5  score=   71.3  win_rate=9%  eps=0.050  step=101705  (119s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  65/100] scen=pfsp           rank=3/5  score=  332.2  win_rate=9%  eps=0.050  step=102029  (120s)
+  [W2 ep  66/100] scen=boss_mode_solo rank=2/2  score=  107.4  win_rate=9%  eps=0.050  step=102205  (127s)
+  [W2 ep  67/100] scen=boss_mode_trio rank=4/4  score=  247.8  win_rate=9%  eps=0.050  step=102485  (134s)
+  [W2 ep  68/100] scen=boss_mode_trio rank=3/4  score=  147.2  win_rate=9%  eps=0.050  step=102709  (135s)
+  [W2 ep  69/100] scen=boss_mode_trio rank=4/4  score=  159.2  win_rate=9%  eps=0.050  step=102953  (136s)
+  [W2 ep  70/100] scen=pure_rule      rank=3/5  score=  325.0  win_rate=9%  eps=0.050  step=103154  (141s)
+  [W2 ep  71/100] scen=boss_mode_solo rank=1/2  score=  496.8  win_rate=10%  eps=0.050  step=103523  (145s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  72/100] scen=pfsp           rank=1/5  score=  421.7  win_rate=11%  eps=0.050  step=103641  (148s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  73/100] scen=pfsp           rank=2/5  score=  298.6  win_rate=11%  eps=0.050  step=103929  (149s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  74/100] scen=pfsp           rank=2/5  score=  303.2  win_rate=11%  eps=0.050  step=104213  (151s)
+  [W2 ep  75/100] scen=boss_mode_trio rank=4/4  score=  123.4  win_rate=11%  eps=0.050  step=104399  (159s)
+  [W2 ep  76/100] scen=boss_mode_trio rank=4/4  score=  117.2  win_rate=11%  eps=0.050  step=104623  (159s)
+  [W2 ep  77/100] scen=boss_mode_trio rank=4/4  score=   89.4  win_rate=10%  eps=0.050  step=104819  (160s)
+  [W2 ep  78/100] scen=boss_mode_trio rank=3/4  score=  325.9  win_rate=10%  eps=0.050  step=105130  (164s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  79/100] scen=pfsp           rank=2/5  score=  303.7  win_rate=10%  eps=0.050  step=105419  (173s)
+  [W2 ep  80/100] scen=pure_rule      rank=3/5  score=  122.6  win_rate=10%  eps=0.050  step=105447  (173s)
+  [W2 ep  81/100] scen=boss_mode_trio rank=4/4  score=   63.3  win_rate=10%  eps=0.050  step=105632  (174s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  82/100] scen=pfsp           rank=2/5  score=  292.2  win_rate=10%  eps=0.050  step=105956  (175s)
+  [W2 ep  83/100] scen=boss_mode_trio rank=4/4  score=  184.5  win_rate=10%  eps=0.050  step=106203  (176s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  84/100] scen=pfsp           rank=4/5  score=  103.1  win_rate=10%  eps=0.050  step=106386  (177s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  85/100] scen=pfsp           rank=1/5  score=  624.2  win_rate=11%  eps=0.050  step=106779  (179s)
+  [W2 ep  86/100] scen=boss_mode_solo rank=2/2  score=  135.3  win_rate=10%  eps=0.050  step=106984  (180s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  87/100] scen=pfsp           rank=2/5  score=  499.6  win_rate=10%  eps=0.050  step=107382  (181s)
+  [W2 ep  88/100] scen=boss_mode_trio rank=2/4  score=  555.0  win_rate=10%  eps=0.050  step=107783  (183s)
+  [W2 ep  89/100] scen=boss_mode_trio rank=4/4  score=  201.1  win_rate=10%  eps=0.050  step=108046  (184s)
+  [W2 ep  90/100] scen=pure_rule      rank=4/5  score=  140.7  win_rate=10%  eps=0.050  step=108255  (187s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  91/100] scen=pfsp           rank=4/5  score=  168.1  win_rate=10%  eps=0.050  step=108488  (191s)
+  [W2 ep  92/100] scen=boss_mode_solo rank=2/2  score=  238.2  win_rate=10%  eps=0.050  step=108722  (192s)
+  [W2 ep  93/100] scen=boss_mode_trio rank=3/4  score=  126.5  win_rate=10%  eps=0.050  step=108939  (193s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W2 ep  94/100] scen=pfsp           rank=2/5  score=  386.5  win_rate=10%  eps=0.050  step=109256  (195s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W2 ep  95/100] scen=pfsp           rank=2/5  score=  660.0  win_rate=9%  eps=0.050  step=109657  (196s)
+  [W2 ep  96/100] scen=boss_mode_trio rank=4/4  score=   24.0  win_rate=9%  eps=0.050  step=109799  (197s)
+  [W2 ep  97/100] scen=boss_mode_solo rank=2/2  score=  615.0  win_rate=9%  eps=0.050  step=110200  (204s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W2 ep  98/100] scen=pfsp           rank=3/5  score=  194.7  win_rate=9%  eps=0.050  step=110449  (212s)
+  [W2 ep  99/100] scen=boss_mode_solo rank=2/2  score=  192.8  win_rate=9%  eps=0.050  step=110679  (216s)
+  [W2 ep 100/100] scen=pure_rule      rank=3/5  score=   87.8  win_rate=9%  eps=0.050  step=110709  (216s)
+2026-05-31 13:53:36,872 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:37,482 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+  [W0 ep  59/100] scen=boss_mode_solo rank=2/2  score=  351.2  win_rate=12%  eps=0.050  step=102052  (133s)
+  [W0 ep  60/100] scen=pure_rule      rank=2/5  score=  214.9  win_rate=12%  eps=0.050  step=102303  (139s)
+  [W0 ep  61/100] scen=boss_mode_trio rank=4/4  score=  104.7  win_rate=11%  eps=0.050  step=102502  (143s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  62/100] scen=pfsp           rank=2/5  score=  219.2  win_rate=11%  eps=0.050  step=102746  (146s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  63/100] scen=pfsp           rank=3/5  score=  129.6  win_rate=11%  eps=0.050  step=102944  (147s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  64/100] scen=pfsp           rank=2/5  score=  209.1  win_rate=11%  eps=0.050  step=103187  (148s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  65/100] scen=pfsp           rank=1/5  score=  307.1  win_rate=12%  eps=0.050  step=103409  (151s)
+  [W0 ep  66/100] scen=boss_mode_trio rank=4/4  score=   89.9  win_rate=12%  eps=0.050  step=103610  (152s)
+  [W0 ep  67/100] scen=boss_mode_trio rank=3/4  score=  386.2  win_rate=12%  eps=0.050  step=103974  (153s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  68/100] scen=pfsp           rank=2/5  score=  261.4  win_rate=12%  eps=0.050  step=104240  (155s)
+  [W0 ep  69/100] scen=boss_mode_solo rank=1/2  score=  309.5  win_rate=13%  eps=0.050  step=104386  (155s)
+  [W0 ep  70/100] scen=pure_rule      rank=3/5  score=   61.0  win_rate=13%  eps=0.050  step=104398  (155s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  71/100] scen=pfsp           rank=2/5  score=  294.3  win_rate=13%  eps=0.050  step=104693  (156s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  72/100] scen=pfsp           rank=5/5  score=   63.5  win_rate=12%  eps=0.050  step=104880  (157s)
+  [W0 ep  73/100] scen=boss_mode_trio rank=4/4  score=  120.2  win_rate=12%  eps=0.050  step=105084  (158s)
+  [W0 ep  74/100] scen=boss_mode_solo rank=2/2  score=  305.2  win_rate=12%  eps=0.050  step=105388  (164s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  75/100] scen=pfsp           rank=3/5  score=  204.5  win_rate=12%  eps=0.050  step=105635  (173s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  76/100] scen=pfsp           rank=4/5  score=   75.9  win_rate=12%  eps=0.050  step=105696  (177s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  77/100] scen=pfsp           rank=2/5  score=  399.2  win_rate=12%  eps=0.050  step=106040  (185s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  78/100] scen=pfsp           rank=3/5  score=  172.5  win_rate=12%  eps=0.050  step=106267  (186s)
+  [W0 ep  79/100] scen=boss_mode_trio rank=4/4  score=  211.4  win_rate=11%  eps=0.050  step=106533  (190s)
+  [W0 ep  80/100] scen=pure_rule      rank=4/5  score=  161.4  win_rate=11%  eps=0.050  step=106549  (191s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  81/100] scen=pfsp           rank=3/5  score=  177.1  win_rate=11%  eps=0.050  step=106772  (197s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  82/100] scen=pfsp           rank=2/5  score=  352.6  win_rate=11%  eps=0.050  step=107100  (202s)
+  [W0 ep  83/100] scen=boss_mode_trio rank=4/4  score=   51.6  win_rate=11%  eps=0.050  step=107268  (203s)
+  [W0 ep  84/100] scen=boss_mode_solo rank=2/2  score=  332.0  win_rate=11%  eps=0.050  step=107590  (204s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W0 ep  85/100] scen=pfsp           rank=3/5  score=  109.1  win_rate=11%  eps=0.050  step=107783  (205s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  86/100] scen=pfsp           rank=4/5  score=  138.8  win_rate=10%  eps=0.050  step=107973  (206s)
+  [W0 ep  87/100] scen=boss_mode_solo rank=2/2  score=  104.4  win_rate=10%  eps=0.050  step=108169  (206s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  88/100] scen=pfsp           rank=3/5  score=  143.5  win_rate=10%  eps=0.050  step=108406  (207s)
+  [W0 ep  89/100] scen=boss_mode_solo rank=2/2  score=  320.3  win_rate=10%  eps=0.050  step=108711  (208s)
+  [W0 ep  90/100] scen=pure_rule      rank=3/5  score=  188.3  win_rate=10%  eps=0.050  step=108896  (209s)
+  [W0 ep  91/100] scen=boss_mode_solo rank=2/2  score=  171.9  win_rate=10%  eps=0.050  step=109117  (210s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  92/100] scen=pfsp           rank=2/5  score=  161.2  win_rate=10%  eps=0.050  step=109331  (211s)
+  [W0 ep  93/100] scen=boss_mode_trio rank=2/4  score=  242.3  win_rate=10%  eps=0.050  step=109606  (212s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W0 ep  94/100] scen=pfsp           rank=2/5  score=  226.6  win_rate=10%  eps=0.050  step=109874  (213s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W0 ep  95/100] scen=pfsp           rank=3/5  score=  109.4  win_rate=9%  eps=0.050  step=110070  (214s)
+  [W0 ep  96/100] scen=boss_mode_solo rank=2/2  score=  432.2  win_rate=9%  eps=0.050  step=110444  (215s)
+  [W0 ep  97/100] scen=boss_mode_solo rank=2/2  score=  397.1  win_rate=9%  eps=0.050  step=110817  (217s)
+  [W0 ep  98/100] scen=boss_mode_trio rank=4/4  score=   67.4  win_rate=9%  eps=0.050  step=110993  (218s)
+  [W0 ep  99/100] scen=boss_mode_trio rank=4/4  score=   93.9  win_rate=9%  eps=0.050  step=111184  (219s)
+  [W0 ep 100/100] scen=pure_rule      rank=2/5  score=  296.4  win_rate=9%  eps=0.050  step=111500  (220s)
+2026-05-31 13:53:41,485 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:44,357 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:48,214 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:51,084 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:54,934 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+  [W1 ep  62/100] scen=pfsp           rank=4/5  score=   52.4  win_rate=15%  eps=0.050  step=100837  (189s)
+  [W1 ep  63/100] scen=boss_mode_trio rank=4/4  score=   99.8  win_rate=14%  eps=0.050  step=101037  (189s)
+  [W1 ep  64/100] scen=boss_mode_trio rank=4/4  score=   62.5  win_rate=14%  eps=0.050  step=101214  (190s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  65/100] scen=pfsp           rank=4/5  score=  178.3  win_rate=14%  eps=0.050  step=101449  (195s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  66/100] scen=pfsp           rank=4/5  score=  211.2  win_rate=14%  eps=0.050  step=101713  (198s)
+  [W1 ep  67/100] scen=boss_mode_trio rank=4/4  score=  162.8  win_rate=13%  eps=0.050  step=101943  (199s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  68/100] scen=pfsp           rank=2/5  score=  208.1  win_rate=13%  eps=0.050  step=102176  (200s)
+  [W1 ep  69/100] scen=boss_mode_trio rank=3/4  score=  190.6  win_rate=13%  eps=0.050  step=102434  (201s)
+  [W1 ep  70/100] scen=pure_rule      rank=2/5  score=  200.8  win_rate=13%  eps=0.050  step=102593  (208s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  71/100] scen=pfsp           rank=3/5  score=  161.4  win_rate=13%  eps=0.050  step=102809  (216s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  72/100] scen=pfsp           rank=3/5  score=  218.9  win_rate=12%  eps=0.050  step=103100  (217s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  73/100] scen=pfsp           rank=2/5  score=  334.2  win_rate=12%  eps=0.050  step=103344  (218s)
+  [W1 ep  74/100] scen=boss_mode_trio rank=3/4  score=  156.6  win_rate=12%  eps=0.050  step=103562  (219s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  75/100] scen=pfsp           rank=3/5  score=  492.5  win_rate=12%  eps=0.050  step=103939  (221s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  76/100] scen=pfsp           rank=5/5  score=  122.4  win_rate=12%  eps=0.050  step=104165  (222s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  77/100] scen=pfsp           rank=5/5  score=   87.9  win_rate=12%  eps=0.050  step=104346  (222s)
+  [W1 ep  78/100] scen=boss_mode_solo rank=2/2  score=  104.2  win_rate=12%  eps=0.050  step=104389  (222s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  79/100] scen=pfsp           rank=3/5  score=  172.4  win_rate=11%  eps=0.050  step=104615  (223s)
+  [W1 ep  80/100] scen=pure_rule      rank=3/5  score=   46.7  win_rate=11%  eps=0.050  step=104634  (223s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  81/100] scen=pfsp           rank=5/5  score=   52.1  win_rate=11%  eps=0.050  step=104657  (224s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  82/100] scen=pfsp           rank=1/5  score=  675.0  win_rate=12%  eps=0.050  step=105058  (225s)
+  [W1 ep  83/100] scen=boss_mode_solo rank=2/2  score=  117.2  win_rate=12%  eps=0.050  step=105232  (225s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  84/100] scen=pfsp           rank=4/5  score=   62.5  win_rate=12%  eps=0.050  step=105409  (226s)
+  [W1 ep  85/100] scen=boss_mode_solo rank=2/2  score=  293.4  win_rate=12%  eps=0.050  step=105695  (227s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  86/100] scen=pfsp           rank=4/5  score=  125.7  win_rate=12%  eps=0.050  step=105904  (228s)
+  [W1 ep  87/100] scen=boss_mode_trio rank=4/4  score=   93.1  win_rate=11%  eps=0.050  step=106087  (228s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  88/100] scen=pfsp           rank=4/5  score=  100.6  win_rate=11%  eps=0.050  step=106295  (229s)
+  [W1 ep  89/100] scen=boss_mode_solo rank=2/2  score=  214.3  win_rate=11%  eps=0.050  step=106540  (230s)
+  [W1 ep  90/100] scen=pure_rule      rank=2/5  score=  112.2  win_rate=11%  eps=0.050  step=106564  (230s)
+  [W1 ep  91/100] scen=boss_mode_trio rank=4/4  score=   67.1  win_rate=11%  eps=0.050  step=106737  (231s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  92/100] scen=pfsp           rank=1/5  score=  271.7  win_rate=12%  eps=0.050  step=106955  (231s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  93/100] scen=pfsp           rank=3/5  score=  124.8  win_rate=12%  eps=0.050  step=107155  (232s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  94/100] scen=pfsp           rank=3/5  score=   98.8  win_rate=12%  eps=0.050  step=107345  (233s)
+  [W1 ep  95/100] scen=boss_mode_trio rank=4/4  score=   94.6  win_rate=12%  eps=0.050  step=107543  (234s)
+[RLBossBotTorch] device=cpu, ep=113, step=33345, eps=0.000
+  [W1 ep  96/100] scen=pfsp           rank=3/5  score=  172.0  win_rate=11%  eps=0.050  step=107765  (234s)
+[RLBossBotTorch] device=cpu, ep=216, step=60974, eps=0.000
+  [W1 ep  97/100] scen=pfsp           rank=3/5  score=  257.5  win_rate=11%  eps=0.050  step=108042  (235s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  98/100] scen=pfsp           rank=3/5  score=   97.3  win_rate=11%  eps=0.050  step=108217  (236s)
+[RLBossBotTorch] device=cpu, ep=316, step=86380, eps=0.000
+  [W1 ep  99/100] scen=pfsp           rank=3/5  score=  156.0  win_rate=11%  eps=0.050  step=108429  (237s)
+  [W1 ep 100/100] scen=pure_rule      rank=2/5  score=  144.6  win_rate=11%  eps=0.050  step=108627  (237s)
+2026-05-31 13:53:55,791 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/league/gen_00416.pt → gs://knu-2026-boss-weights/league/gen_00416.pt
+2026-05-31 13:53:55,958 [INFO] JSON uploaded: league/league_index.json → gs://knu-2026-boss-weights/league/league_index.json
+2026-05-31 13:53:55,959 [INFO] league.snapshot: gen=416 win_rate=0.097 → gen_00416.pt (총 4개)
+2026-05-31 13:53:56,042 [WARNING] REGRESSION ALERT: pure_rule top2 43.3% < 50% — forgetting 의심
+2026-05-31 13:53:56,132 [INFO] JSON uploaded: training_meta.json → gs://knu-2026-boss-weights/training_meta.json
+2026-05-31 13:53:56,237 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → gs://knu-2026-boss-weights/boss_weights.pt
+2026-05-31 13:53:57,241 [INFO] torch checkpoint 로드: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt
+2026-05-31 13:53:57,350 [INFO] 변환 완료: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights_torch.pt → /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights.json (gen=416, step=108627, eps=0.050)
+2026-05-31 13:53:57,392 [INFO] 변환 검증 통과: OK
+2026-05-31 13:53:57,511 [INFO] Weights uploaded: /home/hangloss0331/loa-main/backend/battle_royale/bots/boss/trained_weights.json → gs://knu-2026-boss-weights/trained_weights.json
+2026-05-31 13:53:57,513 [INFO] VM 자동 종료: boss-training-vm (zone=asia-northeast3-a)
+Stopping instance(s) boss-training-vm...

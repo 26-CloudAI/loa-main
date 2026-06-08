@@ -120,6 +120,7 @@ loa-main/
 | **[03-infrastructure.md](03-infrastructure.md)** | 학습 VM 설계, GCS 레이아웃, Cloud Scheduler 의도(미완성), 비용 | 인프라를 *운영·확장* 하려는 사람 |
 | **[04-status.md](04-status.md)** | gen_00011 학습 결과, 알려진 한계, 다음 단계 후보 | 현재 상태를 *정확히 알고 싶은* 사람 |
 | **[references.md](references.md)** | 참고 논문·교과서 (DQN, PFSP, reward shaping 등) — 본 프로젝트 ↔ 인용 매핑 표 | 발표·보고서에 *인용* 하려는 사람 |
+| **[training-evidence.md](training-evidence.md)** | 실제 학습 수행 증거 (로그·체크포인트·곡선 PNG·VM·GCS) — raw 데이터 위치 포함 | "강화학습 했다" 의 *정량 증거* 가 필요한 사람 |
 
 기존 자료(중복 부분 있음):
 - [`docs/br2_boss_rl_design.md`](../br2_boss_rl_design.md) — 인프라 contract (2026-06-02 작성, 학습 환경 미결정 시점)

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-31T13:53:55.866290+00:00",
+  "entries": [
+    {
+      "generation": 110,
+      "filename": "gen_00110.pt",
+      "archived_at": "2026-05-26T07:12:45.644204+00:00",
+      "win_rate": 0.4266666666666667,
+      "epsilon": 0.41331763620360423,
+      "step_count": 33310,
+      "session_episodes": 300,
+      "notes": "trained_bots=0"
+    },
+    {
+      "generation": 216,
+      "filename": "gen_00216.pt",
+      "archived_at": "2026-05-31T12:54:35.258932+00:00",
+      "win_rate": 0.19,
+      "epsilon": 0.176409181647329,
+      "step_count": 63271,
+      "session_episodes": 300,
+      "notes": "trained_bots=0"
+    },
+    {
+      "generation": 317,
+      "filename": "gen_00317.pt",
+      "archived_at": "2026-05-31T13:14:26.589371+00:00",
+      "win_rate": 0.13,
+      "epsilon": 0.07837906400557086,
+      "step_count": 86380,
+      "session_episodes": 300,
+      "notes": "trained_bots=0"
+    },
+    {
+      "generation": 416,
+      "filename": "gen_00416.pt",
+      "archived_at": "2026-05-31T13:53:55.698258+00:00",
+      "win_rate": 0.09666666666666666,
+      "epsilon": 0.05,
+      "step_count": 111500,
+      "session_episodes": 300,
+      "notes": "trained_bots=0"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+total 460
+drwxr-xr-x 2 hangloss0331 hangloss0331   4096 Jun  4 10:12 .
+drwxr-xr-x 4 hangloss0331 hangloss0331   4096 Jun  4 09:24 ..
+-rw-r--r-- 1 hangloss0331 hangloss0331    960 Jun  4 09:07 README.md
+-rw-r--r-- 1 hangloss0331 hangloss0331 228682 Jun  4 09:24 gen_00001.npz
+-rw-r--r-- 1 hangloss0331 hangloss0331 228682 Jun  4 10:12 gen_00011.npz

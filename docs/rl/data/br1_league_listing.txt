@@ -1,0 +1,8 @@
+total 2972
+drwxr-xr-x 2 hangloss0331 hangloss0331   4096 May 31 13:53 .
+drwxr-xr-x 4 hangloss0331 hangloss0331   4096 Jun  4 09:07 ..
+-rw-r--r-- 1 hangloss0331 hangloss0331 756529 May 26 07:12 gen_00110.pt
+-rw-r--r-- 1 hangloss0331 hangloss0331 756529 May 31 12:54 gen_00216.pt
+-rw-r--r-- 1 hangloss0331 hangloss0331 756529 May 31 13:14 gen_00317.pt
+-rw-r--r-- 1 hangloss0331 hangloss0331 756529 May 31 13:53 gen_00416.pt
+-rw-r--r-- 1 hangloss0331 hangloss0331   1226 May 31 13:53 league_index.json
