@@ -828,10 +828,19 @@ class MatchSession:
         else:
             target = max(len(spec), min(8, bot_count))
         rng = random.Random(seed)
-        type_counts: dict[str, int] = {}
         fill_n = max(0, target - len(spec))
-        for i in range(fill_n):
-            label, cls = rng.choice(_AI_FILLERS)
+        # AI 채움을 3종(초식/미친개/존버)에 균등 분배 — 특정 종류(미친개) 쏠림 방지.
+        #   각 종류 fill_n//3 개씩 기본 배치 + 나머지(fill_n%3)는 서로 다른 랜덤 종류로 1개씩.
+        #   예: 1→랜덤1종 / 2→랜덤2종 / 3→1종씩 / 4→1종씩+랜덤1 / 7→2종씩+랜덤1.
+        n_types = len(_AI_FILLERS)
+        base, rem = divmod(fill_n, n_types)
+        chosen = list(_AI_FILLERS) * base
+        extra = list(_AI_FILLERS)
+        rng.shuffle(extra)
+        chosen += extra[:rem]
+        rng.shuffle(chosen)   # 스폰 순서 섞기(분배 수는 이미 균등)
+        type_counts: dict[str, int] = {}
+        for i, (label, cls) in enumerate(chosen):
             type_counts[label] = type_counts.get(label, 0) + 1
             bid = "ai_%d" % i
             name = "%s %d" % (label, type_counts[label])
