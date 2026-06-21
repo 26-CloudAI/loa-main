@@ -210,3 +210,27 @@ def test_db_on_abandon_does_not_overwrite_finished(client, repo):
     g = repo.get_game(gid)
     assert g.status == "finished"
     assert g.end_reason == "last_standing"   # abandoned 로 안 바뀜
+
+
+def test_runner_exit_marks_stuck_game(client, repo):
+    """러너 비정상 종료 콜백(_on_runner_exit) → 진행 중 게임을 status='error' 로 종료 처리."""
+    body = {"bots": [{"bot_id": "b", "name": "봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    repo.update_game_started(gid)               # running 상태로
+    ws._on_runner_exit(gid, rc=139, reason="crash")
+    g = repo.get_game(gid)
+    assert g.status == "error"
+    assert g.end_reason == "runner_crash"
+    assert g.finished_at is not None
+
+
+def test_runner_exit_skips_finished_game(client, repo):
+    """이미 finished 인 게임(정상 MATCH_END 후 종료)은 콜백이 덮어쓰지 않는다."""
+    body = {"bots": [{"bot_id": "b", "name": "봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    repo.update_game_finished(gid, final_tick=1800, end_reason="last_standing")
+    changed = repo.update_game_abandoned(gid, end_reason="runner_timeout")
+    assert changed == 0                          # finished 면 변경 없음
+    g = repo.get_game(gid)
+    assert g.status == "finished"
+    assert g.end_reason == "last_standing"

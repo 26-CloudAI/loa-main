@@ -305,16 +305,12 @@ export default function BattleRoyaleReplayPage() {
     }}>
       {/* Header */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-3 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games/list')}
+        <button onClick={() => navigate(-1)}
           className="text-gray-400 hover:text-white text-sm transition-colors">
-          ◀ 게임 목록
+          ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">{gameName ?? 'LOA - 리플레이'}</span>
-        <span className="text-gray-500 text-sm ml-1">게임 ID: {game_id?.slice(0, 8) ?? ''}…</span>
-        <span className="ml-2 text-xs font-medium bg-indigo-600/30 text-indigo-300 border border-indigo-600/50 rounded-full px-2 py-0.5">
-          🎬 리플레이
-        </span>
+        <span className="font-bold">🎬 {gameName ? `${gameName} 리플레이` : '리플레이'}</span>
       </header>
 
       {/* Main area */}

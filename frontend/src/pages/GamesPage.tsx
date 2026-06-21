@@ -27,6 +27,7 @@ interface GameInfo {
   name?: string | null
   mode?: string
   created_at?: string | null
+  started_at?: string | null
   finished_at?: string | null
   rankings?: RankingEntry[]
 }
@@ -44,6 +45,38 @@ const STATUS_LABEL: Record<GameInfo['status'], string> = {
   running: '진행 중',
   finished: '종료',
   error: '오류',
+}
+
+function fmtMMSS(sec: number): string {
+  sec = Math.max(0, Math.floor(sec))
+  const m = String(Math.floor(sec / 60)).padStart(2, '0')
+  const s = String(sec % 60).padStart(2, '0')
+  return `${m}:${s}`
+}
+
+// 서버 타임스탬프를 epoch(ms)로. SQLite datetime('now') 는 tz 표기 없는 UTC("Y-M-D H:M:S")라
+// JS new Date() 가 로컬(KST)로 오해해 +9h(=540분) 오차가 남 → tz 없으면 UTC('Z')로 보정.
+function parseServerTime(s?: string | null): number {
+  if (!s) return 0
+  const str = s.trim().replace(' ', 'T')
+  const iso = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(str) ? str : str + 'Z'
+  const t = new Date(iso).getTime()
+  return Number.isNaN(t) ? 0 : t
+}
+
+// 게임 목록 시간 표시(보스전 포함 BR2 공통).
+// - 진행 중: started_at 부터 경과(페이지 로드 시점 기준 — 새로고침 때 갱신).
+//   ※ 180초는 마지막 자기장이 멈추는 시점일 뿐 교전은 그 뒤로도 이어지므로 상한 클램프 없음.
+// - 종료: finished_at - started_at(실제 소요). 폴백: current_tick(=final_tick, 결정틱 10/초)/10.
+function fmtGameTime(game: GameInfo): string {
+  const started = parseServerTime(game.started_at)
+  if (game.status === 'running' && started) {
+    return fmtMMSS((Date.now() - started) / 1000)
+  }
+  if (started && game.finished_at) {
+    return fmtMMSS((parseServerTime(game.finished_at) - started) / 1000)
+  }
+  return fmtMMSS((game.current_tick ?? 0) / 10)
 }
 
 const STATUS_COLOR: Record<GameInfo['status'], string> = {
@@ -101,30 +134,35 @@ export default function GamesPage() {
         }),
       ])
 
-      // 메인 /api/games 가 이미 battleroyale2 모드를 포함하고, BR2 전용 API 가 같은 게임을
-      // 다시 반환하므로 game_id 기준 전역 dedup (먼저 들어온 레코드 우선).
-      const merged: GameInfo[] = []
-      const seen = new Set<string>()
-      const pushUnique = (arr: GameInfo[]) => {
+      // 메인 /api/games 와 BR2 전용 API 가 같은 BR2 게임을 둘 다 반환 →
+      // game_id 기준 병합(메인의 current_tick 등 + BR2 의 started_at/finished_at/mode 우선 overlay).
+      const byId = new Map<string, GameInfo>()
+      const mergeAll = (arr: GameInfo[]) => {
         for (const g of arr) {
-          if (seen.has(g.game_id)) continue
-          seen.add(g.game_id)
-          merged.push(g)
+          const prev = byId.get(g.game_id)
+          byId.set(g.game_id, prev ? { ...prev, ...g } : g)
         }
       }
       if (brResult.status === 'fulfilled' && Array.isArray(brResult.value)) {
-        pushUnique(brResult.value as GameInfo[])
+        mergeAll(brResult.value as GameInfo[])
       }
       if (br2Result.status === 'fulfilled' && Array.isArray(br2Result.value)) {
-        pushUnique(br2Result.value as GameInfo[])
+        mergeAll(br2Result.value as GameInfo[])   // BR2 필드(started_at/mode) 우선
+      }
+      // 주식은 별도 dedup (이미 병합된 BR2/메인 게임과 game_id 중복 시 건너뜀, 활성 우선)
+      const pushUnique = (arr: GameInfo[]) => {
+        for (const g of arr) {
+          if (byId.has(g.game_id)) continue
+          byId.set(g.game_id, g)
+        }
       }
       if (stocksActive.status === 'fulfilled' && Array.isArray(stocksActive.value)) {
         pushUnique(stocksActive.value as GameInfo[])
       }
       if (stocksHistory.status === 'fulfilled' && Array.isArray(stocksHistory.value)) {
-        // history는 finished 상태이므로 활성 목록과 game_id 중복 시 활성 우선
         pushUnique(stocksHistory.value as GameInfo[])
       }
+      const merged: GameInfo[] = Array.from(byId.values())
 
       // created_at 기준 내림차순 정렬 (최신 게임이 위로)
       merged.sort((a, b) => {
@@ -266,7 +304,8 @@ function GameCard({ game }: { game: GameInfo }) {
   const shortId = game.game_id.slice(0, 8)
   const modeBadge = game.mode ? MODE_BADGE[game.mode] : null
   const isStocks = game.mode === 'mock-stocks'
-  const isBR2 = game.mode === 'battleroyale2'
+  // 보스전(boss)도 BR2 엔진 → watch/replay/result/시간표시 모두 BR2 경로 사용.
+  const isBR2 = game.mode === 'battleroyale2' || game.mode === 'boss'
   const isFinished = game.status === 'finished'
 
   function handleWatch() {
@@ -293,8 +332,7 @@ function GameCard({ game }: { game: GameInfo }) {
     if (isStocks) {
       navigate(`/games/${game.game_id}/mock-stocks/replay`)
     } else if (isBR2) {
-      // 리플레이 영속화는 다음 작업 — 일단 결과 페이지로
-      navigate(`/games/${game.game_id}/battleroyale/result`)
+      navigate(`/games/${game.game_id}/battleroyale/replay`)
     } else {
       navigate(`/games/${game.game_id}/replay`)
     }
@@ -327,11 +365,18 @@ function GameCard({ game }: { game: GameInfo }) {
 
       {/* 가운데: 진행 정보 */}
       <div className="hidden sm:flex items-center gap-6 text-sm text-gray-400 flex-1 justify-center">
-        <span>
-          틱{' '}
-          <span className="text-white font-medium">{game.current_tick}</span>
-          {' / 200'}
-        </span>
+        {isBR2 ? (
+          <span>
+            시간{' '}
+            <span className="text-white font-medium">{fmtGameTime(game)}</span>
+          </span>
+        ) : (
+          <span>
+            틱{' '}
+            <span className="text-white font-medium">{game.current_tick}</span>
+            {' / 200'}
+          </span>
+        )}
         <span>
           봇{' '}
           <span className="text-white font-medium">{game.total_bots}</span>
@@ -339,7 +384,7 @@ function GameCard({ game }: { game: GameInfo }) {
       </div>
 
       {/* 오른쪽: 관전 / 결과 + 리플레이 버튼 */}
-      <div className="shrink-0 flex items-center gap-2">
+      <div className="shrink-0 flex items-center justify-end gap-2 w-48">
         {isFinished ? (
           <>
             <button

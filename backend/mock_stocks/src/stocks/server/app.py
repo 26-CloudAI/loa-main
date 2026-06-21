@@ -15,8 +15,11 @@ MockStocks — FastAPI 서버
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
+import os as _os
 import sys
+import urllib.request as _urllib
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..bot_interface import BotInterface
@@ -36,6 +40,81 @@ from ..market import Market
 from . import settings as _settings
 from .game_session import GameRegistry
 from .ws_manager import SpectatorManager
+
+# ── Gemini API 키 (코드 생성용) ────────────────────────────────────────────
+try:
+    from gemini_key import GEMINI_API_KEY as _GEMINI_KEY  # type: ignore[import]
+    if _GEMINI_KEY == "여기에_Gemini_API_키_입력":
+        _GEMINI_KEY = None
+except ImportError:
+    _GEMINI_KEY = _os.getenv("GEMINI_API_KEY") or None
+
+
+def _call_gemini_generate(prompt: str, timeout: int = 30) -> str | None:
+    if not _GEMINI_KEY:
+        return None
+    try:
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta"
+            f"/models/gemini-2.5-flash:generateContent?key={_GEMINI_KEY}"
+        )
+        body = _json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"thinkingConfig": {"thinkingBudget": 0}},
+        }).encode("utf-8")
+        req = _urllib.Request(
+            url, data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urllib.urlopen(req, timeout=timeout) as resp:
+            result = _json.loads(resp.read().decode("utf-8"))
+        return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as e:
+        logger.warning("Gemini API 호출 실패: %s", e)
+        return None
+
+
+def _extract_code(text: str) -> str:
+    if "```" in text:
+        for part in text.split("```"):
+            part = part.strip().lstrip("python").strip()
+            if part.startswith(("import ", "from ", "class ", "def ", "#")):
+                return part
+    return text.strip()
+
+
+_STOCKS_SYSTEM_PROMPT = """\
+You are a Python trading bot code generator for a MockStocks game.
+Output ONLY valid Python code with NO explanations, NO markdown.
+
+RULES:
+- Must define: def action(state: dict) -> dict
+- Allowed imports ONLY: math, random, json, collections
+
+STATE:
+  state["tick"]: int                       # current turn 1-200
+  state["my_bot"]["cash"]: float
+  state["my_bot"]["total_value"]: float
+  state["my_bot"]["portfolio"]: dict       # {symbol: quantity_held}
+  state["my_bot"]["short_positions"]: dict # {symbol: quantity_shorted}
+  state["my_bot"]["credit_score"]: int     # 0-1000; SHORT requires >= 800
+  state["market"]["stocks"]: list of {symbol, price, price_history:[floats], volume}
+  state["market"]["news"]: list of str     # recent news strings
+
+RETURN one of:
+  {"action": "HOLD"}
+  {"action": "BUY",   "symbol": "X", "quantity": N}
+  {"action": "SELL",  "symbol": "X", "quantity": N}
+  {"action": "SHORT", "symbol": "X", "quantity": N}    # credit_score >= 800
+  {"action": "COVER", "symbol": "X", "quantity": N}
+  {"action": "INQUIRY"}                                # get next news hint (0.01%/turn interest on HOLD)
+
+Initial capital: 100,000,000 KRW. Win: highest total_value after 200 turns.
+Available stocks: NeoChips, BioFusion, QuantumDrive, SolarEdge, CyberMed,
+DataVault, AeroNext, GreenCore, RoboTech, SpaceMine, NanoMed, HyperGrid,
+OceanFarm, CryptoBase, MindLink.
+"""
 
 
 class BotSubmission(BaseModel):
@@ -78,15 +157,49 @@ def _require_uid(request: Request) -> str:
 
 # ── InProcessBot ──────────────────────────────────────────────────────────────
 
+_FORBIDDEN_BUILTINS = frozenset({
+    "open", "exec", "eval", "compile", "__import__",
+    "input", "breakpoint", "memoryview",
+    "globals", "vars",
+})
+
+_ALLOWED_MODULES = frozenset({"math", "random", "json", "collections", "heapq", "itertools"})
+
+
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
+    root = name.split(".")[0]
+    if root not in _ALLOWED_MODULES:
+        raise ImportError("허용되지 않은 모듈 import: %s" % name)
+    return __import__(name, globals, locals, fromlist, level)
+
+
+def _restricted_builtins() -> dict:
+    import builtins as _b
+    safe = {}
+    for name in dir(_b):
+        if name.startswith("_"):
+            continue
+        if name in _FORBIDDEN_BUILTINS:
+            continue
+        safe[name] = getattr(_b, name)
+    safe["__import__"] = _safe_import
+    safe["__build_class__"] = _b.__build_class__
+    return safe
+
+
+_RESTRICTED_BUILTINS = _restricted_builtins()
+
+
 class InProcessBot(BotInterface):
     """유저 제출 코드를 실행하는 어댑터."""
 
     def __init__(self, bot_id: str, code: str):
         super().__init__(bot_id)
+        self.code = code
         self._action_fn = None
         self._load_error: Optional[str] = None
         try:
-            ns: dict = {"__builtins__": __builtins__}
+            ns: dict = {"__builtins__": _RESTRICTED_BUILTINS}
             exec(code, ns)
             fn = ns.get("action")
             if fn is None or not callable(fn):
@@ -257,6 +370,11 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(request, exc):
+        logger.exception("Unhandled exception in MockStocks: %s %s", request.method, request.url)
+        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
     registry = GameRegistry(spectator_manager)
 
     # Bot Runner readiness 용 DB 상태 노출 (run_server.py /healthz 에서 사용)
@@ -400,6 +518,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
 
     @app.post("/api/games", status_code=201)
     async def create_game(body: CreateGameRequest, request: Request):
+        uid = _require_uid(request)
         cfg = DEFAULT_CONFIG
 
         user_bots: list[BotInterface] = []
@@ -444,7 +563,6 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             if entry is not None:
                 prepared_news = entry.get("queue") or None
 
-        uid = _require_uid(request)
         if registry._repo is None:
             raise HTTPException(503, "MockStocks DB를 사용할 수 없습니다.")
         name = body.name.strip() if body.name else None
@@ -485,6 +603,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
                 initial_cash = session._cfg.game.starting_cash
                 return {
                     "game_id": game_id,
+                    "name": session.name,
                     "status": "finished",
                     "final_tick": result.final_tick,
                     "end_reason": "finished",
@@ -512,6 +631,7 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         participants = repo.get_participants(game_id)
         return {
             "game_id": game_id,
+            "name": game.name,
             "status": "finished",
             "final_tick": game.final_tick,
             "end_reason": game.end_reason,
@@ -562,6 +682,42 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
             "frames": frames,
             "result": result_data,
         }
+
+    @app.get("/api/users/me/bots")
+    async def get_my_bots(request: Request):
+        """인증된 유저의 모의주식 봇 제출 이력을 반환한다."""
+        uid = _require_uid(request)
+        repo = registry._repo
+        if repo is None:
+            return []
+        return repo.get_user_bots(uid)
+
+    @app.get("/api/users/me/stats")
+    async def get_my_stats(request: Request):
+        """인증된 유저의 모의주식 전적을 반환한다."""
+        uid = _require_uid(request)
+        repo = registry._repo
+        if repo is None:
+            return {"games_played": 0, "wins": 0, "losses": 0}
+        return repo.get_user_stats(uid)
+
+    @app.post("/api/bots/generate")
+    async def generate_bot_code(request: Request):
+        """자연어 프롬프트로 모의주식 봇 코드 생성 (Gemini 2.5 Flash)."""
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        user_prompt = str(body.get("prompt", "")).strip()
+        if not user_prompt:
+            raise HTTPException(400, "prompt가 필요합니다.")
+        if not _GEMINI_KEY:
+            raise HTTPException(503, "AI 코드 생성을 사용할 수 없습니다. (GEMINI_API_KEY 미설정)")
+        full_prompt = f"{_STOCKS_SYSTEM_PROMPT}\n\nUser request: {user_prompt}"
+        raw = _call_gemini_generate(full_prompt, timeout=30)
+        if raw is None:
+            raise HTTPException(502, "AI 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.")
+        return {"code": _extract_code(raw), "source": "gemini"}
 
     @app.delete("/api/games/{game_id}", status_code=204)
     async def delete_game(game_id: str):

@@ -115,6 +115,7 @@ interface Step {
   badge: string
   title: string
   subtitle: string
+  context: string
   description: string
   tips: { icon: string; text: string }[]
   code: string
@@ -126,6 +127,7 @@ interface Step {
 const BR_STEPS: Step[] = [
   {
     badge: 'Step 1', title: '봇의 기본 구조', subtitle: '함수 하나면 충분합니다',
+    context: '봇은 게임 내내 자동으로 실행됩니다. 플레이어가 직접 조작하지 않고, 작성한 코드 로직이 봇을 움직입니다.',
     description: '엔진은 매 틱마다 action(state) 함수를 호출하고, \n반환된 문자열 하나를 봇의 행동으로 실행합니다.',
     tips: [
       { icon: '⚡', text: 'action(state) 함수 하나면 봇이 됩니다' },
@@ -146,6 +148,7 @@ const BR_STEPS: Step[] = [
   },
   {
     badge: 'Step 2', title: '내 봇 상태 읽기', subtitle: '나를 알아야 살아남습니다',
+    context: '에너지는 행동 자원이자 생명선입니다. 이동·공격·방어 모두 에너지를 소모하고, 0이 되면 즉사합니다.',
     description: 'state["my_bot"]에 내 위치, 에너지, 점수가 \n담겨 있습니다. 에너지가 0이 되면 즉시 사망합니다.',
     tips: [
       { icon: '📍', text: 'position은 [x, y] 형식. 좌상단이 [0, 0]' },
@@ -183,6 +186,7 @@ const BR_STEPS: Step[] = [
   },
   {
     badge: 'Step 3', title: '8방향 이동', subtitle: '맵을 탐색하며 기회를 찾으세요',
+    context: '목적 없는 랜덤 이동은 에너지를 낭비합니다. 시야 안의 광물·적·자기장을 보고 방향을 결정해야 효율적입니다.',
     description: '봇은 매 틱 8방향 중 하나로 이동할 수 있습니다. \n이동할 때마다 에너지가 2씩 줄어듭니다.',
     tips: [
       { icon: '🗺️', text: '맵은 100×100 격자. MOVE_UP은 y 감소, \nMOVE_DOWN은 y 증가' },
@@ -213,6 +217,7 @@ def action(state: dict) -> str:
   },
   {
     badge: 'Step 4', title: '광물 채굴하기', subtitle: '점수의 핵심, 광물을 노려라',
+    context: '광물 채굴이 초반 점수의 핵심입니다. 희귀 광물(+20점)은 일반 광물(+5점)보다 4배 가치가 높고 에너지도 회복됩니다.',
     description: 'vision.grid는 내 주변 5×5 시야입니다. \n중심 grid[2][2]가 내 위치이고, 광물 위로 이동한 다음 \n틱에 MINE을 반환하면 채굴됩니다.',
     tips: [
       { icon: '⛏️', text: '일반 광물 +5점, 희귀 광물 +20점 & 에너지 +25' },
@@ -248,6 +253,7 @@ def action(state: dict) -> str:
   },
   {
     badge: 'Step 5', title: '자기장 생존', subtitle: '존 밖은 매 틱 에너지가 닳습니다',
+    context: '자기장 밖에 있으면 매 틱 에너지 −3입니다. 광물 +5보다 손해가 날 수 있으니 존 밖에서는 채굴보다 복귀가 항상 우선입니다.',
     description: '76틱부터 자기장이 수축합니다. \nzone_bounds 바깥에 있으면 매 틱 에너지 −3. \n151틱부터는 수축 속도가 2배입니다.',
     tips: [
       { icon: '🌀', text: 'zone_bounds = (min_x, min_y, max_x, max_y) 형식' },
@@ -308,6 +314,7 @@ def action(state: dict) -> str:
 const BOSS_STEPS: Step[] = [
   {
     badge: 'Step 1', title: '보스전 기본 구조', subtitle: '1대1, 더 치열한 싸움입니다',
+    context: '보스는 강화학습으로 훈련된 AI입니다. 랜덤하게 움직이지 않고 상황에 반응하므로 패턴 파악과 타이밍이 중요합니다.',
     description: '배틀로얄과 동일한 action(state) 함수를 씁니다. \n차이는 단 하나 — 상대가 강화학습으로 훈련된 \n보스 봇 하나뿐입니다.',
     tips: [
       { icon: '🤖', text: '보스는 훈련된 RL 봇입니다. 랜덤하게 움직이지 않습니다' },
@@ -338,6 +345,7 @@ const BOSS_STEPS: Step[] = [
   },
   {
     badge: 'Step 2', title: '보스 위치 파악', subtitle: '시야로 보스를 추적하세요',
+    context: '보스 위치를 모르면 공격도 회피도 불가능합니다. 시야 그리드에서 보스를 찾는 것이 모든 행동 판단의 시작입니다.',
     description: 'vision.grid의 "bot_enemy" 셀로 보스의 상대 위치를 알 수 있습니다. 보스가 시야에 들어오면 그 방향을 계산할 수 있습니다.',
     tips: [
       { icon: '👁️', text: 'grid[row][col] == "bot_enemy" 이면 \n그 위치에 보스가 있습니다' },
@@ -374,6 +382,7 @@ const BOSS_STEPS: Step[] = [
   },
   {
     badge: 'Step 3', title: '공격 타이밍', subtitle: '인접하면 바로 공격하세요',
+    context: '인접 상태에서 공격하지 않으면 보스가 먼저 공격합니다. 에너지 여유가 있을 때 선제공격이 항상 유리합니다.',
     description: '보스가 인접(상하좌우 1칸)해 있으면 ATTACK_* 액션으로 공격합니다. 에너지 −5이지만 보스에게 25 피해를 줍니다.',
     tips: [
       { icon: '⚔️', text: 'ATTACK_UP/DOWN/LEFT/RIGHT로 \n인접 칸을 공격합니다' },
@@ -415,6 +424,7 @@ const BOSS_STEPS: Step[] = [
   },
   {
     badge: 'Step 4', title: '추격 & 생존', subtitle: '보스를 향해 거리를 좁히세요',
+    context: '거리를 좁히지 않으면 자기장이 수축하면서 퇴로가 막힙니다. 공격보다 접근이 먼저이고, 자기장 안에 있어야 선택지가 생깁니다.',
     description: '보스가 시야 내에 있지만 인접하지 않았다면, 보스 방향으로 이동해 거리를 좁히세요. 자기장도 잊지 마세요.',
     tips: [
       { icon: '🏃', text: '보스 방향으로 이동해 공격 사거리 안으로 들어오세요' },
@@ -470,6 +480,7 @@ const BOSS_STEPS: Step[] = [
   },
   {
     badge: 'Step 5', title: '완성 전략', subtitle: '공격·방어·생존을 조합하세요',
+    context: '에너지 관리·자기장 회피·보스 추격 세 가지가 동시에 맞물려야 승률이 높아집니다. 하나라도 빠지면 불리해집니다.',
     description: '에너지 관리, 자기장 대응, 보스 추격을 조합하면 됩니다. \n보스가 강할수록 SHIELD 타이밍이 승패를 가릅니다.',
     tips: [
       { icon: '🏆', text: '보스를 쓰러뜨리면 즉시 게임 종료. 생존만으로도 점수가 됩니다' },
@@ -531,6 +542,7 @@ def action(state: dict) -> str:
 const STOCKS_STEPS: Step[] = [
   {
     badge: 'Step 1', title: '봇의 기본 구조', subtitle: '반환값이 dict인 점이 다릅니다',
+    context: '봇은 200턴 동안 자동으로 매매를 결정합니다. 마지막 총자산 순위로 승패가 갈리므로 수익률보다 최종 금액이 중요합니다.',
     description: '배틀로얄과 달리 action()은 문자열이 아니라 딕셔너리를 \n반환합니다. 200턴 동안 주식을 사고팔아 총 자산을 \n최대화하는 게 목표입니다.',
     tips: [
       { icon: '💰', text: '초기 자본 1억 원. 200턴 후 총 자산이 가장 높은 봇이 우승' },
@@ -552,6 +564,7 @@ const STOCKS_STEPS: Step[] = [
   },
   {
     badge: 'Step 2', title: '시장 정보 읽기', subtitle: '주가와 뉴스가 핵심 데이터입니다',
+    context: '뉴스가 주가를 움직이는 원인입니다. 차트만 보는 봇보다 뉴스를 해석하는 봇이 구조적으로 유리합니다.',
     description: 'state["market"]["stocks"]에 15개 종목의 \n현재가·등락률이, state["market"]["news"]에 \n이번 틱 뉴스가 담겨 있습니다.',
     tips: [
       { icon: '📊', text: 'stocks는 리스트입니다. \nsymbol, price, change_pct 키를 확인하세요' },
@@ -600,6 +613,7 @@ const STOCKS_STEPS: Step[] = [
   },
   {
     badge: 'Step 3', title: '매수 / 매도', subtitle: '타이밍이 수익을 결정합니다',
+    context: '수수료(0.2%)가 있어 잦은 매매는 오히려 손해입니다. 확신이 있을 때만 진입하고, 타이밍을 기다리는 것이 핵심입니다.',
     description: 'BUY로 매수하고 SELL로 매도합니다. 수량과 종목을 \n지정해야 합니다. 보유 현금과 수량 범위를 넘으면 \n자동으로 무시됩니다.',
     tips: [
       { icon: '💳', text: 'BUY: 현금 내에서만 체결됩니다. 수수료 0.2% 발생' },
@@ -642,6 +656,7 @@ const STOCKS_STEPS: Step[] = [
   },
   {
     badge: 'Step 4', title: '포트폴리오 관리', subtitle: '손절과 익절 기준을 만드세요',
+    context: '매수 후 보유만 하면 하락 시 기회비용이 생깁니다. 손절 기준을 코드로 정해두면 감정 없이 실행되어 더 안정적입니다.',
     description: 'my_bot.portfolio에 보유 종목별 수량·평균단가·수익률(pnl_pct)이 담겨 있습니다. \n이를 기반으로 손절·익절 전략을 짭니다.',
     tips: [
       { icon: '📊', text: 'portfolio는 dict. \n키는 종목 심볼, 값은 quantity·pnl_pct 등' },
@@ -676,6 +691,7 @@ const STOCKS_STEPS: Step[] = [
   },
   {
     badge: 'Step 5', title: '뉴스 기반 전략', subtitle: '정보가 수익을 만듭니다',
+    context: '뉴스 키워드로 호재·악재를 자동 판단하는 것이 이 게임에서 가장 효과적인 전략입니다. 단순 보유 전략보다 수익률이 확연히 높습니다.',
     description: '뉴스 키워드로 호재·악재를 판단해 매수·매도를 결정합니다. [G] 뉴스는 AI가 생성한 신뢰도 높은 시그널입니다.',
     tips: [
       { icon: '📰', text: '"계약", "실적", "파트너십"은 보통 호재 신호입니다' },
@@ -757,24 +773,40 @@ const MODE_CONFIG: Record<Mode, {
   steps: Step[]
   returnRoute: string
   returnState?: object
+  overview: { summary: string; win: string; scoring: string[] }
 }> = {
   'battle-royale': {
     label: '배틀로얄',
     accent: '#818CF8',
     steps: BR_STEPS,
     returnRoute: '/games/new/battle-royale',
+    overview: {
+      summary: '100×100 맵에서 최대 8개의 봇이 자원을 채굴하고 전투하며 생존을 다툽니다.',
+      win: '에너지 0 → 즉사. 200틱 후 최고 점수 봇이 우승 (마지막 생존자 보너스 포함)',
+      scoring: ['광물 +5/+20', '킬 +30', '가드 성공 +10', '생존 +0.1/틱'],
+    },
   },
   'boss': {
     label: '보스전',
     accent: '#F05E70',
     steps: BOSS_STEPS,
     returnRoute: '/games/new/boss-battle',
+    overview: {
+      summary: '강화학습으로 훈련된 보스 봇과 단둘이 맞붙습니다. 상대는 하나지만 강합니다.',
+      win: '보스 HP를 0으로 만들거나, 200틱 후 누적 피해량이 높은 봇이 우승',
+      scoring: ['피해량 비례 점수', '가드 성공 +10', '생존 +0.1/틱'],
+    },
   },
   'stocks': {
     label: '모의주식',
     accent: '#FFC76A',
     steps: STOCKS_STEPS,
     returnRoute: '/games/new/mock-stocks',
+    overview: {
+      summary: '초기 자본 1억 원으로 15개 종목을 자동 매매합니다.',
+      win: '200턴 후 총자산이 가장 높은 봇이 우승. 매매 수수료 0.2% 발생',
+      scoring: ['총자산 기준 최종 순위', '현금 이자 +0.01%/틱', 'SHORT: 신용점수 800+ 필요'],
+    },
   },
 }
 
@@ -879,6 +911,15 @@ export default function TutorialPage() {
               <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>{cur.subtitle}</p>
             </div>
 
+            <div style={{
+              background: `${cfg.accent}0e`,
+              border: `1px solid ${cfg.accent}28`,
+              borderRadius: 8, padding: '8px 12px',
+              fontSize: 12, color: '#A0A8B8', lineHeight: 1.7,
+            }}>
+              💡 {cur.context}
+            </div>
+
             <p style={{ fontSize: 14, color: '#D1D5DB', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>{cur.description}</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
@@ -916,6 +957,19 @@ export default function TutorialPage() {
             </div>
           </div>
         </div>
+
+        {/* 게임 개요 패널 — Step 1 맨 아래 */}
+        {step === 0 && <div style={{
+          background: 'rgba(255,255,255,.02)',
+          border: `1px solid ${cfg.accent}28`,
+          borderRadius: 12, padding: '14px 18px',
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          <p style={{ fontSize: 13, color: '#C8D0DC', margin: 0, lineHeight: 1.6 }}>
+            {cfg.overview.summary}
+          </p>
+          <p style={{ fontSize: 11, color: '#4B5563', margin: 0 }}>🏆 {cfg.overview.win}</p>
+        </div>}
 
         {/* 하단 네비게이션 */}
         <div style={{

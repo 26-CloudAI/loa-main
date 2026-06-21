@@ -244,10 +244,19 @@ export default function MockStocksReplayPage() {
   const [selectedBot,      setSelectedBot]      = useState('')
   const [selectedStock,    setSelectedStock]    = useState<string | null>(null)
   const [showFinalResult,  setShowFinalResult]  = useState(false)
+  const [gameName,         setGameName]         = useState<string | null>(null)
 
   const botInitialValues = useRef<Record<string, number>>({})
   const botColorAssigned = useRef<Record<string, string>>({})
   const playTimerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (!game_id) return
+    fetch(`${STOCKS_API}/api/games/${game_id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.name) setGameName(data.name) })
+      .catch(() => {})
+  }, [game_id])
 
   // 리플레이 데이터 로드
   useEffect(() => {
@@ -413,15 +422,11 @@ export default function MockStocksReplayPage() {
 
       {/* ── 헤더 ── */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games/list')} className="text-gray-400 hover:text-white text-sm transition-colors">
-          ◀ 게임 목록
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white text-sm transition-colors">
+          ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">📈 모의주식</span>
-        <span className="text-gray-500 text-xs font-mono">#{game_id}</span>
-        <span className="ml-1 text-xs font-medium bg-indigo-600/30 text-indigo-300 border border-indigo-600/50 rounded-full px-2 py-0.5">
-          🎬 리플레이
-        </span>
+        <span className="font-bold">🎬 {gameName ? `${gameName} 리플레이` : '리플레이'}</span>
 
         <div className="flex items-center gap-3 ml-auto">
           <div className="flex items-center gap-2">

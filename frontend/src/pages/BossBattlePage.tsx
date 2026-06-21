@@ -5,58 +5,76 @@ import { MOCK, MOCK_GAME_ID } from '../dev/mock'
 import BotCodeInput from '../components/BotCodeInput'
 import TutorialBanner from '../components/TutorialBanner'
 import QuickRefPanel from '../components/QuickRefPanel'
+import { BR2_API_BASE } from '../br2'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+// 보스전도 BR2(연속 2D) 엔진 사용 → /battleroyale2 백엔드.
+const API_BASE = BR2_API_BASE
 
 const MAX_CODE_BYTES = 50 * 1024
 const MAX_BOTS = 3
 
-const DEFAULT_CODE = `import random
+// BR2(연속 2D) 봇 템플릿 — class Bot(BattleRoyale2DBot), get_action(state) → action dict.
+const DEFAULT_CODE = `import math
 
-def action(state: dict) -> str:
-    my      = state["my_bot"]
-    pos_x, pos_y = my["position"]
-    energy  = my["energy"]
-    grid    = state["vision"]["grid"]
-    zone_bounds = state.get("zone_bounds", (0, 0, 99, 99))
-    min_x, min_y, max_x, max_y = zone_bounds
+# class Bot(BattleRoyale2DBot) 을 정의하세요. get_action(state) 가 매 결정 틱(0.1s) 호출됩니다.
+# 허용 import: math, random, json, collections, heapq, itertools
+class Bot(BattleRoyale2DBot):
+    def choose_spawn(self, map_info):
+        rc = map_info.get("rare_clusters") or map_info.get("chest_clusters") or []
+        if rc:
+            return (rc[0][0], rc[0][1])
+        return None
 
-    # 존 밖이면 중심으로 이동
-    in_zone = min_x <= pos_x <= max_x and min_y <= pos_y <= max_y
-    if not in_zone:
-        cx = (min_x + max_x) // 2
-        cy = (min_y + max_y) // 2
-        dx, dy = cx - pos_x, cy - pos_y
-        if abs(dx) >= abs(dy):
-            return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
-        return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+    def get_action(self, state):
+        me = state["self"]
+        x, y = me["pos"]
+        vision = state["vision"]
+        zone = state.get("zone", {})
+        action = {
+            "move_dir": [0.0, 0.0], "aim_dir": [1.0, 0.0],
+            "attack": False, "guard": False, "dash": False,
+            "pickup": False, "use_potion": False,
+        }
 
-    # 에너지 위험 시 방어
-    if energy <= 20:
-        return "SHIELD"
+        # 1) HP 낮고 포션 보유 → 사용
+        if me.get("has_potion") and me["hp"] < 80:
+            action["use_potion"] = True
 
-    # 인접 적 공격
-    dirs = [(0,-1,"ATTACK_UP"), (0,1,"ATTACK_DOWN"), (-1,0,"ATTACK_LEFT"), (1,0,"ATTACK_RIGHT")]
-    for dx, dy, atk in dirs:
-        if grid[2 + dy][2 + dx] == "bot_enemy":
-            return atk
+        # 2) 자기장 밖이면 중심으로 이동
+        if zone.get("active") and zone.get("damage", 0) > 0:
+            cx, cy = zone["center"]
+            dx, dy = cx - x, cy - y
+            d = math.hypot(dx, dy)
+            if d > zone.get("radius", 0):
+                action["move_dir"] = [dx / d, dy / d]
+                action["aim_dir"] = [dx / d, dy / d]
+                return action
 
-    # 인접 광물 채굴
-    for dx, dy, _ in dirs:
-        cell = grid[2 + dy][2 + dx]
-        if cell in ("mineral", "mineral_rare"):
-            return "MINE"
+        # 3) 보스/적 → 사거리(60) 안이면 공격, 아니면 접근
+        enemies = vision.get("enemies", [])
+        if enemies:
+            e = min(enemies, key=lambda en: (en["pos"][0]-x)**2 + (en["pos"][1]-y)**2)
+            dx, dy = e["pos"][0]-x, e["pos"][1]-y
+            d = math.hypot(dx, dy) or 1.0
+            action["aim_dir"] = [dx/d, dy/d]
+            if d <= 60:
+                action["attack"] = True
+            else:
+                action["move_dir"] = [dx/d, dy/d]
+            return action
 
-    # 시야 내 광물로 이동
-    for row in range(5):
-        for col in range(5):
-            if grid[row][col] in ("mineral", "mineral_rare"):
-                dx, dy = col - 2, row - 2
-                if abs(dx) >= abs(dy):
-                    return "MOVE_RIGHT" if dx > 0 else "MOVE_LEFT"
-                return "MOVE_DOWN" if dy > 0 else "MOVE_UP"
+        # 4) 코인 채집 (희귀 우선)
+        nodes = vision.get("nodes", [])
+        if nodes:
+            rare = [n for n in nodes if n.get("rare")]
+            pool = rare if rare else nodes
+            n = min(pool, key=lambda nd: (nd["pos"][0]-x)**2 + (nd["pos"][1]-y)**2)
+            dx, dy = n["pos"][0]-x, n["pos"][1]-y
+            d = math.hypot(dx, dy) or 1.0
+            action["move_dir"] = [dx/d, dy/d]
+            action["aim_dir"] = [dx/d, dy/d]
 
-    return random.choice(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"])
+        return action
 `
 
 function byteSize(str: string) {
@@ -78,7 +96,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   하: {
     label: '하',
     sub: '쉬움',
-    desc: '광물 채굴·생존 중심 룰베이스 보스.\n인접 공격만 하며 추적하지 않습니다.',
+    desc: '코인 수집 + 도주 위주의 룰베이스 보스\n인접공격만 하며 추적하지않습니다.',
     color: 'text-green-300',
     border: 'border-green-700',
     selected: 'border-green-400 bg-green-950/40',
@@ -86,7 +104,7 @@ const DIFFICULTY_INFO: Record<Difficulty, { label: string; sub: string; desc: st
   중: {
     label: '중',
     sub: '보통',
-    desc: '채굴·전투 균형형 룰베이스 보스.\n시야 내 적을 적극 추적합니다.',
+    desc: '수집·전투 균형형 룰베이스 보스\n시야 내 적을 적극 추적 및 공격합니다.',
     color: 'text-yellow-300',
     border: 'border-yellow-700',
     selected: 'border-yellow-400 bg-yellow-950/40',
@@ -124,7 +142,7 @@ function DifficultySelector({
             ].join(' ')}
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className={`font-bold text-base ${isSelected ? info.color : 'text-gray-300'}`}>
+              <span className={`font-bold text-sm ${isSelected ? info.color : 'text-gray-300'}`}>
                 {info.label}
               </span>
               <span className={`text-xs ${isSelected ? info.color : 'text-gray-500'}`}>
@@ -145,7 +163,7 @@ function BossInfoBanner({ difficulty }: { difficulty: Difficulty }) {
     <div className="rounded-xl px-5 py-4 flex gap-4 items-start" style={{ background: 'rgba(232,51,74,.1)', border: '1px solid rgba(232,51,74,.35)' }}>
       <span className="text-3xl shrink-0">👾</span>
       <div className="flex flex-col gap-1">
-        <p className={`font-bold ${info.color}`}>
+        <p className={`font-bold text-sm ${info.color}`}>
           AI 보스 ({info.label} — {info.sub})
         </p>
         <p className="text-sm text-gray-400 leading-relaxed">{info.desc}</p>
@@ -197,7 +215,7 @@ function BotCard({
             <button
               type="button"
               onClick={onRemove}
-              className="text-gray-500 hover:text-red-400 transition-colors text-lg leading-none"
+              className="text-gray-500 hover:text-red-400 transition-colors text-sm leading-none"
               title="봇 제거"
             >
               ×
@@ -213,6 +231,8 @@ function BotCard({
           onChange={(v) => onUpdate('code', v)}
           hasError={overLimit}
           accentColor="red"
+          generateApiBase={API_BASE}
+          generateMode="boss"
         />
         {overLimit && (
           <p className="text-red-400 text-xs mt-1">코드가 50KB를 초과합니다. 줄여주세요.</p>
@@ -228,7 +248,6 @@ export default function BossBattlePage() {
 
   const [gameName, setGameName] = useState('')
   const [bots, setBots] = useState<BotEntry[]>([{ id: '', code: DEFAULT_CODE }])
-  const [tickInterval, setTickInterval] = useState(0.05)
   const [seed, setSeed] = useState('')
   const [difficulty, setDifficulty] = useState<Difficulty>('중')
   const [isPublic, setIsPublic] = useState(true)
@@ -260,7 +279,7 @@ export default function BossBattlePage() {
 
     if (MOCK) {
       await new Promise((r) => setTimeout(r, 600))
-      navigate(`/games/${MOCK_GAME_ID}/watch`)
+      navigate(`/games/${MOCK_GAME_ID}/battleroyale/watch`)
       return
     }
 
@@ -271,7 +290,6 @@ export default function BossBattlePage() {
           code: b.code,
           is_public: isPublic,
         })),
-        tick_interval: tickInterval,
         mode: 'boss',
         difficulty,
         seed: seed !== '' ? parseInt(seed, 10) : null,
@@ -293,7 +311,7 @@ export default function BossBattlePage() {
       }
 
       const game = await res.json()
-      navigate(`/games/${game.game_id}/watch`)
+      navigate(`/games/${game.game_id}/battleroyale/watch`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '게임 생성에 실패했습니다.')
       setSubmitting(false)
@@ -318,7 +336,7 @@ export default function BossBattlePage() {
           ◀ 뒤로
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">👾 보스전</span>
+        <span className="font-bold">👾 보스전 — 새 게임</span>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-8">
@@ -376,7 +394,7 @@ export default function BossBattlePage() {
                   onClick={addBot}
                   className="flex items-center justify-center gap-2 border border-dashed border-gray-600 hover:border-red-600 rounded-xl py-3 text-sm text-gray-500 hover:text-red-400 transition-colors"
                 >
-                  <span className="text-lg leading-none">+</span>
+                  <span className="text-sm leading-none">+</span>
                   봇 추가 ({bots.length}/{MAX_BOTS})
                 </button>
               )}
@@ -385,60 +403,39 @@ export default function BossBattlePage() {
           </div>
 
           {/* 게임 옵션 */}
-          <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-4">
+          <section className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 flex flex-col gap-3">
             <h3 className="text-sm font-medium text-gray-300">게임 옵션</h3>
 
-            {/* 봇 코드 공개 여부 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">봇 코드 공개</p>
-                <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPublic((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-[#E8334A]' : 'bg-gray-700'}`}
-              >
-                <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
+            <div className="flex flex-col divide-y divide-gray-700/50">
+              {/* 봇 코드 공개 여부 */}
+              <div className="pb-3 flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-white">틱 간격 (속도)</p>
-                  <p className="text-xs text-gray-500">값이 작을수록 빠름</p>
+                  <p className="text-sm text-white">봇 코드 공개</p>
+                  <p className="text-xs text-gray-500">다른 유저가 리더보드에서 내 봇 코드를 볼 수 있습니다</p>
                 </div>
-                <span className="text-sm font-mono" style={{ color: '#E8334A' }}>{tickInterval.toFixed(2)}s</span>
+                <button
+                  type="button"
+                  onClick={() => setIsPublic((v) => !v)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-[#E8334A]' : 'bg-gray-700'}`}
+                >
+                  <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
-              <input
-                type="range"
-                min={0.01}
-                max={1.0}
-                step={0.01}
-                value={tickInterval}
-                onChange={(e) => setTickInterval(parseFloat(e.target.value))}
-                className="w-full accent-[#E8334A]"
-              />
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>0.01s (빠름)</span>
-                <span>1.0s (느림)</span>
-              </div>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-white">시드 (재현용, 선택)</p>
-                <p className="text-xs text-gray-500">비우면 랜덤</p>
+              <div className="pt-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white">시드 (재현용, 선택)</p>
+                  <p className="text-xs text-gray-500">비우면 랜덤</p>
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={seed}
+                  onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="랜덤"
+                  className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-20 text-center placeholder-gray-400"
+                />
               </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={seed}
-                onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="랜덤"
-                className="bg-gray-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-red-500 w-20 text-center placeholder-gray-400"
-              />
             </div>
           </section>
 

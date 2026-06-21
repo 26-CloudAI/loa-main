@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import GodotGame from '../game/GodotGame'
-import { BR2_WS_BASE } from '../br2'
+import { BR2_WS_BASE, BR2_API_BASE } from '../br2'
 import { useAuth } from '../context/AuthContext'
 
 // Godot(iframe) → postMessage 로 받는 메시지 타입
@@ -32,10 +32,13 @@ export default function GodotTestPage() {
   const navigate = useNavigate()
   const { game_id } = useParams()
   const { token } = useAuth()
-  const [time, setTime] = useState(180)
+  const [gameName, setGameName] = useState<string | null>(null)
+  const [gameMode, setGameMode] = useState<string>('battleroyale2')
+  const [time, setTime] = useState(0)   // 경과 시간(카운트업). hud.time = 경과초.
   const [phase, setPhase] = useState(1)
   const [alive, setAlive] = useState(0)
   const [lb, setLb] = useState<LbRow[]>([])
+  const [follow, setFollow] = useState<{ bot: string; nonce: number } | null>(null)   // 리더보드 클릭 시점전환
   const [logs, setLogs] = useState<LogLine[]>([])
   const [result, setResult] = useState<{ reason: string; rankings: RankRow[] } | null>(null)
   const [showModal, setShowModal] = useState(true)
@@ -83,31 +86,52 @@ export default function GodotTestPage() {
 
   // 라우트 경로 /games/:game_id/battleroyale/watch 우선, 없으면 /godot-test?match= 폴백(개발용)
   const matchId = game_id ?? new URLSearchParams(window.location.search).get('match') ?? ''
-  const shortId = matchId ? matchId.slice(0, 8) : ''
+
+  useEffect(() => {
+    if (!matchId) return
+    fetch(`${BR2_API_BASE}/api/games/${matchId}/result`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.name) setGameName(data.name)
+        if (data?.mode) setGameMode(data.mode)
+      })
+      .catch(() => {})
+  }, [matchId, token])
+
+  const isBoss = gameMode === 'boss'
+  const modeLabel = isBoss ? '👾 보스전' : '⚔️ 배틀로얄 2D'
 
   return (
-    <div className="fixed inset-0 bg-gray-950 flex items-center justify-center gap-4 p-6">
-      {/* 좌측 상단 바 — 나가기 / 모드 / 매치ID */}
-      <div className="absolute top-3 left-4 z-50 flex items-center gap-2 rounded-xl bg-gray-900/85 backdrop-blur px-3 py-1.5 ring-1 ring-gray-700 text-sm">
+    <div className="fixed inset-0 flex flex-col" style={{
+      background: '#0D0F14',
+      backgroundImage: 'linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+      backgroundSize: '24px 24px',
+    }}>
+      {/* 상단 헤더 */}
+      <div className="shrink-0 h-11 px-4 flex items-center gap-2 bg-gray-900/90 backdrop-blur border-b border-gray-800 text-sm z-50">
         <button
-          onClick={() => navigate('/games')}
+          onClick={() => navigate('/games/list')}
           className="flex items-center gap-1 text-gray-300 hover:text-white transition-colors font-medium"
         >
           ◀ 나가기
         </button>
         <span className="text-gray-600">|</span>
-        <span className="flex items-center gap-1.5 font-semibold text-indigo-300">
-          ⚔️ 배틀로얄 2D
-          {shortId && <span className="text-gray-500 font-mono text-xs">#{shortId}</span>}
+        <span className="font-semibold text-indigo-300">
+          {modeLabel}{gameName ? ` — ${gameName}` : ''}
         </span>
       </div>
+
+      {/* 게임 영역 */}
+      <div className="flex-1 flex items-center justify-center gap-4 p-4 min-h-0">
 
       {/* 게임 화면 — 높이에 맞춘 정사각형 */}
       <div
         className="relative rounded-xl overflow-hidden ring-1 ring-gray-800 shadow-2xl h-full shrink-0"
         style={{ aspectRatio: '1 / 1', maxWidth: '100%' }}
       >
-        <GodotGame matchId={matchId || undefined} wsBase={BR2_WS_BASE} token={token} />
+        <GodotGame matchId={matchId || undefined} wsBase={BR2_WS_BASE} token={token} follow={follow} />
       </div>
 
       {/* 패널 — 게임 바로 옆 (그룹이 함께 중앙 정렬) */}
@@ -124,7 +148,12 @@ export default function GodotTestPage() {
           <h3 className="text-sm font-bold text-gray-200 mb-2">리더보드</h3>
           <ul className="space-y-1.5">
             {lb.map((row, i) => (
-              <li key={row.name} className="flex items-center justify-between text-sm">
+              <li
+                key={row.name}
+                onClick={() => setFollow({ bot: row.name, nonce: Date.now() })}
+                title="클릭하면 이 봇 시점으로"
+                className="flex items-center justify-between text-sm cursor-pointer rounded px-1 hover:bg-white/5"
+              >
                 <span className="truncate" style={{ color: botColor(row.name), opacity: row.alive ? 1 : 0.45 }}>
                   {i + 1}. {row.name}{row.alive ? '' : ' ☠'}
                 </span>
@@ -148,6 +177,8 @@ export default function GodotTestPage() {
           </ul>
         </div>
       </aside>
+
+      </div>
 
       {/* 매치 종료 결과 모달 — 기존 배틀로얄과 동일 */}
       {result && showModal && (

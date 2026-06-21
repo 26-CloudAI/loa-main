@@ -18,6 +18,7 @@ import UserBotDetailPage from './pages/UserBotDetailPage'
 import MyPage from './pages/MyPage'
 import GodotTestPage from './pages/GodotTestPage'
 import BattleRoyale2ResultPage from './pages/BattleRoyale2ResultPage'
+import BattleRoyale2ReplayPage from './pages/BattleRoyale2ReplayPage'
 import TutorialPage from './pages/TutorialPage'
 
 function LoadingScreen() {
@@ -98,6 +99,7 @@ function AppRoutes() {
       <Route path="/games/:game_id/mock-stocks/watch" element={<MockStocksWatchPage />} />
       <Route path="/games/:game_id/battleroyale/watch" element={<GodotTestPage />} />
       <Route path="/games/:game_id/battleroyale/result" element={<BattleRoyale2ResultPage />} />
+      <Route path="/games/:game_id/battleroyale/replay" element={<BattleRoyale2ReplayPage />} />
       <Route path="/games/:game_id/mock-stocks/result" element={<MockStocksResultPage />} />
       <Route path="/games/:game_id/replay" element={<BattleRoyaleReplayPage />} />
       <Route path="/games/:game_id/mock-stocks/replay" element={<MockStocksReplayPage />} />

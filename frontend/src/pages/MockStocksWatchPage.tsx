@@ -234,11 +234,20 @@ export default function MockStocksWatchPage() {
   const [finalRankings, setFinalRankings]     = useState<LeaderEntry[]>([])
   const [gameOverDismissed, setGameOverDismissed] = useState(false)
   const [highlightedStocks, setHighlightedStocks] = useState<Set<string>>(new Set())
+  const [gameName, setGameName]               = useState<string | null>(null)
 
   const newsKeySet       = useRef<Set<string>>(new Set())
   const botInitialValues = useRef<Record<string, number>>({})
   const botColorAssigned = useRef<Record<string, string>>({})
   const bannerTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!game_id) return
+    fetch(`${STOCKS_API}/api/games/${game_id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.name) setGameName(data.name) })
+      .catch(() => {})
+  }, [game_id])
 
   useEffect(() => {
     if (!game_id) return
@@ -365,12 +374,11 @@ export default function MockStocksWatchPage() {
 
       {/* ── 헤더 ── */}
       <header className="sticky top-0 z-20 h-14 px-6 flex items-center gap-4 shrink-0" style={{ background: 'rgba(13,15,20,.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-        <button onClick={() => navigate('/games/new')} className="text-gray-400 hover:text-white text-sm transition-colors">
+        <button onClick={() => navigate('/games/list')} className="text-gray-400 hover:text-white text-sm transition-colors">
           ◀ 나가기
         </button>
         <span className="text-gray-600">|</span>
-        <span className="font-bold">📈 모의주식</span>
-        <span className="text-gray-500 text-xs font-mono">#{game_id}</span>
+        <span className="font-bold">📈 모의주식{gameName ? ` — ${gameName}` : ''}</span>
 
         <div className="flex items-center gap-3 ml-auto">
           <div className="flex items-center gap-2">
@@ -730,10 +738,10 @@ export default function MockStocksWatchPage() {
               </button>
               <div className="flex gap-2">
                 <button
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/games/list')}
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-xl py-2.5 text-sm font-medium transition-colors"
                 >
-                  메인 홈
+                  게임 목록
                 </button>
                 <button
                   onClick={() => setGameOverDismissed(true)}

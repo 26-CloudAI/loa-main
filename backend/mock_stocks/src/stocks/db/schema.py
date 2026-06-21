@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS stock_game_participants (
     bot_id              TEXT    NOT NULL,
     bot_name            TEXT    NOT NULL,
     is_ai_filler        INTEGER NOT NULL DEFAULT 0,
+    code                TEXT,
     final_rank          INTEGER,
     initial_cash        REAL,
     final_total_value   REAL,
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS stock_game_participants (
     bot_id              TEXT             NOT NULL,
     bot_name            TEXT             NOT NULL,
     is_ai_filler        BOOLEAN          NOT NULL DEFAULT FALSE,
+    code                TEXT,
     final_rank          INTEGER,
     initial_cash        DOUBLE PRECISION,
     final_total_value   DOUBLE PRECISION,
@@ -160,6 +162,10 @@ def _init_sqlite(db_path: str | Path = "ai_arena.db") -> sqlite3.Connection:
         conn.execute("ALTER TABLE stock_games ADD COLUMN name TEXT")
     except Exception:
         pass
+    try:
+        conn.execute("ALTER TABLE stock_game_participants ADD COLUMN code TEXT")
+    except Exception:
+        pass
     conn.commit()
     return conn
 
@@ -195,6 +201,21 @@ def _init_postgresql():
                 cur.execute(stmt)
 
     conn.commit()
+
+    # 기존 테이블에 누락 컬럼 추가 (IF NOT EXISTS 없으므로 예외 무시)
+    _pg_migrations = [
+        "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS owner_uid TEXT",
+        "ALTER TABLE stock_games ADD COLUMN IF NOT EXISTS name TEXT",
+        "ALTER TABLE stock_game_participants ADD COLUMN IF NOT EXISTS code TEXT",
+    ]
+    with conn.cursor() as cur:
+        for sql in _pg_migrations:
+            try:
+                cur.execute(sql)
+            except Exception:
+                pass
+    conn.commit()
+
     conn.autocommit = True          # SELECT 후 트랜잭션 누수 방지
     conn.cursor_factory = psycopg2.extras.RealDictCursor
     return conn

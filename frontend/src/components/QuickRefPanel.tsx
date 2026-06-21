@@ -54,33 +54,45 @@ const CONTENT: Record<Mode, {
   'boss': {
     sections: [
       {
-        title: '액션', sub: '→ return 값',
-        footer: '* = UP/DOWN/LEFT/RIGHT + 대각선',
+        title: 'action', sub: '→ return dict',
+        footer: '매 결정 틱(0.1s) get_action(state)',
         rows: [
-          { label: 'MOVE_*',   value: '−2 EP', color: '#38BDF8' },
-          { label: 'ATTACK_*', value: '−5 EP', color: '#F87171' },
-          { label: 'SHIELD',   value: '−3 EP', color: '#4ADE80' },
-          { label: 'MINE',     value: '−3 EP', color: '#FDE047' },
-          { label: 'STAY',     value: '−1 EP', color: '#6B7280' },
+          { label: 'move_dir',   value: '[x,y]', color: '#38BDF8' },
+          { label: 'aim_dir',    value: '[x,y]', color: '#38BDF8' },
+          { label: 'attack',     value: 'bool',  color: '#F87171' },
+          { label: 'guard',      value: 'bool',  color: '#4ADE80' },
+          { label: 'dash',       value: 'bool',  color: '#A855F7' },
+          { label: 'pickup',     value: 'bool',  color: '#FDE047' },
+          { label: 'use_potion', value: 'bool',  color: '#FB923C' },
         ],
       },
       {
-        title: 'vision.grid', sub: '5×5 시야',
-        footer: 'grid[2][2] = 내 위치 (중심)',
+        title: 'state', sub: '주요 키',
+        footer: '시야 반경 200px 내 객체만',
         rows: [
-          { label: 'bot_enemy',    value: '보스 위치', dot: '#EF4444' },
-          { label: 'mineral',      value: '일반 광물', dot: '#EAB308' },
-          { label: 'mineral_rare', value: '희귀 광물', dot: '#A855F7' },
-          { label: 'ME',           value: '내 위치',   dot: '#0EA5E9' },
-          { label: 'empty',        value: '빈 칸',     dot: '#374151' },
+          { label: 'self',             value: 'pos·hp·atk' },
+          { label: 'vision.enemies',   value: '보스',   dot: '#EF4444' },
+          { label: 'vision.nodes',     value: '코인',   dot: '#EAB308' },
+          { label: 'vision.items',     value: '아이템', dot: '#A855F7' },
+          { label: 'zone',             value: '자기장', dot: '#38BDF8' },
+        ],
+      },
+      {
+        title: '점수',
+        rows: [
+          { label: '일반 코인', value: '+5',   color: '#FBBF24' },
+          { label: '희귀 코인', value: '+20',  color: '#FBBF24' },
+          { label: '보스 처치', value: '+100', color: '#FBBF24' },
+          { label: '가드 성공', value: '+10',  color: '#FBBF24' },
+          { label: '생존/초',   value: '+0.1', color: '#FBBF24' },
         ],
       },
     ],
     tips: [
-      { key: '인접 공격', val: 'grid[2±1][2±1]' },
-      { key: '에너지=0',  val: '즉시 사망' },
-      { key: '76틱~',     val: '자기장 수축' },
-      { key: '존 밖',     val: '매틱 −3 EP' },
+      { key: '근접 사거리', val: '60px / 90°' },
+      { key: '가드 쿨',     val: '10s · 대시 5s' },
+      { key: '60s~',        val: '자기장 수축' },
+      { key: '존 밖',       val: '2→3→5 dmg/s' },
     ],
   },
   'stocks': {
@@ -135,18 +147,17 @@ export default function QuickRefPanel({ mode }: { mode: Mode }) {
         flexShrink: 0,
         overflow: 'hidden',
         transition: 'width 320ms cubic-bezier(.4,0,.2,1)',
-        position: 'sticky',
-        top: 80,
-        alignSelf: 'flex-start',
+        ...(open
+          ? { position: 'sticky', top: 80, alignSelf: 'flex-start' }
+          : { alignSelf: 'center' }
+        ),
       }}
     >
       {/* ── 열린 상태 ── */}
       <div style={{
         width: 208,
-        opacity: open ? 1 : 0,
-        transition: 'opacity 200ms ease',
-        display: 'flex', flexDirection: 'column', gap: 8,
-        pointerEvents: open ? 'auto' : 'none',
+        display: open ? 'flex' : 'none',
+        flexDirection: 'column', gap: 8,
       }}>
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 2 }}>
@@ -229,13 +240,10 @@ export default function QuickRefPanel({ mode }: { mode: Mode }) {
         type="button"
         onClick={reopen}
         style={{
-          position: 'absolute', top: 0, right: 0,
-          width: 28, height: '100%', minHeight: 120,
+          display: open ? 'none' : 'flex',
+          width: 28, padding: '12px 0',
           background: 'none', border: 'none', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          opacity: open ? 0 : 1,
-          transition: 'opacity 200ms ease',
-          pointerEvents: open ? 'none' : 'auto',
+          alignItems: 'center', justifyContent: 'center',
         }}
         title="Quick Ref 열기"
       >

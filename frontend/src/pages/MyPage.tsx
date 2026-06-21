@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import PythonEditor from '../components/PythonEditor'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+const API_BASE    = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/battleroyale'
+const STOCKS_API  = import.meta.env.VITE_STOCKS_API_BASE ?? 'http://localhost:8080/stocks'
 
 const DISPLAY_FONT = '"SB Aggro",system-ui,sans-serif'
 const PANEL_BG     = '#161A23'
@@ -47,6 +48,7 @@ interface BotInfo {
   code: string | null
   is_public: boolean; wins: number; losses: number
   games_played: number; created_at: string
+  readonly?: boolean  // 모의주식 봇은 수정 불가
 }
 interface RankEntry { rank: number; username: string }
 
@@ -94,6 +96,7 @@ export default function MyPage() {
   const [bots, setBots]         = useState<BotInfo[]>([])
   const [myRank, setMyRank]     = useState<number | null>(null)
   const [loading, setLoading]   = useState(true)
+  const [stocksStats, setStocksStats] = useState<{ games_played: number; wins: number; losses: number } | null>(null)
   const [toggling, setToggling]             = useState<number | null>(null)
   const [barProgress, setBarProgress]       = useState(0)
   const [selectedMode, setSelectedMode]     = useState<string | null>(null)
@@ -122,9 +125,27 @@ export default function MyPage() {
     Promise.all([
       fetch(`${API_BASE}/api/users/${user.id}/bots`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(`${API_BASE}/api/rankings`).then(r => r.json()),
-    ]).then(([ud, rd]) => {
+      fetch(`${STOCKS_API}/api/users/me/stats`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${STOCKS_API}/api/users/me/bots`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : []).catch(() => []),
+    ]).then(([ud, rd, ss, sb]) => {
       setUserInfo(ud.user)
-      setBots(ud.bots ?? [])
+      const stocksBots: BotInfo[] = (sb as any[]).map((b: any) => ({
+        id: b.id,
+        name: b.bot_name,
+        game_mode: '모의주식',
+        game_name: b.game_name ?? null,
+        code: b.code ?? null,
+        is_public: false,
+        wins: b.final_rank === 1 ? 1 : 0,
+        losses: b.final_rank === 1 ? 0 : 1,
+        games_played: 1,
+        created_at: b.created_at ?? '',
+        readonly: true,
+      }))
+      setBots([...(ud.bots ?? []), ...stocksBots])
+      if (ss) setStocksStats(ss)
       const found = (rd.rankings as RankEntry[])?.find(r => r.username === user.username)
       setMyRank(found?.rank ?? null)
 
@@ -169,9 +190,11 @@ export default function MyPage() {
   }
 
 
-  const tier    = userInfo ? getTier(userInfo.elo) : null
-  const winRate = userInfo?.games_played
-    ? ((userInfo.wins / userInfo.games_played) * 100).toFixed(1) : '0.0'
+  const tier       = userInfo ? getTier(userInfo.elo) : null
+  const totalWins  = (userInfo?.wins ?? 0) + (stocksStats?.wins ?? 0)
+  const totalLosses = (userInfo?.losses ?? 0) + (stocksStats?.losses ?? 0)
+  const totalGames = (userInfo?.games_played ?? 0) + (stocksStats?.games_played ?? 0)
+  const winRate    = totalGames > 0 ? ((totalWins / totalGames) * 100).toFixed(1) : '0.0'
 
   return (
     <div style={{
@@ -285,7 +308,7 @@ export default function MyPage() {
                   { label: '현재 랭킹', value: myRank ? `${myRank}위` : '—', color: '#F5A624' },
                   { label: 'ELO',       value: String(userInfo?.elo ?? 0),   color: '#E8334A' },
                   { label: '승률',      value: `${winRate}%`,                color: '#4ade80' },
-                  { label: '총 전적',   value: `${userInfo?.wins ?? 0}승 ${userInfo?.losses ?? 0}패`, color: '#F0EBFF' },
+                  { label: '총 전적',   value: `${totalWins}승 ${totalLosses}패`, color: '#F0EBFF' },
                 ].map(({ label, value, color }, i, arr) => (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
                     <div style={{ textAlign: 'center' }}>
@@ -311,9 +334,15 @@ export default function MyPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
                   {modes.map((mode) => {
                     const mc = MODE_COLOR[mode]
-                    const modeBots = bots.filter(b => b.game_mode === mode)
-                    const wins = modeBots.filter(b => b.wins > 0).length
-                    const total = modeBots.length
+                    let total: number, wins: number
+                    if (mode === '모의주식') {
+                      total = stocksStats?.games_played ?? 0
+                      wins  = stocksStats?.wins ?? 0
+                    } else {
+                      const modeBots = bots.filter(b => b.game_mode === mode)
+                      wins  = modeBots.filter(b => b.wins > 0).length
+                      total = modeBots.length
+                    }
                     const isSelected = selectedMode === mode
                     const borderCol = mc.border.replace('.4', isSelected ? '.7' : '.25')
                     const glowCol   = mc.bg.replace('.15', isSelected ? '.25' : '.12')
@@ -410,10 +439,12 @@ export default function MyPage() {
                               <span style={{ fontSize: 11, fontWeight: 600, color: !played ? MUTED : won ? '#4ade80' : '#F05E70' }}>{!played ? '미경기' : won ? '승' : '패'}</span>
                               <span style={{ fontSize: 10, color: '#3D3558' }}>{formatDate(bot.created_at)}</span>
                             </div>
-                            <button disabled={toggling === bot.id} onClick={e => { e.stopPropagation(); togglePublic(bot.id, bot.is_public) }}
-                              style={{ position: 'relative', width: 32, height: 18, borderRadius: 999, border: 'none', cursor: 'pointer', flexShrink: 0, opacity: toggling === bot.id ? 0.5 : 1, background: bot.is_public ? 'rgba(74,222,128,.35)' : 'rgba(255,255,255,.1)', padding: 0 }}>
-                              <span style={{ position: 'absolute', top: 2, width: 14, height: 14, borderRadius: '50%', background: bot.is_public ? '#4ade80' : '#554C78', left: bot.is_public ? 16 : 2, transition: 'left .2s' }} />
-                            </button>
+                            {!bot.readonly && (
+                              <button disabled={toggling === bot.id} onClick={e => { e.stopPropagation(); togglePublic(bot.id, bot.is_public) }}
+                                style={{ position: 'relative', width: 32, height: 18, borderRadius: 999, border: 'none', cursor: 'pointer', flexShrink: 0, opacity: toggling === bot.id ? 0.5 : 1, background: bot.is_public ? 'rgba(74,222,128,.35)' : 'rgba(255,255,255,.1)', padding: 0 }}>
+                                <span style={{ position: 'absolute', top: 2, width: 14, height: 14, borderRadius: '50%', background: bot.is_public ? '#4ade80' : '#554C78', left: bot.is_public ? 16 : 2, transition: 'left .2s' }} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       )
@@ -432,10 +463,13 @@ export default function MyPage() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           {botSaveMsg[selected.id] && <span style={{ fontSize: 12, color: botSaveMsg[selected.id].includes('실패') ? '#F05E70' : '#4ade80' }}>{botSaveMsg[selected.id]}</span>}
-                          <button onClick={() => saveBot(selected.id)} disabled={savingBot === selected.id}
-                            style={{ padding: '6px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: '#E8334A', color: '#fff', opacity: savingBot === selected.id ? 0.6 : 1 }}>
-                            {savingBot === selected.id ? '저장 중...' : '저장'}
-                          </button>
+                          {selected.readonly
+                            ? <span style={{ fontSize: 11, color: MUTED }}>제출 당시 코드 (읽기 전용)</span>
+                            : <button onClick={() => saveBot(selected.id)} disabled={savingBot === selected.id}
+                                style={{ padding: '6px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: '#E8334A', color: '#fff', opacity: savingBot === selected.id ? 0.6 : 1 }}>
+                                {savingBot === selected.id ? '저장 중...' : '저장'}
+                              </button>
+                          }
                         </div>
                       </div>
                       {/* 코드 에디터 */}

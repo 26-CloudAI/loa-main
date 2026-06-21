@@ -1153,6 +1153,75 @@ def create_app(
                 "created_at": b.created_at,
                 "updated_at": b.updated_at,
             })
+
+        # 모의주식 전적 및 봇 코드 이력 조회 (같은 DB 공유)
+        stocks_stats = {"games_played": 0, "wins": 0, "losses": 0}
+        stocks_bots: list = []
+        firebase_uid = user.firebase_uid
+        if firebase_uid:
+            try:
+                conn = state["db_conn"]
+                is_pg = _user_repo()._is_pg
+
+                def _sq(sql, params=()):
+                    if is_pg:
+                        cur = conn.cursor()
+                        cur.execute(sql.replace("?", "%s"), params)
+                        return cur
+                    return conn.execute(sql, params)
+
+                row = _sq(
+                    "SELECT COUNT(*) as cnt FROM stock_games WHERE owner_uid = ? AND status = 'finished'",
+                    (firebase_uid,),
+                ).fetchone()
+                games_played = row["cnt"] if row else 0
+
+                row = _sq(
+                    """
+                    SELECT COUNT(*) as cnt
+                    FROM stock_games sg
+                    JOIN stock_game_participants sgp ON sg.id = sgp.game_id
+                    WHERE sg.owner_uid = ? AND sg.status = 'finished'
+                      AND NOT sgp.is_ai_filler AND sgp.final_rank = 1
+                    """,
+                    (firebase_uid,),
+                ).fetchone()
+                wins = row["cnt"] if row else 0
+
+                stocks_stats = {"games_played": games_played, "wins": wins, "losses": games_played - wins}
+
+                rows = _sq(
+                    """
+                    SELECT sgp.id, sgp.bot_name, sgp.code, sgp.final_rank, sgp.profit_rate,
+                           sg.id AS game_id, sg.name AS game_name, sg.created_at
+                    FROM stock_games sg
+                    JOIN stock_game_participants sgp ON sg.id = sgp.game_id
+                    WHERE sg.owner_uid = ? AND NOT sgp.is_ai_filler AND sgp.code IS NOT NULL
+                    ORDER BY sg.created_at DESC LIMIT 50
+                    """,
+                    (firebase_uid,),
+                ).fetchall()
+                stocks_bots = [
+                    {
+                        "id": r["id"],
+                        "name": r["bot_name"],
+                        "code": r["code"],
+                        "final_rank": r["final_rank"],
+                        "profit_rate": r["profit_rate"],
+                        "game_id": r["game_id"],
+                        "game_name": r["game_name"],
+                        "created_at": r["created_at"],
+                        "game_mode": "모의주식",
+                    }
+                    for r in rows
+                ]
+            except Exception:
+                logger.exception("모의주식 통계 조회 실패 (user_id=%s)", user_id)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         return {
             "user": {
                 "user_id": user.id,
@@ -1162,8 +1231,12 @@ def create_app(
                 "wins": user.wins,
                 "losses": user.losses,
                 "games_played": user.games_played,
+                "stocks_wins": stocks_stats["wins"],
+                "stocks_losses": stocks_stats["losses"],
+                "stocks_games_played": stocks_stats["games_played"],
             },
             "bots": bot_list,
+            "stocks_bots": stocks_bots,
         }
 
     return app
