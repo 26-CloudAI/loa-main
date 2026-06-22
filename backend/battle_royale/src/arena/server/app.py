@@ -241,6 +241,8 @@ def create_app(
         state["spectator_mgr"] = spectator_mgr
 
         def _init_repositories():
+            # 연결 + repo 생성만 한다(여러 번/늦게 실행돼도 안전, 멱등). 미완료 게임 정리
+            # (destructive)는 여기서 하지 않는다 — 승자 연결로 단 1회, 트래픽 유입 전에만.
             db_conn = None
             try:
                 db_conn = init_db()
@@ -248,36 +250,86 @@ def create_app(
                 bot_repo = BotRepository(db_conn)
                 game_repo = GameRepository(db_conn)
                 firebase_user_svc = FirebaseUserService(user_repo)
-                stale = game_repo.cleanup_stale_games()
-                return db_conn, user_repo, bot_repo, game_repo, firebase_user_svc, stale
+                return db_conn, user_repo, bot_repo, game_repo, firebase_user_svc
             except Exception:
                 if db_conn is not None:
                     db_conn.close()
                 raise
 
-        try:
-            loop = asyncio.get_running_loop()
-            (
-                db_conn,
-                user_repo,
-                bot_repo,
-                game_repo,
-                firebase_user_svc,
-                stale,
-            ) = await asyncio.wait_for(
-                loop.run_in_executor(None, _init_repositories),
-                timeout=35.0,
-            )
-            state["db_conn"] = db_conn
-            state["user_repo"] = user_repo
-            state["bot_repo"] = bot_repo
-            state["game_repo"] = game_repo
-            state["firebase_user_svc"] = firebase_user_svc
+        loop = asyncio.get_running_loop()
+        winner_chosen = False  # 첫 성공 결과 채택 여부 (정리/설치 single-flight)
+        finalize_task = None
 
-            if stale:
-                logger.info("서버 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
-        except Exception as e:
-            logger.exception("BattleRoyale DB 초기화 실패, DB 없이 기동: %s", e)
+        def _accept_winner(result) -> None:
+            """첫 성공 결과만 승자로 채택한다. 승자 연결로 미완료 게임 정리(1회)를
+            마친 뒤 readiness를 flip한다(트래픽 유입 전). 패자(늦게 끝난 시도 포함)는
+            연결만 닫고 destructive 정리를 절대 재실행하지 않는다 → 라이브 게임 보호."""
+            nonlocal winner_chosen, finalize_task
+            db_conn, user_repo, bot_repo, game_repo, firebase_user_svc = result
+            if winner_chosen:
+                try:
+                    db_conn.close()
+                except Exception:
+                    logger.exception("중복 DB 연결 닫기 실패")
+                return
+            winner_chosen = True
+
+            async def _finalize():
+                # 미완료 게임 정리는 state["game_repo"] 설치(=게임 생성 가능) 전에 끝내
+                # 정리가 라이브 게임을 건드리지 못하게 한다. 정리 실패해도 연결은 쓸 수
+                # 있으므로 readiness는 활성화.
+                try:
+                    stale = await loop.run_in_executor(None, game_repo.cleanup_stale_games)
+                except Exception:
+                    logger.exception("미완료 게임 정리 실패 — 무시하고 readiness 활성화")
+                    stale = 0
+                state["db_conn"] = db_conn
+                state["user_repo"] = user_repo
+                state["bot_repo"] = bot_repo
+                state["game_repo"] = game_repo
+                state["firebase_user_svc"] = firebase_user_svc
+                if stale:
+                    logger.info("서버 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
+
+            finalize_task = loop.create_task(_finalize())
+
+        async def _init_once() -> None:
+            """init 시도 1건: executor에서 연결+repo 생성 후 승자 채택을 시도."""
+            try:
+                result = await loop.run_in_executor(None, _init_repositories)
+            except Exception as e:
+                logger.exception("BattleRoyale DB 초기화 실패, DB 없이 기동: %s", e)
+                return
+            _accept_winner(result)
+
+        # startup DB init이 실패해도 프로세스는 산다(liveness 유지, 기존 비차단 설계). 단
+        # readiness가 영구 503으로 latch되지 않도록 DB가 살아나면 백그라운드 재시도로 state를
+        # 다시 채워 db_ok() 람다가 자동으로 truthy로 flip되게 한다.
+        #
+        # 첫 시도는 startup을 막지 않도록 DB_INIT_TIMEOUT_SEC 안에서만 기다린다. 타임아웃돼도
+        # executor 스레드는 멈출 수 없으므로 shield로 살려두고, 늦은 결과는 _accept_winner가
+        # 흡수한다(승자면 설치, 아니면 연결만 닫음 → 늦은 정리로 인한 라이브 게임 손상 방지).
+        # 재시도는 await로 직렬 실행되어 시도가 중첩 누적되지 않는다.
+        startup_init = asyncio.create_task(_init_once())
+        try:
+            await asyncio.wait_for(asyncio.shield(startup_init), timeout=_settings.DB_INIT_TIMEOUT_SEC)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "BattleRoyale DB 초기화가 %.0fs 내 미완료 — 백그라운드에서 계속 시도",
+                _settings.DB_INIT_TIMEOUT_SEC,
+            )
+        except Exception:
+            pass  # 실패는 _init_once가 이미 로깅
+
+        db_retry_task = None
+        if not winner_chosen:
+            async def _db_retry_loop():
+                while not winner_chosen:
+                    await asyncio.sleep(_settings.DB_RETRY_INTERVAL_SEC)
+                    if not winner_chosen:
+                        await _init_once()
+                logger.info("BattleRoyale DB 연결 복구됨 — readiness 회복")
+            db_retry_task = asyncio.create_task(_db_retry_loop())
 
         logger.info(
             "서버 시작 (Redis: %s)", "활성" if use_redis else "인메모리"
@@ -326,6 +378,16 @@ def create_app(
 
         yield
 
+        for _t in (db_retry_task, finalize_task, startup_init):
+            if _t is not None:
+                _t.cancel()
+                try:
+                    await _t
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
+
         if state["db_conn"] is not None:
             state["db_conn"].close()
 
@@ -358,6 +420,9 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Bot Runner readiness 용 DB 상태 노출 (run_server.py /healthz 에서 사용)
+    app.state.db_ok = lambda: state.get("db_conn") is not None
 
     if _settings.ENV != "production":
         app.include_router(mock_auth_router)
@@ -548,7 +613,18 @@ def create_app(
         participant_specs: list[tuple[str, bool, bool]] = []
 
         for b in bots_data:
-            bot = InProcessBot(b["bot_id"], b["code"])
+            if _settings.BOT_RUNNER_URL:
+                from ..sandbox.remote_adapter import RemoteBattleRoyaleBotAdapter
+                bot = RemoteBattleRoyaleBotAdapter(
+                    bot_id=b["bot_id"],
+                    code=b["code"],
+                    runner_url=_settings.BOT_RUNNER_URL,
+                    timeout=_settings.BOT_RUNNER_TIMEOUT_SEC,
+                )
+            elif _settings.ENV == "production" and _settings.BOT_RUNNER_REQUIRED:
+                raise HTTPException(503, "Bot Runner is required but BOT_RUNNER_URL is not configured")
+            else:
+                bot = InProcessBot(b["bot_id"], b["code"])
             bot_interfaces.append(bot)
             existing_ids.add(b["bot_id"])
             participant_specs.append((b["bot_id"], False, False))

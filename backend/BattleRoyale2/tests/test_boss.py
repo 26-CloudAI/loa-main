@@ -11,12 +11,23 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
 _BACKEND = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(_BACKEND, "battle_royale"))
 
 import BattleRoyale2.server.ws_server as ws  # noqa: E402
 from BattleRoyale2.rules import boss_mode as boss_rules_mod  # noqa: E402
 from BattleRoyale2.server.ws_server import MatchSession  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _allow_inprocess_bots(monkeypatch):
+    """_assemble_bots → _make_user_bot 는 프로덕션에서 격리(BOT_RUNNER_URL)를 강제하며
+    미설정 시 fail-closed 한다. 보스 로스터 조립 검증은 봇 실행 격리와 무관하므로,
+    test_db_flow 와 동일하게 ENV=development 로 in-process 폴백을 허용한다."""
+    monkeypatch.setenv("ENV", "development")
+    monkeypatch.delenv("BOT_RUNNER_URL", raising=False)
 
 
 class _FakeWS:

@@ -43,6 +43,10 @@ def _fresh_repo() -> GameRepository:
 def repo(monkeypatch):
     r = _fresh_repo()
     monkeypatch.setattr(ws, "_get_game_repo", lambda: r)
+    # 로컬 테스트는 dev 컨텍스트 — _make_user_bot이 InProcessBot2를 쓰도록
+    # (secure-by-default fail-closed는 ENV=production에서만 적용).
+    monkeypatch.setenv("ENV", "development")
+    monkeypatch.delenv("BOT_RUNNER_URL", raising=False)
     # 인메모리 스펙 캐시 초기화 (테스트 격리)
     ws._GAME_CODE.clear()
     ws._GAME_BOT_COUNT.clear()
@@ -87,6 +91,23 @@ def test_create_owner_from_token_ignores_body(client, repo):
     assert game is not None
     assert game.owner_user_id == 1          # 토큰 사용자
     assert game.owner_user_id != 9999       # body 무시
+
+
+def test_create_game_auto_names_when_missing(client, repo):
+    """이름 미지정 시 '새 배틀로얄 N' 자동 생성 — 목록에 '게임 {shortId}' fallback 방지.
+    (BR2 cutover 후 자동 이름 로직 누락으로 배틀로얄만 shortId 로 뜨던 문제 회귀 가드)"""
+    body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid1 = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    assert repo.get_game(gid1).name == "새 배틀로얄 1"
+    gid2 = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    assert repo.get_game(gid2).name == "새 배틀로얄 2"   # 다음 번호
+
+
+def test_create_game_uses_provided_name(client, repo):
+    """이름을 명시하면 그대로 사용(자동 생성 안 함)."""
+    body = {"name": "내 게임", "bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    assert repo.get_game(gid).name == "내 게임"
 
 
 def test_config_json_persist_and_load(client, repo):
@@ -149,10 +170,63 @@ def test_db_on_end_finished_guard(client, repo):
     g = repo.get_game(gid)
     assert g.status == "finished"
     assert g.end_reason == "last_standing"
+    assert g.final_tick == 180   # duration(180초) 그대로 저장 — ×10 제거 회귀 가드 (≤200)
     # 중복 MATCH_END — finished 가드로 reason 안 바뀜
     sess._db_on_end({"duration": 99.0, "reason": "max_ticks", "rankings": []})
     g2 = repo.get_game(gid)
     assert g2.end_reason == "last_standing"
+
+
+def test_db_on_abandon_finalizes_running_game(client, repo, monkeypatch):
+    """권위 WS가 MATCH_END 없이 끊기면(_db_on_abandon) running 게임을 종료 확정하고,
+    final_tick 을 매치 시작부터의 경과 '초'로 저장한다(정상 종료의 duration 과 같은 단위)."""
+    body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    sess = ws.MatchSession(ws=None, match_id=gid)
+    sess.bots, sess.bot_spec = sess._assemble_bots(seed=1)
+    sess._db_on_start()
+    assert repo.get_game(gid).status == "running"
+    # 매치 시작 후 78초 경과 상황을 결정적으로 재현
+    sess.start_time = 1000.0
+    monkeypatch.setattr(ws.time, "time", lambda: 1078.0)
+    sess._db_on_abandon()
+    g = repo.get_game(gid)
+    assert g.status == "finished"        # 더 이상 진행 중 아님
+    assert g.end_reason == "abandoned"
+    assert g.final_tick == 78            # 경과 78초 (정상 종료와 같은 '초' 단위)
+
+
+def test_db_on_abandon_does_not_overwrite_finished(client, repo):
+    """MATCH_END로 정상 종료된 게임은 이후 disconnect의 _db_on_abandon이 덮어쓰지 않는다."""
+    body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    sess = ws.MatchSession(ws=None, match_id=gid)
+    sess.bots, sess.bot_spec = sess._assemble_bots(seed=1)
+    sess._db_on_start()
+    sess._db_on_end({"duration": 180.0, "reason": "last_standing", "rankings": []})
+    assert repo.get_game(gid).status == "finished"
+    sess.last_tick = 5
+    sess._db_on_abandon()                # 이미 finished → no-op
+    g = repo.get_game(gid)
+    assert g.status == "finished"
+    assert g.end_reason == "last_standing"   # abandoned 로 안 바뀜
+
+
+def test_db_on_abandon_does_not_overwrite_error(client, repo):
+    """러너 비정상 종료(_on_runner_exit, status='error')된 게임은 이후 권위 WS disconnect의
+    _db_on_abandon이 abandoned 로 덮어쓰지 않는다(원인 손실/상태 역전 방지)."""
+    body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    sess = ws.MatchSession(ws=None, match_id=gid)
+    sess.bots, sess.bot_spec = sess._assemble_bots(seed=1)
+    sess._db_on_start()
+    ws._on_runner_exit(gid, rc=139, reason="crash")   # status='error', end_reason='runner_crash'
+    assert repo.get_game(gid).status == "error"
+    sess.last_tick = 5
+    sess._db_on_abandon()                # 이미 error(terminal) → no-op
+    g = repo.get_game(gid)
+    assert g.status == "error"               # finished 로 역전 안 됨
+    assert g.end_reason == "runner_crash"    # abandoned 로 안 바뀜
 
 
 def test_runner_exit_marks_stuck_game(client, repo):

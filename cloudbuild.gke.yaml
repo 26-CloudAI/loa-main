@@ -1,0 +1,109 @@
+substitutions:
+  _REGION: asia-northeast3
+  _REPOSITORY: ai-arena
+  _CLUSTER: loa-arena
+  _NAMESPACE: arena
+
+steps:
+  # 0. 이미지 태그 계산 (YYYYMMDD-SHORTSHA)
+  - name: 'bash'
+    args:
+      - '-c'
+      - echo "$(date +%Y%m%d)-$SHORT_SHA" > /workspace/image_tag.txt && cat /workspace/image_tag.txt
+
+  # 1a. server 이미지 빌드
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        TAG=$$(cat /workspace/image_tag.txt)
+        docker build \
+          -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$$TAG \
+          backend
+
+  # 1b. bot-runner 이미지 빌드
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        TAG=$$(cat /workspace/image_tag.txt)
+        docker build \
+          -f backend/bot_runner/Dockerfile \
+          -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$$TAG \
+          backend/bot_runner
+
+  # 2a. server 이미지 푸시
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        TAG=$$(cat /workspace/image_tag.txt)
+        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$$TAG
+
+  # 2b. bot-runner 이미지 푸시
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        TAG=$$(cat /workspace/image_tag.txt)
+        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$$TAG
+
+  # 3. GKE 자격 취득
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - container
+      - clusters
+      - get-credentials
+      - ${_CLUSTER}
+      - --region
+      - ${_REGION}
+
+  # 4a. game-server 이미지 교체 (kubectl apply -k 금지 — PLACEHOLDER 리셋 방지)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        TAG=$$(cat /workspace/image_tag.txt)
+        kubectl -n ${_NAMESPACE} set image deployment/game-server \
+          game-server=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/server:$$TAG
+
+  # 4b. bot-runner 이미지 교체
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        TAG=$$(cat /workspace/image_tag.txt)
+        kubectl -n ${_NAMESPACE} set image deployment/bot-runner \
+          bot-runner=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/bot-runner:$$TAG
+
+  # 5a. game-server rollout 확인
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: kubectl
+    args:
+      - -n
+      - ${_NAMESPACE}
+      - rollout
+      - status
+      - deployment/game-server
+      - --timeout=180s
+
+  # 5b. bot-runner rollout 확인
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: kubectl
+    args:
+      - -n
+      - ${_NAMESPACE}
+      - rollout
+      - status
+      - deployment/bot-runner
+      - --timeout=180s
+
+options:
+  logging: CLOUD_LOGGING_ONLY

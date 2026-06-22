@@ -97,9 +97,12 @@ steps:
       - 'FIREBASE_CREDENTIALS_JSON=firebase-service-account:latest,DB_PASSWORD=db-password:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest'
 
       # 환경변수 (CORS_ORIGINS 값에 콤마가 포함되므로 | 를 구분자로 사용)
+      # BOT_RUNNER_REQUIRED=false: Cloud Run에는 bot-runner 사이드카가 없어 봇을
+      # 의도적으로 in-process 실행한다. secure-by-default(fail-closed)에 대한 명시적
+      # opt-out (GKE는 대신 실제 BOT_RUNNER_URL을 설정해 격리 실행).
       - '--set-env-vars'
       - >-
-        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=${_DB_HOST}|DB_NAME=${_DB_NAME}|DB_USER=${_DB_USER}|ENV=production|BOSS_WEIGHTS_GCS_URI=${_BOSS_WEIGHTS_GCS_URI}|BR2_RUNNER_ENABLED=1|BR2_GODOT_BIN=/usr/local/bin/godot_server|BR2_GAME_PCK=/app/BattleRoyale2/runner/game.pck|BR2_RUNNER_WS=ws://127.0.0.1:8080/battleroyale2/match/|BR2_RUNNER_SECRET=${_BR2_RUNNER_SECRET}|BR2_MAX_CONCURRENT_GAMES=4|BR2_MATCH_TIMEOUT_SEC=240
+        ^|^USE_REDIS=true|REDIS_HOST=${_REDIS_HOST}|LOG_FORMAT=json|CORS_ORIGINS=${_CORS_ORIGINS}|DB_TYPE=postgresql|DB_HOST=${_DB_HOST}|DB_NAME=${_DB_NAME}|DB_USER=${_DB_USER}|ENV=production|BOT_RUNNER_REQUIRED=false|BOSS_WEIGHTS_GCS_URI=${_BOSS_WEIGHTS_GCS_URI}|BR2_RUNNER_ENABLED=1|BR2_GODOT_BIN=/usr/local/bin/godot_server|BR2_GAME_PCK=/app/BattleRoyale2/runner/game.pck|BR2_RUNNER_WS=ws://127.0.0.1:8080/battleroyale2/match/|BR2_RUNNER_SECRET=${_BR2_RUNNER_SECRET}|BR2_MAX_CONCURRENT_GAMES=4|BR2_MATCH_TIMEOUT_SEC=240
 
       - '--quiet'
 

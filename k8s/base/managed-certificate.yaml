@@ -1,0 +1,8 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: arena-cert
+  namespace: arena
+spec:
+  domains:
+    - gke-api.leagueofagents.net

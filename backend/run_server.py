@@ -135,8 +135,28 @@ def main():
             async with ms_app.router.lifespan_context(ms_app):
                 yield
 
+    from fastapi.responses import JSONResponse
+
     app = FastAPI(title="League of Agents", lifespan=lifespan)
     # CORS는 각 서브앱(br_app, ms_app)이 자체 미들웨어로 처리
+
+    @app.get("/healthz")
+    async def healthz():
+        """readinessProbe용 — BattleRoyale + MockStocks DB 상태 종합."""
+        br_ok = br_app.state.db_ok()
+        ms_ok = ms_app.state.db_ok()
+        status = "ok" if (br_ok and ms_ok) else "degraded"
+        body = {
+            "status": status,
+            "battleroyale": {"db": "ok" if br_ok else "error"},
+            "stocks": {"db": "ok" if ms_ok else "error"},
+        }
+        return JSONResponse(content=body, status_code=200 if status == "ok" else 503)
+
+    @app.get("/livez")
+    async def livez():
+        """livenessProbe용 — 프로세스 생존만 확인, 항상 200."""
+        return {"status": "alive"}
 
     app.mount("/battleroyale", br_app)
     app.mount("/stocks", ms_app)

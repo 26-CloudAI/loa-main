@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: arena-ingress
+  namespace: arena
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: "loa-arena-ingress-ip"  # Phase 4에서 예약
+    networking.gke.io/managed-certificates: "arena-cert"
+    kubernetes.io/ingress.class: "gce"  # GKE 1.35 Autopilot에서 spec.ingressClassName 단독으로는 GLBC가 NEG/LB를 생성하지 않아 추가 (Phase 8 실증)
+spec:
+  ingressClassName: gce
+  rules:
+    - host: api.leagueofagents.net
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: game-server
+                port:
+                  number: 80
+    - host: gke-api.leagueofagents.net
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: game-server
+                port:
+                  number: 80

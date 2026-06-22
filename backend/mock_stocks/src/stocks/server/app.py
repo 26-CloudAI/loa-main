@@ -37,6 +37,7 @@ from ..config import Config, DEFAULT_CONFIG
 from ..db.schema import init_db
 from ..db.game_repo import StockGameRepository
 from ..market import Market
+from . import settings as _settings
 from .game_session import GameRegistry
 from .ws_manager import SpectatorManager
 
@@ -252,40 +253,112 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        conn = None
+        # 재시도로 늦게 생긴 conn도 shutdown에서 닫을 수 있도록 holder로 보관.
+        conn_holder = {"conn": None}
 
         def _init_repository():
+            # 연결 + repo 생성만 한다(여러 번/늦게 실행돼도 안전, 멱등). 미완료 게임 정리
+            # (destructive)는 여기서 하지 않는다 — 승자 연결로 단 1회, 트래픽 유입 전에만.
             db_conn = None
             try:
                 db_conn = init_db()
                 repo = StockGameRepository(db_conn)
-                stale = repo.cleanup_stale_games()
-                return db_conn, repo, stale
+                return db_conn, repo
             except Exception:
                 if db_conn is not None:
                     db_conn.close()
                 raise
 
+        loop = asyncio.get_running_loop()
+        winner_chosen = False  # 첫 성공 결과 채택 여부 (정리/설치 single-flight)
+        finalize_task = None
+
+        def _accept_winner(result) -> None:
+            """첫 성공 결과만 승자로 채택한다. 승자 연결로 미완료 게임 정리(1회)를
+            마친 뒤 registry._repo를 설치한다(트래픽 유입 전). 패자(늦게 끝난 시도 포함)는
+            연결만 닫고 destructive 정리를 절대 재실행하지 않는다 → 라이브 게임 보호."""
+            nonlocal winner_chosen, finalize_task
+            db_conn, repo = result
+            if winner_chosen:
+                try:
+                    db_conn.close()
+                except Exception:
+                    logger.exception("중복 DB 연결 닫기 실패")
+                return
+            winner_chosen = True
+
+            async def _finalize():
+                # 미완료 게임 정리는 registry._repo 설치(=게임 생성 가능) 전에 끝내 정리가
+                # 라이브 게임을 건드리지 못하게 한다. 정리 실패해도 연결은 쓸 수 있으므로
+                # readiness는 활성화.
+                try:
+                    stale = await loop.run_in_executor(None, repo.cleanup_stale_games)
+                except Exception:
+                    logger.exception("미완료 게임 정리 실패 — 무시하고 readiness 활성화")
+                    stale = 0
+                conn_holder["conn"] = db_conn
+                registry._repo = repo
+                if stale:
+                    logger.info("MockStocks 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
+
+            finalize_task = loop.create_task(_finalize())
+
+        async def _init_once() -> None:
+            """init 시도 1건: executor에서 연결+repo 생성 후 승자 채택을 시도."""
+            try:
+                result = await loop.run_in_executor(None, _init_repository)
+            except Exception as e:
+                logger.exception("MockStocks DB 초기화 실패, DB 없이 기동: %s", e)
+                return
+            _accept_winner(result)
+
+        # startup DB init이 실패해도 프로세스는 산다(liveness 유지, 기존 비차단 설계). 단
+        # readiness가 영구 503으로 latch되지 않도록 DB가 살아나면 백그라운드 재시도로
+        # registry._repo를 다시 채워 db_ok() 람다가 자동으로 truthy로 flip되게 한다.
+        #
+        # 첫 시도는 startup을 막지 않도록 DB_INIT_TIMEOUT_SEC 안에서만 기다린다. 타임아웃돼도
+        # executor 스레드는 멈출 수 없으므로 shield로 살려두고, 늦은 결과는 _accept_winner가
+        # 흡수한다(승자면 설치, 아니면 연결만 닫음 → 늦은 정리로 인한 라이브 게임 손상 방지).
+        # 재시도는 await로 직렬 실행되어 시도가 중첩 누적되지 않는다.
+        startup_init = asyncio.create_task(_init_once())
         try:
-            loop = asyncio.get_running_loop()
-            conn, repo, stale = await asyncio.wait_for(
-                loop.run_in_executor(None, _init_repository),
-                timeout=35.0,
+            await asyncio.wait_for(asyncio.shield(startup_init), timeout=_settings.DB_INIT_TIMEOUT_SEC)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "MockStocks DB 초기화가 %.0fs 내 미완료 — 백그라운드에서 계속 시도",
+                _settings.DB_INIT_TIMEOUT_SEC,
             )
-            registry._repo = repo
-            if stale:
-                logger.info("MockStocks 재시작: %d개 미완료 게임을 error 상태로 변경", stale)
-        except Exception as e:
-            registry._repo = None
-            logger.exception("MockStocks DB 초기화 실패, DB 없이 기동: %s", e)
+        except Exception:
+            pass  # 실패는 _init_once가 이미 로깅
+
+        db_retry_task = None
+        if not winner_chosen:
+            async def _db_retry_loop():
+                while not winner_chosen:
+                    await asyncio.sleep(_settings.DB_RETRY_INTERVAL_SEC)
+                    if not winner_chosen:
+                        await _init_once()
+                logger.info("MockStocks DB 연결 복구됨 — readiness 회복")
+            db_retry_task = asyncio.create_task(_db_retry_loop())
 
         # 서버 시작 시 뉴스 풀 미리 채우기 시작
         asyncio.create_task(_fill_pool())
         logger.info("뉴스 풀 사전 생성 시작")
 
         yield
-        if conn is not None:
-            conn.close()
+
+        for _t in (db_retry_task, finalize_task, startup_init):
+            if _t is not None:
+                _t.cancel()
+                try:
+                    await _t
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
+
+        if conn_holder["conn"] is not None:
+            conn_holder["conn"].close()
 
     app = FastAPI(title="MockStocks API", version="0.1.0", lifespan=lifespan)
 
@@ -303,6 +376,9 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
     registry = GameRegistry(spectator_manager)
+
+    # Bot Runner readiness 용 DB 상태 노출 (run_server.py /healthz 에서 사용)
+    app.state.db_ok = lambda: registry._repo is not None
 
     # ── 뉴스 풀 ───────────────────────────────────────────────────────────────
     # 서버가 미리 만들어두는 뉴스 배치. 유저가 /prepare 호출 시 즉시 꺼내줌.
@@ -449,7 +525,18 @@ def create_app(config: Config = DEFAULT_CONFIG) -> FastAPI:
         for b in body.bots:
             if len(b.code) > 50 * 1024:
                 raise HTTPException(400, "코드가 너무 큽니다 (최대 50KB).")
-            bot = InProcessBot(b.bot_id, b.code)
+            if _settings.BOT_RUNNER_URL:
+                from ..sandbox.remote_adapter import RemoteStockBotAdapter
+                bot = RemoteStockBotAdapter(
+                    bot_id=b.bot_id,
+                    code=b.code,
+                    runner_url=_settings.BOT_RUNNER_URL,
+                    timeout=_settings.BOT_RUNNER_TIMEOUT_SEC,
+                )
+            elif _settings.ENV == "production" and _settings.BOT_RUNNER_REQUIRED:
+                raise HTTPException(503, "Bot Runner is required but BOT_RUNNER_URL is not configured")
+            else:
+                bot = InProcessBot(b.bot_id, b.code)
             user_bots.append(bot)
 
         filler_bots: list[BotInterface] = []

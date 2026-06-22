@@ -31,6 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from BattleRoyale2.bots import HerbivoreBot, MadDogBot, CamperBot, BOSS_BOT_BY_DIFFICULTY
 from BattleRoyale2.rules import boss_mode as boss_rules_mod
 from BattleRoyale2.server.inprocess_bot import InProcessBot2
+from BattleRoyale2.server.remote_bot import RemoteBattleRoyale2BotAdapter
 from BattleRoyale2.server.runner_manager import get_runner_manager
 from BattleRoyale2.src.arena.bot_interface import BattleRoyale2DBot
 
@@ -731,6 +732,29 @@ def _build_bots(spec: list[tuple[str, str]], seed: int | None = None) -> dict[st
     return bots
 
 
+def _make_user_bot(bot_id: str, code: str) -> BattleRoyale2DBot:
+    """유저 제출 봇을 격리 실행 어댑터로 생성한다 (기존 BR/MS create_game 패턴과 동일).
+    BOT_RUNNER_URL 있으면 bot-runner 격리 실행(RemoteBattleRoyale2BotAdapter). 프로덕션에서
+    runner 필수(BOT_RUNNER_REQUIRED)인데 URL 미설정이면 in-process 폴백을 금지(거부) —
+    유저 코드를 game-server Pod에서 직접 exec 하는 RCE 경로를 막는다.
+    env는 settings와 동일하게 os.environ에서 파싱(통합 서버 configmap이 동일 변수 주입)."""
+    runner_url = os.environ.get("BOT_RUNNER_URL", "").strip()
+    if runner_url:
+        try:
+            timeout = float(os.environ.get("BOT_RUNNER_TIMEOUT_SEC", "0.5"))
+        except ValueError:
+            timeout = 0.5
+        return RemoteBattleRoyale2BotAdapter(bot_id, code, runner_url, timeout)
+    env = os.environ.get("ENV", "production")
+    # Secure by default (mirrors settings.BOT_RUNNER_REQUIRED): in production a
+    # missing BOT_RUNNER_URL fails closed unless explicitly opted out.
+    required = os.environ.get("BOT_RUNNER_REQUIRED", "true").lower() in ("true", "1", "yes")
+    if env == "production" and required:
+        raise RuntimeError("Bot Runner is required but BOT_RUNNER_URL is not configured")
+    # 개발/로컬 전용 폴백 (격리 아님). 프로덕션에선 위 가드로 도달 불가.
+    return InProcessBot2(bot_id, code)
+
+
 def _validate_action(action: Any) -> dict[str, Any]:
     """봇이 반환한 action 을 안전하게 정규화. 잘못된 키/타입은 기본값으로 치환."""
     def vec(value: Any, default: list[float]) -> list[float]:
@@ -764,6 +788,8 @@ class MatchSession:
         self.bot_spec: list[tuple[str, str]] = list(DEFAULT_BOT_FACTORY)
         self.started = False
         self.ended = False
+        self.last_tick = 0           # 마지막으로 처리한 틱
+        self.start_time: float | None = None   # 매치 시작(MATCH_START) 시각 — 중도 종료 시 경과초 계산용
         self.match_info: dict[str, Any] = {}
         self.authoritative = False   # 권위 획득 세션만 True — FRAME 기록/발행 권위
         self.auth_owner = ""         # 권위 소유자 uuid (Redis 키 compare-and-* 용)
@@ -816,7 +842,7 @@ class MatchSession:
         for entry in user_bots:
             bid = entry["bot_id"]
             name = entry.get("name", bid)
-            bots[bid] = InProcessBot2(bid, entry.get("code", ""))
+            bots[bid] = _make_user_bot(bid, entry.get("code", ""))
             spec.append((bid, name))
             self.user_bot_ids.add(bid)
 
@@ -850,6 +876,7 @@ class MatchSession:
 
     async def send_match_start(self) -> None:
         self.started = True
+        self.start_time = time.time()   # 경과초 기준점 (정상종료의 client duration 과 같은 의미)
         self._db_on_start()
         await self.send({"type": "MATCH_START"})
 
@@ -895,7 +922,10 @@ class MatchSession:
                 return
             repo.update_game_finished(
                 game_id=self.match_id,
-                final_tick=int(duration * 10.0),
+                # duration 은 매치 경과 '초'(MATCH_CONFIG duration:180 기준). 다른 모드의
+                # final_tick(논리 틱, max 200)과 같은 ~200 스케일로 맞추기 위해 그대로 저장한다.
+                # (과거 ×10 은 초를 ~1800 으로 부풀려 프론트 "틱 X/200" 을 초과시켰음)
+                final_tick=int(duration),
                 end_reason=reason,
             )
             for entry in rankings:
@@ -915,8 +945,40 @@ class MatchSession:
             logger.exception("[match=%s] _db_on_end 실패", self.match_id)
             _safe_rollback(repo)
 
+    def _db_on_abandon(self) -> None:
+        """권위 세션이 MATCH_END 없이 끊겼을 때(탭 닫힘/연결 끊김/네트워크 단절) 게임을
+        종료 상태로 확정한다. BR2는 브라우저(Godot)가 시뮬레이션을 구동하므로, 권위 연결이
+        끊기면 매치는 더 진행될 수 없다(서버 자율 진행 없음). 이 안전망이 없으면 중도 이탈한
+        게임이 DB에 RUNNING 으로 영구히 남아 목록에 "진행 중"으로 박힌다.
+        이미 종결된 게임(finished=MATCH_END 정상 종료 / error=러너 비정상 종료)은 무시 —
+        terminal 상태를 abandoned 로 역전시키지 않는다(원인 손실/상태 역전 방지)."""
+        repo = _get_game_repo()
+        if repo is None:
+            return
+        try:
+            game = repo.get_game(self.match_id)
+            if game is None or getattr(game, "status", None) in ("finished", "error"):
+                return
+            # 정상 종료(_db_on_end)는 client 가 보낸 경과초(duration)를 저장한다. 중도 이탈은
+            # MATCH_END 가 없어 duration 을 못 받으므로, 서버가 매치 시작부터 잰 경과초로 맞춘다
+            # (두 경로 모두 '경과 초' 단위로 일관). start_time 이 없으면(시작 전 이탈) 0.
+            elapsed = int(time.time() - self.start_time) if self.start_time else 0
+            repo.update_game_finished(
+                game_id=self.match_id,
+                final_tick=elapsed,
+                end_reason="abandoned",
+            )
+            logger.info(
+                "[match=%s] 권위 연결이 MATCH_END 없이 종료 — abandoned 로 확정 (경과 %d초, 내부틱 %d)",
+                self.match_id, elapsed, self.last_tick,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("[match=%s] _db_on_abandon 실패", self.match_id)
+            _safe_rollback(repo)
+
     def handle_state(self, tick: int, data: dict[str, Any]) -> dict[str, Any]:
         """봇들의 state 를 받아 각 봇의 get_action 호출 → action dict 반환."""
+        self.last_tick = tick
         bots_state: dict[str, Any] = data.get("bots", {}) if isinstance(data, dict) else {}
         actions: dict[str, Any] = {}
         for bot_id, bot in self.bots.items():
@@ -932,6 +994,31 @@ class MatchSession:
                 raw = None
             actions[bot_id] = _validate_action(raw)
         return actions
+
+    async def handle_state_async(self, tick: int, data: dict[str, Any]) -> dict[str, Any]:
+        """handle_state 의 논블로킹 버전. 각 봇의 get_action 을 스레드로 빼서 병렬 실행한다.
+
+        remote(bot-runner) 봇은 동기 blocking HTTP(urllib)라, async WS 핸들러에서 직접 부르면
+        틱마다 이벤트 루프가 타임아웃(0.5s)만큼 멈춰 실시간 클라이언트와 desync → 매치가
+        MATCH_END 까지 못 가고 RUNNING 으로 잔존했다. asyncio.to_thread 로 루프를 비우고,
+        gather 로 여러 봇 호출을 동시 진행해 틱당 지연을 sum → max 로 줄인다."""
+        self.last_tick = tick
+        bots_state: dict[str, Any] = data.get("bots", {}) if isinstance(data, dict) else {}
+
+        async def _one(bot_id: str, bot: BattleRoyale2DBot) -> tuple[str, dict[str, Any]]:
+            state = bots_state.get(bot_id)
+            if state is None:
+                # 시야 누락 또는 사망 처리. STAY 강제.
+                return bot_id, _validate_action(None)
+            try:
+                raw = await asyncio.to_thread(bot.get_action, state)
+            except Exception:  # noqa: BLE001 — 봇 예외는 STAY 로 폴백
+                logger.exception("[match=%s tick=%d] bot=%s get_action 실패", self.match_id, tick, bot_id)
+                raw = None
+            return bot_id, _validate_action(raw)
+
+        results = await asyncio.gather(*(_one(bid, b) for bid, b in self.bots.items()))
+        return dict(results)
 
     def handle_choose_spawn(self, data: dict[str, Any]) -> dict[str, list[float] | None]:
         """클라이언트가 MATCH_CONFIG 응답으로 봇별 스폰 위치 요청 시 호출용 헬퍼.
@@ -1215,6 +1302,20 @@ def create_app() -> FastAPI:
                 await ws.close(code=4401)
                 logger.info("[match=%s] WS 인증 실패 — 거부", match_id)
                 return
+            # owner 일치 검증: owner 해석 실패(None)도 불일치와 동일하게 거부.
+            # 토큰 검증은 통과해도 user-service/DB 장애로 caller_id가 None이면
+            # 소유권을 확인할 수 없으므로 fail-closed 한다.
+            # 단, 러너 토큰(서버 헤드리스 러너)은 사람 유저가 아니라 owner 가 없으므로
+            # owner 검증 대상에서 제외한다(러너 토큰일 때만 _is_runner_token 으로 우회).
+            if not _is_runner_token(token) and game.owner_user_id is not None:
+                caller_id = _resolve_owner_id(token)
+                if caller_id != game.owner_user_id:
+                    await ws.close(code=4403)
+                    logger.info(
+                        "[match=%s] WS owner 인증 실패 — 거부 (caller=%s owner=%s)",
+                        match_id, caller_id, game.owner_user_id,
+                    )
+                    return
 
         await ws.accept()
         session = MatchSession(ws, match_id)
@@ -1295,7 +1396,7 @@ def create_app() -> FastAPI:
                 elif mtype == "STATE":
                     if not session.started:
                         continue
-                    actions = session.handle_state(tick, data if isinstance(data, dict) else {})
+                    actions = await session.handle_state_async(tick, data if isinstance(data, dict) else {})
                     await session.send({
                         "type": "ACTIONS",
                         "tick": tick,
@@ -1343,6 +1444,12 @@ def create_app() -> FastAPI:
         except Exception:  # noqa: BLE001
             logger.exception("[match=%s] unexpected error", match_id)
         finally:
+            # 안전망: 권위 세션이 MATCH_END 없이 끊기면 게임을 종료 확정한다.
+            # (지연이 줄어도 사용자가 중도에 닫을 수 있으므로, "진행 중" 영구 잔존을 구조적으로 차단)
+            # 순서 주의: DB 종료확정(_db_on_abandon)을 권위 해제(_release_authority)보다 먼저 한다.
+            # 권위를 먼저 풀면 멀티 인스턴스에서 다른 인스턴스가 즉시 승계해 종료 전 매치를 재시작할 수 있다.
+            if session.authoritative and not session.ended:
+                session._db_on_abandon()
             # 권위 세션이 끊기면 해제 (다음 연결이 권위 승계 가능). 멀티 인스턴스는
             # Redis 키를 compare-and-delete(내가 소유자일 때만).
             if session.authoritative:

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-server
+  namespace: arena
+spec:
+  replicas: 1  # 세션이 프로세스 메모리에 있음. Redis 외부화 전까지 1 고정
+  selector:
+    matchLabels:
+      app: game-server
+  template:
+    metadata:
+      labels:
+        app: game-server
+    spec:
+      serviceAccountName: game-server
+      containers:
+        - name: game-server
+          # 절대 그대로 적용하지 말 것 — Cloud Build 또는 `kubectl set image`로 실제 태그/digest 주입 필수.
+          # 직접 `kubectl apply`하면 ImagePullBackOff로 명백히 실패하도록 placeholder 사용.
+          image: asia-northeast3-docker.pkg.dev/YOUR_PROJECT_ID/ai-arena/server:PLACEHOLDER
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: arena-config
+            - secretRef:
+                name: arena-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10002
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          # BR + MS lifespan이 직렬로 초기화되어 startup에 최대 ~70s 소요.
+          # startupProbe가 통과할 때까지 liveness/readiness 카운트를 보류해
+          # 일시적 DB 지연 시 A1 백그라운드 재시도 self-heal이 작동할 여유 확보.
+          startupProbe:
+            httpGet:
+              path: /livez
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 12  # 최대 15 + 12*10 = 135s budget
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
