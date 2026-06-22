@@ -212,6 +212,23 @@ def test_db_on_abandon_does_not_overwrite_finished(client, repo):
     assert g.end_reason == "last_standing"   # abandoned 로 안 바뀜
 
 
+def test_db_on_abandon_does_not_overwrite_error(client, repo):
+    """러너 비정상 종료(_on_runner_exit, status='error')된 게임은 이후 권위 WS disconnect의
+    _db_on_abandon이 abandoned 로 덮어쓰지 않는다(원인 손실/상태 역전 방지)."""
+    body = {"bots": [{"bot_id": "my_bot", "name": "내봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}
+    gid = client.post("/api/games", json=body, headers=_auth()).json()["game_id"]
+    sess = ws.MatchSession(ws=None, match_id=gid)
+    sess.bots, sess.bot_spec = sess._assemble_bots(seed=1)
+    sess._db_on_start()
+    ws._on_runner_exit(gid, rc=139, reason="crash")   # status='error', end_reason='runner_crash'
+    assert repo.get_game(gid).status == "error"
+    sess.last_tick = 5
+    sess._db_on_abandon()                # 이미 error(terminal) → no-op
+    g = repo.get_game(gid)
+    assert g.status == "error"               # finished 로 역전 안 됨
+    assert g.end_reason == "runner_crash"    # abandoned 로 안 바뀜
+
+
 def test_runner_exit_marks_stuck_game(client, repo):
     """러너 비정상 종료 콜백(_on_runner_exit) → 진행 중 게임을 status='error' 로 종료 처리."""
     body = {"bots": [{"bot_id": "b", "name": "봇", "code": "class Bot(BattleRoyale2DBot):\n def get_action(self,s): return {}"}], "bot_count": 2}

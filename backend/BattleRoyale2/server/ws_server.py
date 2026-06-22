@@ -950,13 +950,14 @@ class MatchSession:
         종료 상태로 확정한다. BR2는 브라우저(Godot)가 시뮬레이션을 구동하므로, 권위 연결이
         끊기면 매치는 더 진행될 수 없다(서버 자율 진행 없음). 이 안전망이 없으면 중도 이탈한
         게임이 DB에 RUNNING 으로 영구히 남아 목록에 "진행 중"으로 박힌다.
-        이미 finished 면 무시(MATCH_END 정상 종료와 중복 방지)."""
+        이미 종결된 게임(finished=MATCH_END 정상 종료 / error=러너 비정상 종료)은 무시 —
+        terminal 상태를 abandoned 로 역전시키지 않는다(원인 손실/상태 역전 방지)."""
         repo = _get_game_repo()
         if repo is None:
             return
         try:
             game = repo.get_game(self.match_id)
-            if game is None or getattr(game, "status", None) == "finished":
+            if game is None or getattr(game, "status", None) in ("finished", "error"):
                 return
             # 정상 종료(_db_on_end)는 client 가 보낸 경과초(duration)를 저장한다. 중도 이탈은
             # MATCH_END 가 없어 duration 을 못 받으므로, 서버가 매치 시작부터 잰 경과초로 맞춘다
